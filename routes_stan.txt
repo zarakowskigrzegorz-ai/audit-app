@@ -1,0 +1,4 @@
+GET /openapi.json
+GET /docs
+GET /docs/oauth2-redirect
+GET /redoc
