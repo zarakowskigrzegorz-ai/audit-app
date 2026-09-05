@@ -22,7 +22,10 @@ from collections import Counter
 from agent import analyze_audit_risk, run_agent_turn
 
 from database import get_db, run_migrations, DB_PATH
+from routers.lines import router as lines_router
+from routers.auth import router as auth_router
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -44,6 +47,9 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=BASE_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+app.include_router(lines_router)
+app.include_router(auth_router)
 
 
 
@@ -101,131 +107,6 @@ def read_root():
     root_path = os.path.join(BASE_DIR, "index.html")
     final_path = template_path if os.path.exists(template_path) else root_path
     
-    if os.path.exists(final_path):
-        return FileResponse(final_path)
-    return HTMLResponse(f"<h1>Błąd 404: Brak pliku index.html</h1>", status_code=404)
-
-
-# --- AUTORYZACJA PIN & FIDO2 BIOMETRIA ---
-@app.post("/api/auth/login")
-async def auth_login(payload: PinLoginModel):
-    async with get_db() as conn:
-        async with conn.execute("SELECT id, pin, full_name, role FROM users WHERE pin = ? AND is_active = 1", (payload.pin.strip(),)) as cursor:
-            row = await cursor.fetchone()
-            if not row:
-                raise HTTPException(status_code=401, detail="Nieprawidłowy kod PIN")
-            return dict(row)
-
-@app.post("/api/auth/biometric/register-challenge")
-def bio_reg_challenge(user_id: int = Query(...)):
-    raw = secrets.token_bytes(32)
-    b64 = base64.urlsafe_b64encode(raw).decode('utf-8').rstrip('=')
-    return {"challenge": b64}
-
-@app.post("/api/auth/biometric/register-verify")
-async def bio_reg_verify(payload: BiometricRegisterVerifyModel):
-    async with get_db() as conn:
-        c = await conn.cursor()
-        await c.execute("UPDATE users SET biometric_cred_id = ? WHERE id = ?", (payload.credential_id, payload.user_id))
-        await conn.commit()
-    return {"status": "OK"}
-
-@app.get("/api/auth/biometric/login-challenge")
-def bio_login_challenge():
-    raw = secrets.token_bytes(32)
-    b64 = base64.urlsafe_b64encode(raw).decode('utf-8').rstrip('=')
-    return {"challenge": b64}
-
-@app.post("/api/auth/biometric/login-verify")
-async def bio_login_verify(payload: BiometricLoginVerifyModel):
-    async with get_db() as conn:
-        c = await conn.cursor()
-        await c.execute("SELECT id, pin, full_name, role FROM users WHERE biometric_cred_id = ? AND is_active = 1", (payload.credential_id,))
-        row = await c.fetchone()
-    if not row:
-        raise HTTPException(status_code=401, detail="Nie rozpoznano poświadczenia biometrycznego")
-    return dict(row)
-
-@app.get("/api/auth/auditors")
-async def get_auditors_list(type: Optional[str] = None):
-    async with get_db() as conn:
-        cursor = await conn.execute("SELECT full_name, qualifications FROM users WHERE is_active = 1 AND role IN ('AUDITOR', 'MANAGER')")
-        rows = await cursor.fetchall()
-        
-    filtered_rows = []
-    for row in rows:
-        quals = row["qualifications"] or ""
-        if not type or type in quals:
-            filtered_rows.append(row)
-            
-    return [row["full_name"] for row in filtered_rows]
-
-
-@app.get("/api/users")
-async def list_users(role: str = Query("MANAGER")):
-    async with get_db() as conn:
-        c = await conn.cursor()
-        await c.execute("SELECT id, pin, full_name, role, qualifications FROM users WHERE is_active = 1")
-        rows = await c.fetchall()
-    out = []
-    for r in rows:
-        # Zabezpieczenie przed błędem JSONDecodeError w bazie danych
-        try:
-            quals = json.loads(r["qualifications"]) if r["qualifications"] else []
-        except json.JSONDecodeError:
-            quals = ["HACCP", "GMP", "GHP"]
-
-        out.append({
-            "id": r["id"], 
-            "pin": r["pin"], 
-            "full_name": r["full_name"],
-            "role": r["role"], 
-            "qualifications": quals
-        })
-    return out
-@app.post("/api/users")
-async def add_user(payload: UserCreateModel, role: str = Query("MANAGER")):
-    if role != "MANAGER": raise HTTPException(status_code=403, detail="Brak uprawnień")
-    async with get_db() as conn:
-        c = await conn.cursor()
-        try:
-            await c.execute("""
-                INSERT INTO users (pin, full_name, role, qualifications, is_active)
-                VALUES (?, ?, ?, ?, 1)
-            """, (payload.pin.strip(), payload.full_name.strip(), payload.role, json.dumps(payload.qualifications)))
-            await conn.commit()
-        except aiosqlite.IntegrityError:
-            raise HTTPException(status_code=400, detail="Użytkownik z tym PIN już istnieje")
-    return {"status": "OK"}
-
-@app.delete("/api/users/{user_id}")
-async def delete_user(user_id: int, role: str = Query("MANAGER")):
-    if role != "MANAGER": raise HTTPException(status_code=403, detail="Brak uprawnień")
-    async with get_db() as conn:
-        c = await conn.cursor()
-        await c.execute("UPDATE users SET is_active = 0 WHERE id = ? AND pin != '9999'", (user_id,))
-        await conn.commit()
-    return {"status": "OK"}
-
-
-# --- LINIE PRODUKCYJNE ---
-@app.get("/api/lines")
-async def list_lines():
-    async with get_db() as conn:
-        cursor = await conn.execute("SELECT id, name, code, default_zone FROM production_lines WHERE is_active = 1 ORDER BY name ASC")
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
-
-@app.post("/api/lines")
-async def create_line(payload: LineCreateModel):
-    async with get_db() as conn:
-        await conn.execute(
-            "INSERT INTO production_lines (name, code, default_zone, is_active) VALUES (?, ?, ?, 1)",
-            (payload.name, payload.code, payload.default_zone)
-        )
-        await conn.commit()
-    return {"status": "success"}
-
 @app.delete("/api/lines/{line_id}")
 async def delete_line(line_id: int):
     async with get_db() as conn:
