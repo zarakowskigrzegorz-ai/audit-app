@@ -5,13 +5,11 @@ from datetime import datetime
 
 from fastapi import HTTPException
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(BASE_DIR, "audits.db")
+from database import get_db
 
 async def get_db_connection():
-    conn = await aiosqlite.connect(DB_NAME)
-    conn.row_factory = aiosqlite.Row
-    await conn.execute("PRAGMA journal_mode=WAL;")
+    # Helper to keep existing code working
+    conn = await get_db().__aenter__()
     return conn
 
 async def authenticate_user(pin: str) -> Optional[Dict]:
