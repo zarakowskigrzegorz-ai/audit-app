@@ -26,7 +26,12 @@ DB_PATH = os.path.join(BASE_DIR, "audits.db")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-app = FastAPI(title="Quality Audit Enterprise Backend", version="6.3.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await run_migrations()
+    yield
+
+app = FastAPI(title="Quality Audit Enterprise", lifespan=lifespan)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".xlsx"}
 
 app.add_middleware(
@@ -205,7 +210,6 @@ async def run_migrations():
         await conn.commit()
     conn.close()
 
-run_migrations()
 
 
 # --- SZABLONY CHECKLISTY IFS FOOD v8 ---
@@ -267,8 +271,8 @@ class UserCreateModel(BaseModel):
 
 class LineCreateModel(BaseModel):
     name: str
-    code: str
-    default_zone: str
+    code: Optional[str] = None
+    default_zone: Optional[str] = None
 
 class ScheduleCreateModel(BaseModel):
     scheduled_date: str
@@ -372,20 +376,16 @@ async def bio_login_verify(payload: BiometricLoginVerifyModel):
 @app.get("/api/auth/auditors")
 async def get_auditors_list(type: Optional[str] = None):
     async with get_db() as conn:
-        c = await conn.cursor()
-        await c.execute("SELECT full_name, qualifications FROM users WHERE is_active = 1")
-        rows = await c.fetchall()
-    result = []
-    for r in rows:
-        # Zabezpieczenie przed błędem JSONDecodeError w bazie danych
-        try:
-            quals = json.loads(r["qualifications"]) if r["qualifications"] else []
-        except json.JSONDecodeError:
-            quals = ["HACCP", "GMP", "GHP"]
+        cursor = await conn.execute("SELECT full_name, qualifications FROM users WHERE is_active = 1 AND role IN ('AUDITOR', 'MANAGER')")
+        rows = await cursor.fetchall()
+        
+    filtered_rows = []
+    for row in rows:
+        quals = row["qualifications"] or ""
+        if not type or type in quals:
+            filtered_rows.append(row)
             
-        if not type or type.upper() in [q.upper() for q in quals]:
-            result.append(r["full_name"])
-    return result
+    return [row["full_name"] for row in filtered_rows]
 
 
 @app.get("/api/users")
@@ -439,30 +439,26 @@ async def delete_user(user_id: int, role: str = Query("MANAGER")):
 @app.get("/api/lines")
 async def list_lines():
     async with get_db() as conn:
-        c = await conn.cursor()
-        await c.execute("SELECT id, name, code, default_zone FROM production_lines WHERE is_active = 1 ORDER BY id ASC")
-        rows = [dict(r) for r in await c.fetchall()]
-    return rows
+        cursor = await conn.execute("SELECT id, name, code, default_zone FROM production_lines WHERE is_active = 1 ORDER BY name ASC")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
 @app.post("/api/lines")
 async def create_line(payload: LineCreateModel):
     async with get_db() as conn:
-        c = await conn.cursor()
-        try:
-            await c.execute("INSERT INTO production_lines (name, code, default_zone, is_active) VALUES (?, ?, ?, 1)",
-                      (payload.name.strip(), payload.code.strip(), payload.default_zone.strip()))
-            await conn.commit()
-        except aiosqlite.IntegrityError:
-            raise HTTPException(status_code=400, detail="Linia już istnieje")
-    return {"status": "OK"}
+        await conn.execute(
+            "INSERT INTO production_lines (name, code, default_zone, is_active) VALUES (?, ?, ?, 1)",
+            (payload.name, payload.code, payload.default_zone)
+        )
+        await conn.commit()
+    return {"status": "success"}
 
 @app.delete("/api/lines/{line_id}")
 async def delete_line(line_id: int):
     async with get_db() as conn:
-        c = await conn.cursor()
-        await c.execute("UPDATE production_lines SET is_active = 0 WHERE id = ?", (line_id,))
+        await conn.execute("UPDATE production_lines SET is_active = 0 WHERE id = ?", (line_id,))
         await conn.commit()
-    return {"status": "OK"}
+    return {"status": "success"}
 
 
 # --- HARMONOGRAMY ---
