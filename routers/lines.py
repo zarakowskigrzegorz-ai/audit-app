@@ -1,3 +1,4 @@
+import sqlite3
 from fastapi import APIRouter, HTTPException
 from typing import Optional, List
 from pydantic import BaseModel
@@ -20,11 +21,17 @@ async def list_lines():
 @router.post("/")
 async def create_line(payload: LineCreateModel):
     async with get_db() as conn:
-        await conn.execute(
-            "INSERT INTO production_lines (name, code, default_zone, is_active) VALUES (?, ?, ?, 1)",
-            (payload.name, payload.code, payload.default_zone)
-        )
-        await conn.commit()
+        try:
+            await conn.execute(
+                "INSERT INTO production_lines (name, code, default_zone, is_active) VALUES (?, ?, ?, 1)",
+                (payload.name, payload.code, payload.default_zone)
+            )
+            await conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                status_code=400,
+                detail="Linia o podanej nazwie lub kodzie już istnieje w systemie."
+            )
     return {"status": "success"}
 
 @router.delete("/{line_id}")

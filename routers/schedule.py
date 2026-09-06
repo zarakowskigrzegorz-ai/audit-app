@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from database import get_db
-from datetime import datetime
+from datetime import timedelta, datetime
 
 router = APIRouter(prefix="/api/schedule", tags=["Schedule"])
 
@@ -73,10 +73,55 @@ async def update_schedule(sched_id: int, payload: ScheduleUpdateModel):
         await conn.commit()
     return {"status": "success"}
 
+@router.put("/{sched_id}/reschedule")
+async def reschedule_audit(sched_id: int, payload: Dict[str, str]):
+    new_date = payload.get("new_date")
+    if not new_date:
+        raise HTTPException(status_code=400, detail="Brak daty")
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if new_date < today_str:
+        raise HTTPException(status_code=400, detail="Nie można przesuwać audytu na datę wsteczną")
+        
+    async with get_db() as conn:
+        cursor = await conn.execute("SELECT scheduled_date FROM audit_schedules WHERE id = ?", (sched_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+            
+        await conn.execute("UPDATE audit_schedules SET scheduled_date = ? WHERE id = ?", (new_date, sched_id))
+        await conn.commit()
+    return {"status": "success"}
+
 @router.delete("/{sched_id}")
 async def delete_schedule(sched_id: int):
+    today_str = datetime.now().strftime("%Y-%m-%d")
     async with get_db() as conn:
+        cursor = await conn.execute("SELECT scheduled_date, status FROM audit_schedules WHERE id = ?", (sched_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+        
+        # Blokada usuwania historycznych
+        if row["scheduled_date"] < today_str:
+            raise HTTPException(status_code=400, detail="Nie można usunąć audytu z przeszłości")
+            
         await conn.execute("DELETE FROM audit_schedules WHERE id = ?", (sched_id,))
+        await conn.commit()
+    return {"status": "success"}
+
+@router.post("/clear-range")
+async def clear_range(payload: Dict[str, int]):
+    months = payload.get("months", 1)
+    today = datetime.now()
+    end_date = (today + timedelta(days=30 * months)).strftime("%Y-%m-%d")
+    today_str = today.strftime("%Y-%m-%d")
+    
+    async with get_db() as conn:
+        await conn.execute(
+            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ?",
+            (today_str, end_date)
+        )
         await conn.commit()
     return {"status": "success"}
 

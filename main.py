@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, Form, UploadFile, File, Query, status
+from fastapi import FastAPI, HTTPException, Request, Form, UploadFile, File, Query, status, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -108,10 +108,13 @@ class AuditUpdateRequest(BaseModel):
 
 # --- ROUTING I INTERFEJS GŁÓWNY ---
 @app.get("/", response_class=HTMLResponse)
-def read_root():
+def read_root(response: Response):
+    #response.headers["Content-Security-Policy"] = "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; object-src 'none';"
     template_path = os.path.join(BASE_DIR, "templates", "index.html")
     root_path = os.path.join(BASE_DIR, "index.html")
     final_path = template_path if os.path.exists(template_path) else root_path
+    with open(final_path, "r", encoding="utf-8") as f:
+        return f.read()
     
 @app.delete("/api/lines/{line_id}")
 async def delete_line(line_id: int):

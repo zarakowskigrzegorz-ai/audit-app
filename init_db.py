@@ -90,7 +90,13 @@ def init_database():
             risk_level TEXT NOT NULL DEFAULT 'NISKIE',
             slm_verdict TEXT NOT NULL DEFAULT 'OK',
             slm_analysis TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            audit_code TEXT UNIQUE,
+            process_status TEXT NOT NULL DEFAULT 'IN_PROGRESS',
+            signoff_leader TEXT DEFAULT NULL,
+            signoff_quality TEXT DEFAULT NULL,
+            audit_score REAL DEFAULT 100.0,
+            audit_points INTEGER DEFAULT 0
         );
     """)
 

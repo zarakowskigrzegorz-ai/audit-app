@@ -24,9 +24,15 @@ async def run_migrations():
                 role TEXT NOT NULL CHECK(role IN ('MANAGER', 'AUDITOR')),
                 is_active INTEGER NOT NULL DEFAULT 1,
                 qualifications TEXT NOT NULL DEFAULT '["HACCP","GMP","GHP"]',
-                biometric_cred_id TEXT
+                biometric_cred_id TEXT,
+                notes TEXT
             );
         """)
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN notes TEXT")
+            await db.commit()
+        except Exception:
+            pass
 
         # 2. Tabela Linii Produkcyjnych
         await db.execute("""
@@ -107,6 +113,31 @@ async def run_migrations():
                 FOREIGN KEY(audit_id) REFERENCES audits(id)
             );
         """)
+        # 8. Dodanie kolumny audit_code, proces_status, signoff_leader, signoff_quality do audits
+        try:
+            await db.execute("ALTER TABLE audits ADD COLUMN audit_code TEXT UNIQUE")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE audits ADD COLUMN process_status TEXT NOT NULL DEFAULT 'IN_PROGRESS'")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE audits ADD COLUMN signoff_leader TEXT DEFAULT NULL")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE audits ADD COLUMN signoff_quality TEXT DEFAULT NULL")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE audits ADD COLUMN audit_score REAL DEFAULT 100.0")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE audits ADD COLUMN audit_points INTEGER DEFAULT 0")
+        except Exception:
+            pass
 
         # 6. Tabela Dziennika zmian
         await db.execute("""
