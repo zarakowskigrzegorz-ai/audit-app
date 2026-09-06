@@ -51,6 +51,12 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(lines_router)
 app.include_router(auth_router)
 
+from routers.schedule import router as schedule_router
+from routers.checklist import router as checklist_router
+
+app.include_router(schedule_router)
+app.include_router(checklist_router)
+
 
 
 class ScheduleCreateModel(BaseModel):
@@ -211,9 +217,6 @@ async def auto_generate_schedule(payload: AutoPlanModel):
 
 
 # --- WYKONYWANIE AUDYTÓW I SLM ---
-@app.get("/api/checklist-template/{audit_type}")
-def get_checklist_template(audit_type: str):
-    return CHECKLIST_TEMPLATES.get(audit_type.upper().strip(), CHECKLIST_TEMPLATES["HACCP"])
 
 @app.post("/api/slm-analyze")
 async def slm_analyze(payload: dict):
