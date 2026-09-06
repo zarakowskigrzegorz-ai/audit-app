@@ -637,14 +637,19 @@
                     const riskLevel = a?.risk_level || 'NISKIE';
 
                     tbody.innerHTML += `
-                        <tr ${auditId ? `onclick="openAuditDetails(${auditId})"` : ''} class="hover:bg-slate-800 transition cursor-pointer">
-                            <td class="py-2 pr-2 border-b border-white/5 font-mono text-[10px] text-cyan-400 font-black">${code}</td>
+                        <tr class="hover:bg-slate-800 transition">
+                            <td onclick="openAuditDetails(${auditId})" class="py-2 pr-2 border-b border-white/5 font-mono text-[10px] text-cyan-400 font-black cursor-pointer">${code}</td>
                             <td class="py-2 pr-2 border-b border-white/5 text-[9px]">${timestamp}</td>
                             <td class="py-2 pr-2 border-b border-white/5 font-bold text-[10px] text-white">${line}</td>
                             <td class="py-2 pr-2 border-b border-white/5 text-[10px]">${shift}</td>
                             <td class="py-2 pr-2 border-b border-white/5 text-[9px]">${auditorName}</td>
                             <td class="py-2 pr-2 border-b border-white/5 text-[8px] font-black ${statusColor}">${processStatus}</td>
-                            <td class="py-2 border-b border-white/5 ${slmColor} text-[9px]">${slmVerdict} (${riskLevel})</td>
+                            <td class="py-2 pr-2 border-b border-white/5 ${slmColor} text-[9px]">${slmVerdict} (${riskLevel})</td>
+                            <td class="py-2 border-b border-white/5 flex gap-1">
+                                <button onclick="updateAuditStatus(${auditId}, 'APPROVED')" class="bg-emerald-600 text-white px-2 py-0.5 rounded text-[8px] font-bold">Zatwierdź</button>
+                                <button onclick="updateAuditStatus(${auditId}, 'REJECTED')" class="bg-red-600 text-white px-2 py-0.5 rounded text-[8px] font-bold">Odrzuć</button>
+                                <button onclick="alert('Szczegóły audytu:\\nID: ${code}\\nData: ${timestamp}\\nLinia: ${line}\\nAudytor: ${auditorFull}\\nWerdykt: ${slmVerdict}')" class="bg-slate-600 text-white px-2 py-0.5 rounded text-[8px] font-bold">Szczegóły</button>
+                            </td>
                         </tr>
                     `;
                 });
@@ -761,7 +766,7 @@
                 }
 
                 container.innerHTML = requests.map(r => `
-                    <div class="bg-slate-950/90 border border-amber-500/40 p-2.5 rounded-xl space-y-1.5 text-xs">
+                    <div class="bg-slate-950/90 border ${r.status === 'ZATWIERDZONY' ? 'border-emerald-500/40' : r.status === 'ODRZUCONY' ? 'border-rose-500/40' : 'border-amber-500/40'} p-2.5 rounded-xl space-y-1.5 text-xs">
                         <div class="flex justify-between items-center">
                             <span class="text-cyan-400 font-bold">${r.line} (Audyt #${r.audit_id})</span>
                             <span class="text-[9px] text-slate-400">${r.created_at.substring(0, 16)}</span>
@@ -769,8 +774,11 @@
                         <p class="text-[10px] text-slate-300"><b>Wnioskuje:</b> ${r.requested_by}</p>
                         <p class="text-[10px] text-amber-200 bg-amber-950/40 p-1.5 rounded border border-amber-500/20"><b>Powód:</b> ${r.reason}</p>
                         <div class="flex gap-2 pt-1">
-                            <button onclick="decideEditRequest(${r.id}, 'ZATWIERDZONY')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] py-1.5 rounded-lg transition">✓ Zatwierdź</button>
-                            <button onclick="decideEditRequest(${r.id}, 'ODRZUCONY')" class="flex-1 bg-rose-900 hover:bg-rose-800 text-rose-200 font-black text-[10px] py-1.5 rounded-lg transition">✕ Odrzuć</button>
+                            ${r.status === 'PENDING' ? `
+                                <button onclick="decideEditRequest(${r.id}, 'ZATWIERDZONY')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] py-1.5 rounded-lg transition">Zatwierdź</button>
+                                <button onclick="decideEditRequest(${r.id}, 'ODRZUCONY')" class="flex-1 bg-rose-900 hover:bg-rose-800 text-rose-200 font-black text-[10px] py-1.5 rounded-lg transition">Odrzuć</button>
+                            ` : `<span class="flex-1 text-center font-bold text-[10px] py-1.5 rounded-lg ${r.status === 'ZATWIERDZONY' ? 'text-emerald-400' : 'text-rose-400'}">Status: ${r.status}</span>`}
+                            <button onclick="alert('Szczegóły wniosku:\\nID Wniosku: ${r.id}\\nAudyt: #${r.audit_id}\\nZgłaszający: ${r.requested_by}\\nData: ${r.created_at}\\nPowód: ${r.reason}')" class="bg-slate-700 hover:bg-slate-600 text-white px-3 font-bold text-[10px] rounded-lg transition">Szczegóły</button>
                         </div>
                     </div>
                 `).join('');
@@ -789,6 +797,44 @@
                 loadManagerEditRequests();
                 loadAuditResults();
             } else {
+
+        async function updateAuditStatus(id, status) {
+            let comment = "";
+            if (status === 'REJECTED') {
+                comment = prompt("Podaj powód odrzucenia:") || "Brak powodu";
+            }
+            
+            try {
+                const res = await fetch(`/api/audits/${id}/status`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ status: status, reason: comment })
+                });
+                
+                if (res.ok) {
+
+        function handleAuditAction(action, auditId) {
+          if (action === 'approve') {
+            alert('Zatwierdzono audyt #' + auditId);
+          } else if (action === 'reject') {
+            const reason = prompt('Podaj powód odrzucenia (wymóg IFS Food v8):');
+            if (reason) alert('Odrzucono audyt #' + auditId + '. Powód: ' + reason);
+          } else if (action === 'details') {
+            alert('Szczegóły audytu #' + auditId + ' - Linia, audytor oraz werdykt SLM.');
+          }
+        }
+
+                    alert(`Status audytu zmieniony na: ${status}`);
+                    loadAuditResults();
+                } else {
+                    alert("Błąd podczas aktualizacji statusu.");
+                }
+            } catch(e) {
+                console.error(e);
+                alert("Błąd połączenia z serwerem.");
+            }
+        }
+
                 alert("Błąd podczas zapisywania decyzji.");
             }
         }
