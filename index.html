@@ -1680,7 +1680,14 @@
         async function loadAuditorsDropdown(type = "HACCP") {
             const res = await fetch(`/api/auth/auditors?type=${encodeURIComponent(type)}`);
             const list = await res.json();
-            const opts = list.map(a => `<option value="${a}">${a}</option>`).join('');
+            
+            const createOption = (auditor) => {
+                const name = (typeof auditor === 'object' && auditor !== null) ? (auditor.name || auditor.full_name || auditor.id) : auditor;
+                const val = (typeof auditor === 'object' && auditor !== null) ? (auditor.name || auditor.id) : auditor;
+                return `<option value="${val}">${name}</option>`;
+            };
+
+            const opts = list.map(createOption).join('');
             document.getElementById('plan-auditor').innerHTML = opts;
             document.getElementById('plan-backup').innerHTML = `<option value="Brak">Brak</option>` + opts;
         }
@@ -1814,17 +1821,76 @@
     <script>
     window.showAuditorProfileModal = function(user) {
        if (!user) return;
-       document.getElementById('prof-name').innerText = user.full_name || 'Brak danych';
-       document.getElementById('prof-role').innerText = user.role || 'AUDYTOR';
-       document.getElementById('prof-pin').innerText = user.pin ? `PIN: ${user.pin}` : 'Brak';
-       
-       const qualsContainer = document.getElementById('prof-quals');
-       const rawQuals = Array.isArray(user.qualifications) ? user.qualifications : (user.qualifications ? String(user.qualifications).split(',') : ['HACCP', 'GMP', 'GHP']);
-       
-       qualsContainer.innerHTML = rawQuals.map(q => {
-           const val = q.trim();
-           return `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40">${val}</span>`;
-       }).join(' ');
+        window.currentAuditorId = user.id; // Store the current auditor's ID
+
+        document.getElementById('edit-auditor-name').value = user.full_name || '';
+        document.getElementById('edit-auditor-role').value = user.role || 'AUDITOR';
+        document.getElementById('edit-auditor-pin').value = user.pin || '';
+
+        // Handle qualifications checkboxes
+        const qualCheckboxes = document.querySelectorAll('#edit-auditor-qualifications input[type="checkbox"]');
+        const userQuals = Array.isArray(user.qualifications) ? user.qualifications : (user.qualifications ? String(user.qualifications).split(',').map(q => q.trim()) : ['HACCP', 'GMP', 'GHP']);
+        qualCheckboxes.forEach(checkbox => {
+            checkbox.checked = userQuals.includes(checkbox.value);
+        });
+
+        // Handle zones checkboxes
+        const zoneCheckboxes = document.querySelectorAll('#edit-auditor-zones input[type="checkbox"]');
+        const userZones = Array.isArray(user.zones) ? user.zones : (user.zones ? String(user.zones).split(',').map(z => z.trim()) : ['ALL']); // Assuming 'ALL' as default or a sensible default
+        zoneCheckboxes.forEach(checkbox => {
+            checkbox.checked = userZones.includes(checkbox.value);
+        });
+
+    window.saveAuditorProfile = async function() {
+        const auditorId = window.currentAuditorId;
+        if (!auditorId) {
+            console.error('Brak ID audytora do zapisu.');
+            return;
+        }
+
+        const fullName = document.getElementById('edit-auditor-name').value;
+        const role = document.getElementById('edit-auditor-role').value;
+        const pin = document.getElementById('edit-auditor-pin').value;
+
+        const selectedQuals = Array.from(document.querySelectorAll('#edit-auditor-qualifications input[type="checkbox"]')).filter(cb => cb.checked).map(cb => cb.value);
+        const selectedZones = Array.from(document.querySelectorAll('#edit-auditor-zones input[type="checkbox"]')).filter(cb => cb.checked).map(cb => cb.value);
+
+        const updatedAuditor = {
+            full_name: fullName,
+            role: role,
+            pin: pin,
+            qualifications: selectedQuals,
+            zones: selectedZones
+        };
+
+        try {
+            const res = await fetch(`/api/users/${auditorId}`, { // Assuming this endpoint for updating user
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(updatedAuditor)
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                console.error('Błąd podczas zapisu profilu audytora:', errorData.message);
+                alert('Błąd podczas zapisu: ' + (errorData.message || res.statusText));
+                return;
+            }
+
+            // If the user profile is updated successfully, refresh the auditor list
+            if (typeof fetchAuditors === 'function') fetchAuditors(); 
+            if (typeof loadScheduleAndRender === 'function') loadScheduleAndRender(); 
+
+            document.getElementById('auditor-profile-modal').classList.add('hidden');
+            alert('Profil audytora został zaktualizowany!');
+
+        } catch (error) {
+            console.error('Wystąpił błąd sieci lub serwera:', error);
+            alert('Wystąpił błąd sieci lub serwera podczas zapisu profilu.');
+        }
+    };
 
        document.getElementById('auditor-profile-modal').classList.remove('hidden');
    };
@@ -1873,31 +1939,68 @@ window.clearCurrentMonthSchedule = async function() {
            <div class="space-y-3">
                <div>
                    <label class="text-[10px] text-slate-400 block">Imię i Nazwisko:</label>
-                   <p id="prof-name" class="text-sm font-bold text-white"></p>
+                   <input type="text" id="edit-auditor-name" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:border-cyan-500 focus:outline-none">
                </div>
                <div class="grid grid-cols-2 gap-2">
                    <div>
                        <label class="text-[10px] text-slate-400 block">Rola systemowa:</label>
-                       <p id="prof-role" class="text-xs font-semibold text-emerald-400"></p>
+                       <select id="edit-auditor-role" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-400 text-xs font-bold focus:border-cyan-500 focus:outline-none">
+                           <option value="AUDITOR">AUDITOR</option>
+                           <option value="LEAD_AUDITOR">LEAD_AUDITOR</option>
+                           <option value="QUALITY_MANAGER">QUALITY_MANAGER</option>
+                           <option value="ADMIN">ADMIN</option>
+                       </select>
                    </div>
                    <div>
                        <label class="text-[10px] text-slate-400 block">Identyfikator / PIN:</label>
-                       <p id="prof-pin" class="text-xs font-mono text-slate-300"></p>
+                       <input type="password" maxlength="6" id="edit-auditor-pin" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono focus:border-cyan-500 focus:outline-none">
                    </div>
                </div>
                <div>
                    <label class="text-[10px] text-slate-400 block mb-1">Certyfikowane Standardy & Kwalifikacje:</label>
-                   <div id="prof-quals" class="flex flex-wrap gap-1.5"></div>
+                   <div id="edit-auditor-qualifications" class="flex flex-wrap gap-2 text-[10px]">
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-emerald-400 has-[:checked]:bg-emerald-600 has-[:checked]:text-white has-[:checked]:border-emerald-500 transition">
+                           <input type="checkbox" value="HACCP" class="hidden peer"> <span>HACCP</span>
+                       </label>
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-purple-400 has-[:checked]:bg-purple-600 has-[:checked]:text-white has-[:checked]:border-purple-500 transition">
+                           <input type="checkbox" value="GMP" class="hidden peer"> <span>GMP</span>
+                       </label>
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-cyan-400 has-[:checked]:bg-cyan-600 has-[:checked]:text-white has-[:checked]:border-cyan-500 transition">
+                           <input type="checkbox" value="GHP" class="hidden peer"> <span>GHP</span>
+                       </label>
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-blue-400 has-[:checked]:bg-blue-600 has-[:checked]:text-white has-[:checked]:border-blue-500 transition">
+                           <input type="checkbox" value="IFS Food v8" class="hidden peer"> <span>IFS Food v8</span>
+                       </label>
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-orange-400 has-[:checked]:bg-orange-600 has-[:checked]:text-white has-[:checked]:border-orange-500 transition">
+                           <input type="checkbox" value="BRCGS" class="hidden peer"> <span>BRCGS</span>
+                       </label>
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-fuchsia-400 has-[:checked]:bg-fuchsia-600 has-[:checked]:text-white has-[:checked]:border-fuchsia-500 transition">
+                           <input type="checkbox" value="ISO 22000" class="hidden peer"> <span>ISO 22000</span>
+                       </label>
+                   </div>
                </div>
                <div class="p-2.5 bg-slate-950/60 rounded-lg border border-white/5 text-[10px] text-slate-400">
-                   Status: <b class="text-emerald-400">Autoryzowany do audytów IFS</b><br>
-                   Uprawnienia: Wszystkie strefy produkcyjne (High/Medium/Low Care)
+                   <label class="block mb-1">Uprawnienia stref:</label>
+                   <div id="edit-auditor-zones" class="flex flex-wrap gap-2">
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-slate-400 has-[:checked]:bg-cyan-600 has-[:checked]:text-white has-[:checked]:border-cyan-500 transition">
+                           <input type="checkbox" value="ALL" class="hidden peer"> <span>Wszystkie strefy</span>
+                       </label>
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-slate-400 has-[:checked]:bg-cyan-600 has-[:checked]:text-white has-[:checked]:border-cyan-500 transition">
+                           <input type="checkbox" value="HIGH_CARE" class="hidden peer"> <span>High Care</span>
+                       </label>
+                       <label class="flex items-center gap-1 cursor-pointer bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-slate-400 has-[:checked]:bg-cyan-600 has-[:checked]:text-white has-[:checked]:border-cyan-500 transition">
+                           <input type="checkbox" value="LOW_CARE" class="hidden peer"> <span>Low Care</span>
+                       </label>
+                   </div>
                </div>
            </div>
 
-           <div class="mt-5 pt-3 border-t border-white/10 flex justify-end">
+           <div class="mt-5 pt-3 border-t border-white/10 flex justify-end gap-2">
                <button onclick="document.getElementById('auditor-profile-modal').classList.add('hidden')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition">
                    Zamknij
+               </button>
+               <button type="button" onclick="saveAuditorProfile()" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-cyan-950/50">
+                   Zapisz zmiany
                </button>
            </div>
        </div>
