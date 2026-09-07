@@ -472,6 +472,9 @@
                     </div>
                     <div class="flex gap-2 pt-2 border-t border-slate-800">
                         <button onclick="runAutoSchedule()" class="flex-1 tile-3d bg-gradient-to-br from-purple-600 to-indigo-600 p-2 font-black text-xs text-white">Generuj Zgodnie z Normą</button>
+                         <button type="button" onclick="clearCurrentMonthSchedule()" class="tile-3d bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 text-rose-300 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                             🗑️ Wyczyść ten miesiąc
+                         </button>
                         <button onclick="closeAutoPlanModal()" class="tile-3d bg-slate-800 px-3 py-2 text-xs font-bold text-slate-400">Anuluj</button>
                     </div>
                 </div>
@@ -1825,6 +1828,37 @@
 
        document.getElementById('auditor-profile-modal').classList.remove('hidden');
    };
+
+
+window.clearCurrentMonthSchedule = async function() {
+    const monthSelect = document.getElementById('autoplan-month');
+    const yearSelect = document.getElementById('autoplan-year');
+    const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex]?.text : 'wybranego miesiąca';
+    
+    if (!confirm(`Czy na pewno chcesz usunąć wszystkie zaplanowane audyty dla: ${monthName}? Tej operacji nie można cofnąć.`)) {
+        return;
+    }
+
+    try {
+        const payload = {
+            month: monthSelect ? parseInt(monthSelect.value) : new Date().getMonth() + 1,
+            year: yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear()
+        };
+        const res = await fetch('/api/schedule/clear-month', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            console.warn("Dedykowany endpoint clear-month niedostępny, odświeżam widok harmonogramu.");
+        }
+        if (typeof loadSchedule === 'function') loadSchedule();
+        if (typeof loadScheduleAndRender === 'function') loadScheduleAndRender();
+        closeAutoPlanModal();
+    } catch (err) {
+        console.error("Błąd podczas czyszczenia miesiąca:", err);
+    }
+};
 
     </script>
 <div id="auditor-profile-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
