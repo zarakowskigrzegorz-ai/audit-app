@@ -24,6 +24,7 @@ from agent import analyze_audit_risk, run_agent_turn
 from database import get_db, run_migrations, DB_PATH
 from routers.lines import router as lines_router
 from routers.auth import router as auth_router
+from routers.users import router as users_router
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -50,6 +51,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.include_router(lines_router)
 app.include_router(auth_router)
+app.include_router(users_router, prefix="/api")
 
 from routers.schedule import router as schedule_router
 from routers.checklist import router as checklist_router
