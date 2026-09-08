@@ -788,6 +788,39 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <script>
+
+        function updateAuditHud(step, title, desc, mode) {
+            const toast = document.getElementById('audit-progress-toast');
+            const box = document.getElementById('audit-progress-box');
+            const spinner = document.getElementById('audit-progress-spinner');
+            const titleEl = document.getElementById('audit-progress-title');
+            const descEl = document.getElementById('audit-progress-desc');
+            if (!toast) return;
+
+            toast.classList.remove('hidden');
+            titleEl.textContent = title;
+            descEl.textContent = desc;
+
+            if (mode === 'loading') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-slate-900/95 border-cyan-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin";
+                spinner.textContent = "";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-cyan-400";
+            } else if (mode === 'success') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-emerald-950/90 border-emerald-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "text-base";
+                spinner.textContent = "✅";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-emerald-400";
+                setTimeout(() => toast.classList.add('hidden'), 3500);
+            } else if (mode === 'alert') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-rose-950/90 border-rose-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "text-base";
+                spinner.textContent = "⚠️";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-rose-400";
+                setTimeout(() => toast.classList.add('hidden'), 5000);
+            }
+        }
+
         const state = {
             user_id: 0, auditor_id: "", role: "AUDITOR", line: "", shift: "Zmiana A", zone: "Wysoka Higiena (High Care)",
             health_ok: "TAK", dispense_no: "BRAK", glass_plastic_ok: "ZGODNY", allergen_clean_ok: "ZGODNY",
@@ -1631,6 +1664,9 @@
         }
 
         async function saveAuditToDb() {
+            // NATYCHMIASTOWA REAKCJA (0 ms)
+            updateAuditHud(1, "KROK 1/2: ANALIZA SLM", "Wnioskowanie lokalnego modelu i weryfikacja IFS Food v8...", "loading");
+
             let koFailed = false;
             Object.values(state.checklist_results).forEach(it => {
                 if (it.status === "NOK" && it.is_ko) koFailed = true;
@@ -1678,12 +1714,36 @@
             formData.append("slm_analysis", slmText);
             formData.append("checklist_results", JSON.stringify(state.checklist_results));
 
+            // STAN 1: Natychmiastowa reakcja interfejsu (0 ms)
+            updateAuditHud(1, "KROK 1/2: WNIOSKOWANIE SLM", "Analiza parametrów CCP, GMP i normy IFS Food v8...", "loading");
+
+            // STAN 2: Transakcja bazy danych
+            setTimeout(() => {
+                const toastDesc = document.getElementById('audit-progress-desc');
+                if (toastDesc && toastDesc.textContent.includes("CCP")) {
+                    updateAuditHud(2, "KROK 2/2: ZAPIS I BLOKADA REKORDU", "Rejestracja w SQLite i wpis do Audit Trail...", "loading");
+                }
+            }, 900);
+
             const res = await fetch('/api/audit', { method: 'POST', body: formData });
+
             if (res.ok) {
-                alert(`✅ Audyt zarejestrowany w bazie SQLite ze statusem ZABLOKOWANY.\n\nW celu ewentualnej korekty skorzystaj z menu 'Audit Trail'.\nOrzeczenie SLM: ${slmText}`);
+                const data = await res.json().catch(() => ({}));
+                const verdict = data.slm_verdict || (slmText.includes('NOK') ? 'NOK' : 'OK');
+                
+                // STAN 3: Werdykt końcowy
+                if (verdict.includes('NOK') || verdict.includes('HOLD')) {
+                    updateAuditHud(3, "ODCHYLENIE CCP / HOLD LOT", `Werdykt: ${verdict} | Status: ZABLOKOWANY`, "alert");
+                } else {
+                    updateAuditHud(3, "AUDYT ZAPISANY POMYŚLNIE", `Werdykt SLM: ${verdict} | Status: ZABLOKOWANY`, "success");
+                }
+
                 showModule('hub');
-                await loadScheduleAndRender();
-                await updateKpiRibbon();
+                if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
+                if (typeof updateKpiRibbon === 'function') await updateKpiRibbon();
+                if (typeof loadAuditsAndRender === 'function') await loadAuditsAndRender();
+            } else {
+                updateAuditHud(3, "BŁĄD ZAPISU AUDYTU", `Serwer zwrócił kod błędu ${res.status}`, "alert");
             }
         }
 
@@ -2018,6 +2078,39 @@
         }
     </script>
     <script>
+
+        function updateAuditHud(step, title, desc, mode) {
+            const toast = document.getElementById('audit-progress-toast');
+            const box = document.getElementById('audit-progress-box');
+            const spinner = document.getElementById('audit-progress-spinner');
+            const titleEl = document.getElementById('audit-progress-title');
+            const descEl = document.getElementById('audit-progress-desc');
+            if (!toast) return;
+
+            toast.classList.remove('hidden');
+            titleEl.textContent = title;
+            descEl.textContent = desc;
+
+            if (mode === 'loading') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-slate-900/95 border-cyan-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin";
+                spinner.textContent = "";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-cyan-400";
+            } else if (mode === 'success') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-emerald-950/90 border-emerald-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "text-base";
+                spinner.textContent = "✅";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-emerald-400";
+                setTimeout(() => toast.classList.add('hidden'), 3500);
+            } else if (mode === 'alert') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-rose-950/90 border-rose-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "text-base";
+                spinner.textContent = "⚠️";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-rose-400";
+                setTimeout(() => toast.classList.add('hidden'), 5000);
+            }
+        }
+
     window.showAuditorProfileModal = function(user) {
        if (!user) return;
         window.currentAuditorId = user.id; // Store the current auditor's ID
@@ -2277,6 +2370,18 @@ window.clearCurrentMonthSchedule = async function() {
     </div>
 
     <script src="/static/reports_dashboard.js"></script>
+
+
+    <!-- AUDIT PROGRESS HUD -->
+    <div id="audit-progress-toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] hidden transition-all duration-300">
+        <div id="audit-progress-box" class="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-slate-900/95 border-cyan-500/50 text-slate-100 min-w-[320px]">
+            <div id="audit-progress-spinner" class="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+            <div>
+                <div id="audit-progress-title" class="text-xs font-black tracking-wider uppercase text-cyan-400">Przetwarzanie...</div>
+                <div id="audit-progress-desc" class="text-xs text-slate-300">Inicjalizacja procedury zapisu</div>
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>
