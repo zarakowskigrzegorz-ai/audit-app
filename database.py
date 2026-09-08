@@ -2,6 +2,7 @@ import aiosqlite
 from contextlib import asynccontextmanager
 
 DB_NAME = "audits.db"
+DB_PATH = DB_NAME
 
 @asynccontextmanager
 async def get_db():
@@ -140,3 +141,6 @@ async def init_db():
             await c.executemany("INSERT INTO production_lines (name, zone) VALUES (?, ?)", default_lines)
 
         await conn.commit()
+
+# Aliasy dla kompatybilności wstecznej z importami w main.py
+run_migrations = init_db
