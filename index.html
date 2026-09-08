@@ -877,9 +877,14 @@
             
             // Odświeżanie na żywo przy powrocie do Dashboardu / Hubu
             if(modId === 'hub') {
-                if (typeof loadAuditResults === 'function') loadAuditResults();
-                if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
-                if (typeof updateManagerDashboardStats === 'function') updateManagerDashboardStats();
+                const activeHubId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor';
+                document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
+                const hubEl = document.getElementById(activeHubId);
+                if (hubEl) hubEl.classList.remove('hidden');
+                // Bezpieczne odświeżenie danych w tle bez blokowania UI
+                try {
+                    if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
+                } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
             }
             if(modId === 'calendar') loadScheduleAndRender();
             if(modId === 'auditors') renderAuditorsList();
@@ -911,11 +916,15 @@
         }
 
         function navGoHome() {
-            if (currentModule !== 'hub') {
-                navHistory.push(currentModule);
-                navForward = [];
-                showModule('hub', false);
-            }
+            navHistory.push(currentModule);
+            navForward = [];
+            document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
+            const targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor';
+            const target = document.getElementById(targetId);
+            if (target) target.classList.remove('hidden');
+            currentModule = 'hub';
+            updateDockButtons();
+            updateTopNavActiveState('hub');
         }
 
         function updateDockButtons() {
