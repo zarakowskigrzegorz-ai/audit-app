@@ -11,6 +11,7 @@ class LineCreateModel(BaseModel):
     code: str
     default_zone: str
 
+@router.get("")
 @router.get("/")
 async def list_lines():
     async with get_db() as conn:
@@ -18,6 +19,7 @@ async def list_lines():
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
+@router.post("")
 @router.post("/")
 async def create_line(payload: LineCreateModel):
     async with get_db() as conn:

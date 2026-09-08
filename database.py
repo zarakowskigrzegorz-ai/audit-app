@@ -15,7 +15,7 @@ async def init_db():
     async with get_db() as conn:
         c = await conn.cursor()
         
-        # 1. Users ze wszystkimi kolumnami wymaganymi przez routers/auth.py
+        # 1. Users
         await c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,16 +23,17 @@ async def init_db():
                 full_name TEXT NOT NULL,
                 role TEXT NOT NULL,
                 qualifications TEXT DEFAULT '["HACCP", "GMP", "GHP"]',
+                notes TEXT DEFAULT '',
                 is_active INTEGER DEFAULT 1,
                 biometric_cred_id TEXT
             )
         """)
 
-        # Migracja kolumn na wypadek, gdyby tabela istniała w starym formacie
         for col, definition in [
             ("full_name", "TEXT DEFAULT ''"),
             ("is_active", "INTEGER DEFAULT 1"),
             ("qualifications", "TEXT DEFAULT '[\"HACCP\", \"GMP\", \"GHP\"]'"),
+            ("notes", "TEXT DEFAULT ''"),
             ("biometric_cred_id", "TEXT")
         ]:
             try:
@@ -40,14 +41,28 @@ async def init_db():
             except Exception:
                 pass
 
-        # 2. Production lines
+        # 2. Production lines (z kolumnami code, default_zone, is_active)
         await c.execute("""
             CREATE TABLE IF NOT EXISTS production_lines (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
-                zone TEXT NOT NULL
+                code TEXT DEFAULT '',
+                default_zone TEXT DEFAULT '',
+                zone TEXT DEFAULT '',
+                is_active INTEGER DEFAULT 1
             )
         """)
+
+        for col, definition in [
+            ("code", "TEXT DEFAULT ''"),
+            ("default_zone", "TEXT DEFAULT ''"),
+            ("zone", "TEXT DEFAULT ''"),
+            ("is_active", "INTEGER DEFAULT 1")
+        ]:
+            try:
+                await c.execute(f"ALTER TABLE production_lines ADD COLUMN {col} {definition}")
+            except Exception:
+                pass
 
         # 3. Audit schedules
         await c.execute("""
@@ -124,21 +139,32 @@ async def init_db():
             )
         """)
 
-        # --- SEEDOWANIE KONT UŻYTKOWNIKÓW ---
+        # --- SEED: KIEROWNIK I AUDYTORZY ---
         default_users = [
-            ('9999', 'Manager Jakości', 'MANAGER', '["IFS", "BRCGS", "HACCP"]', 1),
-            ('1001', 'Jan Kowalski', 'AUDITOR', '["HACCP", "GMP"]', 1),
-            ('1002', 'Anna Nowak', 'AUDITOR', '["HACCP", "GHP"]', 1),
-            ('1003', 'Piotr Wiśniewski', 'AUDITOR', '["HACCP", "GMP", "GHP", "IFS"]', 1)
+            ('9999', 'Manager Jakości', 'MANAGER', '["IFS", "BRCGS", "HACCP"]', 'Kierownik Jakości', 1),
+            ('1001', 'Jan Kowalski', 'AUDITOR', '["HACCP", "GMP"]', 'Audytor Wewnętrzny', 1),
+            ('1002', 'Anna Nowak', 'AUDITOR', '["HACCP", "GHP"]', 'Audytor Wewnętrzny', 1),
+            ('1003', 'Piotr Wiśniewski', 'AUDITOR', '["HACCP", "GMP", "GHP", "IFS"]', 'Audytor Wiodący', 1)
         ]
-        
         for u in default_users:
             await c.execute("""
-                INSERT OR REPLACE INTO users (pin, full_name, role, qualifications, is_active)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO users (pin, full_name, role, qualifications, notes, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
             """, u)
 
-        # --- SEEDOWANIE WYTYCZNYCH IFS/BRCGS ---
+        # --- SEED: LINIE PRODUKCYJNE ---
+        default_lines = [
+            ('Linia Czekolady 1', 'L-01', 'Strefa Produkcji Czystej', 'Strefa Produkcji Czystej', 1),
+            ('Linia Pakowania Slices', 'L-02', 'Strefa Pakowania', 'Strefa Pakowania', 1),
+            ('Formowanie Tabliczek', 'L-03', 'Strefa Produkcji Czystej', 'Strefa Produkcji Czystej', 1)
+        ]
+        for l in default_lines:
+            await c.execute("""
+                INSERT OR REPLACE INTO production_lines (name, code, default_zone, zone, is_active)
+                VALUES (?, ?, ?, ?, ?)
+            """, l)
+
+        # --- SEED: WYTYCZNE IFS/BRCGS ---
         await c.execute("SELECT COUNT(*) FROM checklist_guidelines")
         if (await c.fetchone())[0] == 0:
             default_guidelines = [
@@ -147,16 +173,6 @@ async def init_db():
                 ('BRCGS Issue 9', '4.10.1', 'Zarządzanie alergenami na liniach pakowania', 'Procedury czyszczenia muszą zapobiegać zanieczyszczeniu krzyżowemu alergenami.', 'Upewnij się, że po partii z orzechami przeprowadzono walidowane mycie i test wymazowy.', 'HIGH')
             ]
             await c.executemany("INSERT INTO checklist_guidelines (standard, clause, title, requirement, guideline, risk_category) VALUES (?, ?, ?, ?, ?, ?)", default_guidelines)
-
-        # --- SEEDOWANIE LINII PRODUKCYJNYCH ---
-        await c.execute("SELECT COUNT(*) FROM production_lines")
-        if (await c.fetchone())[0] == 0:
-            default_lines = [
-                ('Linia Czekolady 1', 'Strefa Produkcji Czystej'),
-                ('Linia Pakowania Slices', 'Strefa Pakowania'),
-                ('Formowanie Tabliczek', 'Strefa Produkcji Czystej')
-            ]
-            await c.executemany("INSERT INTO production_lines (name, zone) VALUES (?, ?)", default_lines)
 
         await conn.commit()
 
