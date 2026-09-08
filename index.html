@@ -2003,7 +2003,7 @@
                     const audits = await res.json();
                     const a = audits.find(item => item.id === id);
                     if (a) {
-                        document.getElementById('det-auditor').textContent = a.auditor_name || a.auditor || 'Brak danych';
+                        document.getElementById('det-auditor').textContent = a.auditor_name || a.auditor_id || a.auditor || 'Brak danych';
                         document.getElementById('det-timestamp').textContent = (a.timestamp || '').substring(0, 16);
                         document.getElementById('det-slm-verdict').textContent = `${a.slm_verdict || 'OK'} (${a.risk_level || 'NISKIE'})`;
                         document.getElementById('det-record-status').textContent = a.record_status || 'ZABLOKOWANY';
