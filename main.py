@@ -197,6 +197,22 @@ async def auto_generate_schedule(payload: AutoPlanModel):
 
         count = 0
         cur = start_date
+
+        # --- KASOWANIE STARYCH AUDYTÓW Z TEGO ZAKRESU PRZED NOWYM PLANEM ---
+        import calendar
+        last_m = (payload.start_month + payload.period_months - 1)
+        target_year = payload.start_year + ((last_m - 1) // 12)
+        target_month = ((last_m - 1) % 12) + 1
+        _, last_day = calendar.monthrange(target_year, target_month)
+        
+        range_start_str = f"{payload.start_year:04d}-{payload.start_month:02d}-01"
+        range_end_str = f"{target_year:04d}-{target_month:02d}-{last_day:02d}"
+
+        await c.execute("""
+            DELETE FROM audit_schedules 
+            WHERE scheduled_date >= ? AND scheduled_date <= ?
+        """, (range_start_str, range_end_str))
+        # -------------------------------------------------------------------
         line_idx = type_idx = aud_idx = 0
 
         while cur <= end_date:
