@@ -156,6 +156,17 @@ async def run_migrations():
 
         # 7. Tabela Poświadczeń biometrycznych
         await db.execute("""
+            
+            CREATE TABLE IF NOT EXISTS checklist_guidelines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                standard TEXT NOT NULL,
+                clause TEXT NOT NULL,
+                title TEXT NOT NULL,
+                requirement TEXT NOT NULL,
+                guideline TEXT NOT NULL,
+                risk_category TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS biometric_credentials (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
