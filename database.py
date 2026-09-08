@@ -1,162 +1,69 @@
-import os
 import aiosqlite
 from contextlib import asynccontextmanager
 
-# Ustawienie ścieżki do bazy danych
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "audits.db")
+DB_NAME = "audits.db"
 
 @asynccontextmanager
 async def get_db():
-    # Otwórz połączenie z bazą danych z włączonym dostępem po nazwach kolumn
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        yield db
+    async with aiosqlite.connect(DB_NAME) as conn:
+        conn.row_factory = aiosqlite.Row
+        yield conn
 
-async def run_migrations():
-    async with get_db() as db:
-        # 1. Tabela Użytkowników
-        await db.execute("""
+async def init_db():
+    async with get_db() as conn:
+        c = await conn.cursor()
+        
+        # 1. Users
+        await c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pin TEXT UNIQUE NOT NULL,
-                full_name TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN ('MANAGER', 'AUDITOR')),
-                is_active INTEGER NOT NULL DEFAULT 1,
-                qualifications TEXT NOT NULL DEFAULT '["HACCP","GMP","GHP"]',
-                biometric_cred_id TEXT,
-                notes TEXT
-            );
+                name TEXT NOT NULL,
+                role TEXT NOT NULL
+            )
         """)
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN notes TEXT")
-            await db.commit()
-        except Exception:
-            pass
 
-        # 2. Tabela Linii Produkcyjnych
-        await db.execute("""
+        # 2. Production lines
+        await c.execute("""
             CREATE TABLE IF NOT EXISTS production_lines (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
-                code TEXT UNIQUE NOT NULL,
-                default_zone TEXT NOT NULL,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
+                zone TEXT NOT NULL
+            )
         """)
 
-        # 3. Tabela Harmonogramu Audytów
-        await db.execute("""
+        # 3. Audit schedules
+        await c.execute("""
             CREATE TABLE IF NOT EXISTS audit_schedules (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 scheduled_date TEXT NOT NULL,
+                audit_type TEXT NOT NULL,
                 line TEXT NOT NULL,
-                audit_type TEXT NOT NULL CHECK(audit_type IN ('HACCP', 'GMP', 'GHP')),
                 lead_auditor TEXT NOT NULL,
-                backup_auditor TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'PLANOWANY' CHECK(status IN ('PLANOWANY', 'WYKONANY', 'ANULOWANY')),
-                notes TEXT,
-                completed_at TEXT
-            );
+                backup_auditor TEXT,
+                status TEXT DEFAULT 'PLANOWANY',
+                notes TEXT
+            )
         """)
 
-        # 4. Tabela Audytów Operacyjnych
-        await db.execute("""
+        # 4. Audits
+        await c.execute("""
             CREATE TABLE IF NOT EXISTS audits (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                auditor_pin TEXT NOT NULL,
-                auditor_name TEXT NOT NULL,
+                auditor_pin TEXT,
+                auditor_name TEXT,
                 line TEXT NOT NULL,
                 shift TEXT NOT NULL,
-                zone TEXT NOT NULL,
-                audit_type TEXT NOT NULL DEFAULT 'HACCP',
-                health_ok TEXT NOT NULL DEFAULT 'TAK',
-                dispense_no TEXT DEFAULT 'BRAK',
-                ppe_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                allergen_clean_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                wood_policy_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                line_status TEXT NOT NULL DEFAULT 'Produkcja Ciągła',
-                ccp1_fe_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                ccp1_nonfe_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                ccp1_ss_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                ccp1_reject_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                ccp1_bin_locked TEXT NOT NULL DEFAULT 'ZGODNY',
-                ccp2_magnet_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                ccp3_sieve_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                cleanliness_rating INTEGER NOT NULL DEFAULT 5,
-                wood_plastic_status TEXT NOT NULL DEFAULT 'ZGODNY',
-                waste_disposal_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                estop_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                atex_zone_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                cip_lockout_ok TEXT NOT NULL DEFAULT 'ZGODNY',
-                notes TEXT,
-                photo_path TEXT,
-                ko_failed INTEGER NOT NULL DEFAULT 0,
-                risk_level TEXT NOT NULL DEFAULT 'NISKIE',
-                slm_verdict TEXT NOT NULL DEFAULT 'OK',
-                slm_analysis TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        # 5. Tabela Wniosków o korektę
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS audit_edit_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                audit_id INTEGER NOT NULL,
-                requested_by TEXT NOT NULL,
-                reason TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'OCZEKUJE' CHECK(status IN ('OCZEKUJE', 'ZATWIERDZONY', 'ODRZUCONY')),
-                manager_comment TEXT,
+                slm_verdict TEXT,
+                risk_level TEXT,
+                process_status TEXT DEFAULT 'ZATWIERDZONY',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                resolved_at TIMESTAMP,
-                FOREIGN KEY(audit_id) REFERENCES audits(id)
-            );
-        """)
-        # 8. Dodanie kolumny audit_code, proces_status, signoff_leader, signoff_quality do audits
-        try:
-            await db.execute("ALTER TABLE audits ADD COLUMN audit_code TEXT UNIQUE")
-        except Exception:
-            pass
-        try:
-            await db.execute("ALTER TABLE audits ADD COLUMN process_status TEXT NOT NULL DEFAULT 'IN_PROGRESS'")
-        except Exception:
-            pass
-        try:
-            await db.execute("ALTER TABLE audits ADD COLUMN signoff_leader TEXT DEFAULT NULL")
-        except Exception:
-            pass
-        try:
-            await db.execute("ALTER TABLE audits ADD COLUMN signoff_quality TEXT DEFAULT NULL")
-        except Exception:
-            pass
-        try:
-            await db.execute("ALTER TABLE audits ADD COLUMN audit_score REAL DEFAULT 100.0")
-        except Exception:
-            pass
-        try:
-            await db.execute("ALTER TABLE audits ADD COLUMN audit_points INTEGER DEFAULT 0")
-        except Exception:
-            pass
-
-        # 6. Tabela Dziennika zmian
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS audit_change_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                audit_id INTEGER NOT NULL,
-                modified_by TEXT NOT NULL,
-                field_name TEXT NOT NULL,
-                old_value TEXT,
-                new_value TEXT,
-                change_reason TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(audit_id) REFERENCES audits(id)
-            );
+                data JSON
+            )
         """)
 
-        # 7. Tabela Poświadczeń biometrycznych
-        await db.execute("""
-            
+        # 5. Checklist guidelines
+        await c.execute("""
             CREATE TABLE IF NOT EXISTS checklist_guidelines (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 standard TEXT NOT NULL,
@@ -165,16 +72,71 @@ async def run_migrations():
                 requirement TEXT NOT NULL,
                 guideline TEXT NOT NULL,
                 risk_category TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS biometric_credentials (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                credential_id TEXT UNIQUE NOT NULL,
-                created_at TEXT NOT NULL,
-                device_name TEXT NOT NULL,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            );
+            )
         """)
 
-        await db.commit()
+        # 6. Audit edit requests & change logs
+        await c.execute("""
+            CREATE TABLE IF NOT EXISTS audit_edit_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                audit_id INTEGER NOT NULL,
+                requested_by TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                status TEXT DEFAULT 'PENDING',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await c.execute("""
+            CREATE TABLE IF NOT EXISTS audit_change_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                audit_id INTEGER NOT NULL,
+                changed_by TEXT NOT NULL,
+                changes TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await c.execute("""
+            CREATE TABLE IF NOT EXISTS biometric_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_pin TEXT NOT NULL,
+                credential_id TEXT NOT NULL,
+                public_key TEXT NOT NULL,
+                sign_count INTEGER DEFAULT 0
+            )
+        """)
+
+        # --- SEEDOWANIE DANYCH STARTOWYCH ---
+        await c.execute("SELECT COUNT(*) FROM users")
+        user_count = (await c.fetchone())[0]
+        if user_count == 0:
+            default_users = [
+                ('9999', 'Manager Jakości', 'MANAGER'),
+                ('1001', 'Audytor Jan Kowalski', 'AUDITOR'),
+                ('1002', 'Audytor Anna Nowak', 'AUDITOR'),
+                ('1003', 'Audytor Piotr Wiśniewski', 'AUDITOR')
+            ]
+            await c.executemany("INSERT INTO users (pin, name, role) VALUES (?, ?, ?)", default_users)
+
+        await c.execute("SELECT COUNT(*) FROM checklist_guidelines")
+        guideline_count = (await c.fetchone())[0]
+        if guideline_count == 0:
+            default_guidelines = [
+                ('IFS Food v8', '4.1.1', 'Czystość i higiena linii produkcyjnej', 'Wszystkie powierzchnie kontaktujące się z żywnością muszą być czyste i zdezynfekowane.', 'Skontroluj taśmociągi, leje zasypowe oraz głowice dozujące pod kątem pozostałości masy czekoladowej.', 'HIGH'),
+                ('IFS Food v8', '4.4.2', 'Kontrola ciał obcych (detektor metali)', 'System detekcji metali musi być sprawny i testowany w regularnych odstępach czasu.', 'Zweryfikuj poprawność odrzutu wzorców Fe, Non-Fe oraz SS zgodnie z instrukcją stanowiskową.', 'CRITICAL'),
+                ('BRCGS Issue 9', '4.10.1', 'Zarządzanie alergenami na liniach pakowania', 'Procedury czyszczenia muszą zapobiegać zanieczyszczeniu krzyżowemu alergenami.', 'Upewnij się, że po partii z orzechami przeprowadzono walidowane mycie i test wymazowy.', 'HIGH')
+            ]
+            await c.executemany("INSERT INTO checklist_guidelines (standard, clause, title, requirement, guideline, risk_category) VALUES (?, ?, ?, ?, ?, ?)", default_guidelines)
+
+        await c.execute("SELECT COUNT(*) FROM production_lines")
+        lines_count = (await c.fetchone())[0]
+        if lines_count == 0:
+            default_lines = [
+                ('Linia Czekolady 1', 'Strefa Produkcji Czystej'),
+                ('Linia Pakowania Slices', 'Strefa Pakowania'),
+                ('Formowanie Tabliczek', 'Strefa Produkcji Czystej')
+            ]
+            await c.executemany("INSERT INTO production_lines (name, zone) VALUES (?, ?)", default_lines)
+
+        await conn.commit()
