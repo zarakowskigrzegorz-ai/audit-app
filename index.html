@@ -1504,29 +1504,46 @@
         async function loadAuditorHistory() {
             const list = document.getElementById('auditor-history-list');
             if (!list) return;
-            list.innerHTML = '<p class="text-xs text-slate-400">Ładowanie historii z bazy SQLite...</p>';
+            list.innerHTML = '<p class="text-xs text-slate-400 animate-pulse">Pobieranie historii z bazy SQLite...</p>';
             try {
                 const res = await fetch('/api/audits');
+                if (!res.ok) {
+                    list.innerHTML = '<p class="text-xs text-amber-400">Brak możliwości pobrania historii (błąd serwera).</p>';
+                    return;
+                }
                 const data = await res.json();
-                const myAudits = data.filter(a => String(a.auditor_id) === String(state.auditor_id) || !state.auditor_id || state.role === 'MANAGER' || true);
+                const auditsList = Array.isArray(data) ? data : [];
                 
+                const myAudits = auditsList.filter(a => {
+                    if (!a) return false;
+                    if (state.role === 'MANAGER') return true;
+                    if (!state.auditor_id) return true;
+                    return String(a.auditor_id).trim() === String(state.auditor_id).trim() || true;
+                });
+
                 list.innerHTML = '';
                 if (myAudits.length === 0) {
                     list.innerHTML = '<p class="text-xs text-slate-400">Brak zarejestrowanych audytów. Masz czyste konto!</p>';
                     return;
                 }
-                
-                myAudits.slice(0, 8).forEach(a => {
-                    const isLocked = a.record_status !== 'ODBLOKOWANY_DO_KOREKTY';
+
+                myAudits.slice(0, 10).forEach(a => {
+                    const auditId = a.id || 0;
+                    const lineName = a.line || 'Brak nazwy linii';
+                    const dateStr = a.timestamp ? String(a.timestamp).substring(0, 16) : 'Brak daty';
+                    const statusText = a.record_status || 'ZABLOKOWANY';
+                    const isLocked = statusText !== 'ODBLOKOWANY_DO_KOREKTY';
+                    const isOk = String(a.slm_verdict).toUpperCase() === 'OK';
+
                     list.innerHTML += `
-                        <div class="glass-card bg-slate-900 p-3.5 rounded-xl flex justify-between items-center border-l-4 ${a.slm_verdict === 'OK' ? 'border-emerald-500' : 'border-red-500'}">
+                        <div class="glass-card bg-slate-900/90 p-3.5 rounded-xl flex justify-between items-center border-l-4 ${isOk ? 'border-emerald-500' : 'border-rose-500'} mb-2">
                             <div>
-                                <h4 class="font-bold text-xs text-white">${a.line}</h4>
-                                <p class="text-[9px] text-slate-400 mt-0.5">Data: ${a.timestamp ? a.timestamp.substring(0, 16) : 'Brak daty'} | Status: <b class="${isLocked ? 'text-amber-400' : 'text-emerald-400'}">${a.record_status || 'ZABLOKOWANY'}</b></p>
+                                <h4 class="font-bold text-xs text-white">${lineName}</h4>
+                                <p class="text-[9px] text-slate-400 mt-0.5">Data: ${dateStr} | Status: <b class="${isLocked ? 'text-amber-400' : 'text-emerald-400'}">${statusText}</b></p>
                             </div>
                             <div>
                                 ${isLocked 
-                                    ? `<button onclick="requestAuditCorrection(${a.id})" class="tile-3d bg-amber-950/80 border border-amber-500/50 text-amber-300 px-3 py-1.5 rounded font-bold text-[10px] transition hover:bg-amber-900">
+                                    ? `<button onclick="requestAuditCorrection(${auditId})" class="tile-3d bg-amber-950/80 border border-amber-500/50 text-amber-300 px-3 py-1.5 rounded font-bold text-[10px] transition hover:bg-amber-900 cursor-pointer">
                                          🔓 Wnioskuj o korektę
                                        </button>`
                                     : `<span class="text-emerald-400 font-extrabold text-[10px] bg-emerald-950 px-2 py-1 rounded border border-emerald-500/40">
@@ -1537,7 +1554,10 @@
                         </div>
                     `;
                 });
-            } catch(e) { console.error(e); }
+            } catch(e) { 
+                console.error("Błąd ładowania historii audytów:", e);
+                list.innerHTML = '<p class="text-xs text-rose-400">Błąd podczas przetwarzania historii audytów.</p>';
+            }
         }
 
         async function requestAuditCorrection(auditId) {

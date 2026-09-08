@@ -148,7 +148,7 @@ async def add_schedule(payload: ScheduleCreateModel):
         c = await conn.cursor()
         await c.execute("""
             INSERT INTO audit_schedules (scheduled_date, audit_type, line, lead_auditor, backup_auditor, status, notes)
-            VALUES (?, ?, ?, ?, ?, 'PLANOWANY', ?)
+            VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, 'PLANOWANY', ?)
         """, (payload.scheduled_date, payload.audit_type, payload.line, payload.lead_auditor, payload.backup_auditor, payload.notes))
         await conn.commit()
     return {"status": "OK"}
@@ -265,7 +265,7 @@ async def save_audit(
 
     async with get_db() as db:
         await db.execute("""
-            INSERT INTO audits (
+            INSERT INTO audits (timestamp, 
                 auditor_id, line, shift, zone, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
                 line_status, ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked, ccp2_magnet_ok, ccp3_sieve_ok,
                 gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok, bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, 
