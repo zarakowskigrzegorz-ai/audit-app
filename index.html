@@ -1428,7 +1428,7 @@
                     tbody.innerHTML += `
                         <tr class="hover:bg-slate-800 transition">
                             <td class="py-2 pr-2 border-b border-white/5 font-mono text-[10px]">#${a.id}</td>
-                            <td class="py-2 pr-2 border-b border-white/5 text-[9px]">${a.timestamp.substring(0, 16)}</td>
+                            <td class="py-2 pr-2 border-b border-white/5 text-[9px]">${a.timestamp ? a.timestamp.substring(0, 16) : 'Brak daty'}</td>
                             <td class="py-2 pr-2 border-b border-white/5 font-bold text-[10px] text-white">${a.line}</td>
                             <td class="py-2 pr-2 border-b border-white/5 text-[10px]">${a.shift}</td>
                             <td class="py-2 pr-2 border-b border-white/5 text-[9px]">${a.auditor_id.split(' ')[0]}</td>
@@ -1499,7 +1499,7 @@
             try {
                 const res = await fetch('/api/audits');
                 const data = await res.json();
-                const myAudits = data.filter(a => a.auditor_id === state.auditor_id || true);
+                const myAudits = data.filter(a => String(a.auditor_id) === String(state.auditor_id) || !state.auditor_id || state.role === 'MANAGER' || true);
                 
                 list.innerHTML = '';
                 if (myAudits.length === 0) {
@@ -1513,7 +1513,7 @@
                         <div class="glass-card bg-slate-900 p-3.5 rounded-xl flex justify-between items-center border-l-4 ${a.slm_verdict === 'OK' ? 'border-emerald-500' : 'border-red-500'}">
                             <div>
                                 <h4 class="font-bold text-xs text-white">${a.line}</h4>
-                                <p class="text-[9px] text-slate-400 mt-0.5">Data: ${a.timestamp.substring(0, 16)} | Status: <b class="${isLocked ? 'text-amber-400' : 'text-emerald-400'}">${a.record_status || 'ZABLOKOWANY'}</b></p>
+                                <p class="text-[9px] text-slate-400 mt-0.5">Data: ${a.timestamp ? a.timestamp.substring(0, 16) : 'Brak daty'} | Status: <b class="${isLocked ? 'text-amber-400' : 'text-emerald-400'}">${a.record_status || 'ZABLOKOWANY'}</b></p>
                             </div>
                             <div>
                                 ${isLocked 
@@ -1742,6 +1742,7 @@
                 if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
                 if (typeof updateKpiRibbon === 'function') await updateKpiRibbon();
                 if (typeof loadAuditsAndRender === 'function') await loadAuditsAndRender();
+                if (typeof loadAuditorHistory === 'function') await loadAuditorHistory();
             } else {
                 updateAuditHud(3, "BŁĄD ZAPISU AUDYTU", `Serwer zwrócił kod błędu ${res.status}`, "alert");
             }
@@ -1989,6 +1990,7 @@
                     alert('✅ Korekta została zarejestrowana w dzienniku Audit Trail!');
                     closeAuditDetailsModal();
                     if (typeof loadAuditsAndRender === 'function') await loadAuditsAndRender();
+                if (typeof loadAuditorHistory === 'function') await loadAuditorHistory();
                 } else {
                     alert('Błąd: ' + (data.detail || 'Nie udało się zapisać korekty.'));
                 }
