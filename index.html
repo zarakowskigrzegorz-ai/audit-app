@@ -857,7 +857,14 @@
             else if (modId === 'audit-main') { targetId = 'view-audit-main'; }
             else if (!modId.startsWith('view-') && !modId.startsWith('hub-')) { targetId = 'view-' + modId; }
 
-            const target = document.getElementById(targetId);
+            let target = document.getElementById(targetId);
+            // Fallback zapobiegający czarnemu ekranowi:
+            if (!target) {
+                targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor';
+                target = document.getElementById(targetId);
+                modId = 'hub';
+            }
+
             if(target) {
                 target.classList.remove('hidden');
                 if(pushToHistory && currentModule !== modId && currentModule !== 'auth') {
@@ -868,6 +875,12 @@
             }
             updateDockButtons();
             
+            // Odświeżanie na żywo przy powrocie do Dashboardu / Hubu
+            if(modId === 'hub') {
+                if (typeof loadAuditResults === 'function') loadAuditResults();
+                if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
+                if (typeof updateManagerDashboardStats === 'function') updateManagerDashboardStats();
+            }
             if(modId === 'calendar') loadScheduleAndRender();
             if(modId === 'auditors') renderAuditorsList();
             if(modId === 'lines') renderLinesManagerList();
@@ -879,8 +892,14 @@
 
         function navGoBack() {
             if(navHistory.length > 0) {
+                const prev = navHistory.pop();
                 navForward.push(currentModule);
-                showModule(navHistory.pop(), false);
+                showModule(prev, false);
+            } else {
+                // Jeśli historia jest pusta, zawsze wracaj bezpiecznie do Dashboardu (Hub)
+                if (currentModule !== 'hub') {
+                    showModule('hub', false);
+                }
             }
         }
 
