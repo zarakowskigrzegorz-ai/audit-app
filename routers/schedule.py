@@ -131,6 +131,12 @@ async def auto_plan_audits(payload: AutoPlanModel):
         current_date = datetime(payload.start_year, payload.start_month, 1)
         end_date = current_date + timedelta(days=30 * payload.period_months) # Approx months
 
+        # Usunięcie dotychczasowych planowanych audytów z wybranego okresu
+        await conn.execute("""
+            DELETE FROM audit_schedules 
+            WHERE scheduled_date >= ? AND scheduled_date <= ? AND status = 'PLANOWANY'
+        """, (current_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
+
         scheduled_audits = []
         while current_date < end_date:
             if not payload.include_weekends and current_date.weekday() >= 5: # Saturday or Sunday
