@@ -713,6 +713,60 @@
         </div>
     </div>
 
+    
+    <!-- MODAL SZCZEGÓŁÓW AUDYTU I KOREKTY -->
+    <div id="modal-audit-details" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-card bg-slate-900 border border-cyan-500/50 p-5 rounded-2xl w-full max-w-lg space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                <div>
+                    <h3 class="text-sm font-black text-cyan-400 flex items-center gap-2">
+                        <span>📋 Szczegóły Audytu</span>
+                        <span id="det-audit-id-badge" class="text-[10px] bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30">#---</span>
+                    </h3>
+                    <p class="text-[10px] text-slate-400">Podgląd wpisu i formularz wprowadzania korekt</p>
+                </div>
+                <button onclick="closeAuditDetailsModal()" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1.5 text-xs">
+                <div class="flex justify-between"><span class="text-slate-400 text-[10px]">Audytor:</span> <b id="det-auditor" class="text-white">---</b></div>
+                <div class="flex justify-between"><span class="text-slate-400 text-[10px]">Data wpisu:</span> <b id="det-timestamp" class="text-slate-300">---</b></div>
+                <div class="flex justify-between"><span class="text-slate-400 text-[10px]">Werdykt SLM:</span> <b id="det-slm-verdict" class="text-emerald-400">---</b></div>
+                <div class="flex justify-between"><span class="text-slate-400 text-[10px]">Status rekordu:</span> <b id="det-record-status" class="text-amber-400">---</b></div>
+            </div>
+
+            <div class="space-y-3 pt-1">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 block mb-1">Linia produkcyjna:</label>
+                        <input id="adm-edit-line" type="text" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:border-cyan-500 outline-none" />
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 block mb-1">Zmiana:</label>
+                        <select id="adm-edit-shift" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:border-cyan-500 outline-none">
+                            <option value="1">Zmiana I</option>
+                            <option value="2">Zmiana II</option>
+                            <option value="3">Zmiana III</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 block mb-1">Uzasadnienie / Powód korekty (IFS Food v8):</label>
+                    <textarea id="adm-reply-text" rows="3" placeholder="Wymóg IFS Food v8: Podaj szczegółowy powód korekty wpisu..." class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-xs text-white focus:border-cyan-500 outline-none resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeAuditDetailsModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded font-bold text-xs">Anuluj</button>
+                <button id="btn-save-correction" onclick="submitAuditCorrection()" class="flex-2 tile-3d bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 p-2 rounded font-black text-xs text-white flex items-center justify-center gap-1.5 shadow-lg">
+                    <span>💾 Zapisz korektę i wyślij</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
     <!-- MODAL AUDYTORA Z KALENDARZA -->
     <div id="modal-aud-view" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="glass-card bg-slate-900 border border-cyan-500/50 p-4 rounded-2xl w-full max-w-md space-y-3 shadow-2xl">
@@ -1798,6 +1852,93 @@
             document.getElementById('aud-view-status').innerText = a.status;
             document.getElementById('modal-aud-view').classList.remove('hidden');
         }
+
+        
+        let currentDetailedAuditId = null;
+
+        window.closeAuditDetailsModal = function() {
+            const modal = document.getElementById('modal-audit-details');
+            if (modal) modal.classList.add('hidden');
+            currentDetailedAuditId = null;
+        };
+
+        window.openAuditDetailsModal = async function(id) {
+            currentDetailedAuditId = id;
+            const modal = document.getElementById('modal-audit-details');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+
+            document.getElementById('det-audit-id-badge').textContent = '#' + id;
+            document.getElementById('det-auditor').textContent = 'Pobieranie...';
+            document.getElementById('adm-reply-text').value = '';
+
+            try {
+                const res = await fetch('/api/audits');
+                if (res.ok) {
+                    const audits = await res.json();
+                    const a = audits.find(item => item.id === id);
+                    if (a) {
+                        document.getElementById('det-auditor').textContent = a.auditor_name || a.auditor || 'Brak danych';
+                        document.getElementById('det-timestamp').textContent = (a.timestamp || '').substring(0, 16);
+                        document.getElementById('det-slm-verdict').textContent = `${a.slm_verdict || 'OK'} (${a.risk_level || 'NISKIE'})`;
+                        document.getElementById('det-record-status').textContent = a.record_status || 'ZABLOKOWANY';
+                        document.getElementById('adm-edit-line').value = a.line || '';
+                        if (a.shift) document.getElementById('adm-edit-shift').value = a.shift;
+                    }
+                }
+            } catch(e) {
+                console.error("Błąd pobierania audytu:", e);
+            }
+        };
+
+        window.submitAuditCorrection = async function() {
+            if (!currentDetailedAuditId) return;
+
+            const line = document.getElementById('adm-edit-line').value.trim();
+            const shift = document.getElementById('adm-edit-shift').value;
+            const reason = document.getElementById('adm-reply-text').value.trim();
+
+            if (!reason || reason.length < 5) {
+                alert("Podanie szczegółowego powodu korekty jest wymagane przez normę IFS Food v8 (min. 5 znaków).");
+                return;
+            }
+
+            const payload = {
+                audit_id: currentDetailedAuditId,
+                modified_by: (typeof state !== 'undefined' && (state.currentAuditor || state.role)) ? (state.currentAuditor || state.role) : "Manager",
+                change_reason: reason,
+                updated_fields: {
+                    line: line,
+                    shift: shift
+                }
+            };
+
+            const btn = document.getElementById('btn-save-correction');
+            btn.disabled = true;
+            btn.textContent = 'Wysyłanie...';
+
+            try {
+                const res = await fetch('/api/audits/apply-correction', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    alert('✅ Korekta została zarejestrowana w dzienniku Audit Trail!');
+                    closeAuditDetailsModal();
+                    if (typeof loadAuditsAndRender === 'function') await loadAuditsAndRender();
+                } else {
+                    alert('Błąd: ' + (data.detail || 'Nie udało się zapisać korekty.'));
+                }
+            } catch (e) {
+                alert('Błąd połączenia z serwerem podczas zapisu korekty.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>💾 Zapisz korektę i wyślij</span>';
+            }
+        };
 
         function closeAudModal() { document.getElementById('modal-aud-view').classList.add('hidden'); }
 
