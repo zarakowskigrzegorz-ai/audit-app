@@ -1,4 +1,5 @@
 import aiosqlite
+import json
 from contextlib import asynccontextmanager
 
 DB_NAME = "audits.db"
@@ -14,15 +15,30 @@ async def init_db():
     async with get_db() as conn:
         c = await conn.cursor()
         
-        # 1. Users
+        # 1. Users ze wszystkimi kolumnami wymaganymi przez routers/auth.py
         await c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pin TEXT UNIQUE NOT NULL,
-                name TEXT NOT NULL,
-                role TEXT NOT NULL
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                qualifications TEXT DEFAULT '["HACCP", "GMP", "GHP"]',
+                is_active INTEGER DEFAULT 1,
+                biometric_cred_id TEXT
             )
         """)
+
+        # Migracja kolumn na wypadek, gdyby tabela istniała w starym formacie
+        for col, definition in [
+            ("full_name", "TEXT DEFAULT ''"),
+            ("is_active", "INTEGER DEFAULT 1"),
+            ("qualifications", "TEXT DEFAULT '[\"HACCP\", \"GMP\", \"GHP\"]'"),
+            ("biometric_cred_id", "TEXT")
+        ]:
+            try:
+                await c.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+            except Exception:
+                pass
 
         # 2. Production lines
         await c.execute("""
@@ -108,21 +124,23 @@ async def init_db():
             )
         """)
 
-        # --- SEEDOWANIE DANYCH STARTOWYCH ---
-        await c.execute("SELECT COUNT(*) FROM users")
-        user_count = (await c.fetchone())[0]
-        if user_count == 0:
-            default_users = [
-                ('9999', 'Manager Jakości', 'MANAGER'),
-                ('1001', 'Audytor Jan Kowalski', 'AUDITOR'),
-                ('1002', 'Audytor Anna Nowak', 'AUDITOR'),
-                ('1003', 'Audytor Piotr Wiśniewski', 'AUDITOR')
-            ]
-            await c.executemany("INSERT INTO users (pin, name, role) VALUES (?, ?, ?)", default_users)
+        # --- SEEDOWANIE KONT UŻYTKOWNIKÓW ---
+        default_users = [
+            ('9999', 'Manager Jakości', 'MANAGER', '["IFS", "BRCGS", "HACCP"]', 1),
+            ('1001', 'Jan Kowalski', 'AUDITOR', '["HACCP", "GMP"]', 1),
+            ('1002', 'Anna Nowak', 'AUDITOR', '["HACCP", "GHP"]', 1),
+            ('1003', 'Piotr Wiśniewski', 'AUDITOR', '["HACCP", "GMP", "GHP", "IFS"]', 1)
+        ]
+        
+        for u in default_users:
+            await c.execute("""
+                INSERT OR REPLACE INTO users (pin, full_name, role, qualifications, is_active)
+                VALUES (?, ?, ?, ?, ?)
+            """, u)
 
+        # --- SEEDOWANIE WYTYCZNYCH IFS/BRCGS ---
         await c.execute("SELECT COUNT(*) FROM checklist_guidelines")
-        guideline_count = (await c.fetchone())[0]
-        if guideline_count == 0:
+        if (await c.fetchone())[0] == 0:
             default_guidelines = [
                 ('IFS Food v8', '4.1.1', 'Czystość i higiena linii produkcyjnej', 'Wszystkie powierzchnie kontaktujące się z żywnością muszą być czyste i zdezynfekowane.', 'Skontroluj taśmociągi, leje zasypowe oraz głowice dozujące pod kątem pozostałości masy czekoladowej.', 'HIGH'),
                 ('IFS Food v8', '4.4.2', 'Kontrola ciał obcych (detektor metali)', 'System detekcji metali musi być sprawny i testowany w regularnych odstępach czasu.', 'Zweryfikuj poprawność odrzutu wzorców Fe, Non-Fe oraz SS zgodnie z instrukcją stanowiskową.', 'CRITICAL'),
@@ -130,9 +148,9 @@ async def init_db():
             ]
             await c.executemany("INSERT INTO checklist_guidelines (standard, clause, title, requirement, guideline, risk_category) VALUES (?, ?, ?, ?, ?, ?)", default_guidelines)
 
+        # --- SEEDOWANIE LINII PRODUKCYJNYCH ---
         await c.execute("SELECT COUNT(*) FROM production_lines")
-        lines_count = (await c.fetchone())[0]
-        if lines_count == 0:
+        if (await c.fetchone())[0] == 0:
             default_lines = [
                 ('Linia Czekolady 1', 'Strefa Produkcji Czystej'),
                 ('Linia Pakowania Slices', 'Strefa Pakowania'),
@@ -142,5 +160,4 @@ async def init_db():
 
         await conn.commit()
 
-# Aliasy dla kompatybilności wstecznej z importami w main.py
 run_migrations = init_db
