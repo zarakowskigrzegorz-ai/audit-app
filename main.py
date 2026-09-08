@@ -184,6 +184,19 @@ async def delete_schedule(sched_id: int):
     return {"status": "OK"}
 
 @app.post("/api/schedule/auto")
+class ClearMonthModel(BaseModel):
+    month: int
+    year: int
+
+@app.post("/api/schedule/clear-month")
+async def clear_month_schedule(payload: ClearMonthModel):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        prefix = f"{payload.year:04d}-{payload.month:02d}%"
+        await c.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix,))
+        await conn.commit()
+    return {"status": "success", "message": f"Wyczyszczono audyty dla {prefix}"}
+
 async def auto_generate_schedule(payload: AutoPlanModel):
     async with get_db() as conn:
         c = await conn.cursor()

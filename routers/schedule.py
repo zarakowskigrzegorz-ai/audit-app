@@ -158,3 +158,16 @@ async def auto_plan_audits(payload: AutoPlanModel):
             current_date += timedelta(days=1)
         await conn.commit()
     return {"status": "success", "count": len(scheduled_audits), "scheduled_audits_count": len(scheduled_audits)}
+
+
+class ClearMonthModel(BaseModel):
+    month: int
+    year: int
+
+@router.post("/clear-month")
+async def router_clear_month(payload: ClearMonthModel):
+    async with get_db() as conn:
+        prefix = f"{payload.year:04d}-{payload.month:02d}%"
+        await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix,))
+        await conn.commit()
+    return {"status": "success"}
