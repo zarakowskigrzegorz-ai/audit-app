@@ -1328,6 +1328,16 @@
                 data.forEach(a => {
                     const slmColor = a.slm_verdict === 'OK' ? 'text-emerald-400' : 'text-red-400 font-bold';
                     const statusColor = a.record_status === 'ZABLOKOWANY' ? 'text-amber-400' : 'text-emerald-400';
+                    const isFinished = (a.record_status === 'ZATWIERDZONY' || a.record_status === 'ODRZUCONY');
+                    const actionsHtml = isFinished 
+                        ? (a.record_status === 'ZATWIERDZONY' 
+                            ? '<span class="text-emerald-400 font-semibold mr-2">Zatwierdzono</span>' 
+                            : '<span class="text-rose-500 font-semibold mr-2">Odrzucono</span>')
+                        : `
+                            <button onclick="handleAuditAction('approve', ${a.id})" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[8px] font-semibold">Zatwierdź</button>
+                            <button onclick="handleAuditAction('reject', ${a.id})" class="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[8px] font-semibold">Odrzuć</button>
+                          `;
+
                     tbody.innerHTML += `
                         <tr class="hover:bg-slate-800 transition">
                             <td class="py-2 pr-2 border-b border-white/5 font-mono text-[10px]">#${a.id}</td>
@@ -1335,12 +1345,11 @@
                             <td class="py-2 pr-2 border-b border-white/5 font-bold text-[10px] text-white">${a.line}</td>
                             <td class="py-2 pr-2 border-b border-white/5 text-[10px]">${a.shift}</td>
                             <td class="py-2 pr-2 border-b border-white/5 text-[9px]">${a.auditor_id.split(' ')[0]}</td>
-                            <td class="py-2 pr-2 border-b border-white/5 text-[8px] font-black ${statusColor}">${a.record_status}</td>
+                            <td id="status-${a.id}" class="py-2 pr-2 border-b border-white/5 text-[8px] font-black ${statusColor}">${a.record_status}</td>
                             <td class="py-2 border-b border-white/5 ${slmColor} text-[9px]">${a.slm_verdict} (${a.risk_level})</td>
                             <td class="py-2 pr-2 border-b border-white/5 whitespace-nowrap">
-                                <div class="flex items-center gap-1">
-                                    <button onclick="handleAuditAction('approve', ${a.id})" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[8px] font-semibold">Zatwierdź</button>
-                                    <button onclick="handleAuditAction('reject', ${a.id})" class="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[8px] font-semibold">Odrzuć</button>
+                                <div id="actions-${a.id}" class="flex items-center gap-1">
+                                    ${actionsHtml}
                                     <button onclick="handleAuditAction('details', ${a.id})" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-[8px] font-semibold">Szczegóły</button>
                                 </div>
                             </td>
@@ -1792,14 +1801,63 @@
 
         function closeAudModal() { document.getElementById('modal-aud-view').classList.add('hidden'); }
 
-        window.handleAuditAction = function(action, id) {
+        window.handleAuditAction = async function(action, id) {
+            const actionsContainer = document.getElementById(`actions-${id}`);
+            const statusCell = document.getElementById(`status-${id}`);
+
             if (action === 'approve') {
-                alert('Zatwierdzono audyt #' + id);
+                try {
+                    await fetch(`/api/audits/${id}/status`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'ZATWIERDZONY' })
+                    });
+                } catch (e) {
+                    console.warn('API status patch fallback:', e);
+                }
+
+                if (actionsContainer) {
+                    actionsContainer.innerHTML = `
+                        <span class="text-emerald-400 font-bold text-[9px] mr-2">Zatwierdzono</span>
+                        <button onclick="handleAuditAction('details', ${id})" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-[8px] font-semibold">Szczegóły</button>
+                    `;
+                }
+                if (statusCell) {
+                    statusCell.textContent = 'ZATWIERDZONY';
+                    statusCell.className = 'py-2 pr-2 border-b border-white/5 text-[8px] font-black text-emerald-400';
+                }
+
             } else if (action === 'reject') {
                 const reason = prompt('Podaj powód odrzucenia (wymóg IFS Food v8):');
-                if (reason) alert('Audyt #' + id + ' odrzucony. Powód: ' + reason);
+                if (!reason || reason.trim() === '') return;
+
+                try {
+                    await fetch(`/api/audits/${id}/status`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'ODRZUCONY', reason: reason })
+                    });
+                } catch (e) {
+                    console.warn('API status patch fallback:', e);
+                }
+
+                if (actionsContainer) {
+                    actionsContainer.innerHTML = `
+                        <span class="text-rose-500 font-bold text-[9px] mr-2">Odrzucono</span>
+                        <button onclick="handleAuditAction('details', ${id})" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-[8px] font-semibold">Szczegóły</button>
+                    `;
+                }
+                if (statusCell) {
+                    statusCell.textContent = 'ODRZUCONY';
+                    statusCell.className = 'py-2 pr-2 border-b border-white/5 text-[8px] font-black text-rose-500';
+                }
+
             } else if (action === 'details') {
-                alert('Szczegóły audytu #' + id);
+                if (typeof openAuditDetailsModal === 'function') {
+                    openAuditDetailsModal(id);
+                } else {
+                    alert('Szczegóły audytu #' + id);
+                }
             }
         };
 
