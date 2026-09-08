@@ -1214,7 +1214,13 @@
         async function loadScheduleAndRender() {
             try {
                 const res = await fetch(`/api/schedule?auditor=${encodeURIComponent(state.auditor_id)}&role=${state.role}`);
-                schedulesData = await res.json();
+                const allSchedules = await res.json();
+                // Audytor widzi tylko zaplanowane (wykonane znikaja do historii), Manager widzi calosc
+                if (state.role !== 'MANAGER') {
+                    schedulesData = allSchedules.filter(s => s.status !== 'WYKONANY');
+                } else {
+                    schedulesData = allSchedules;
+                }
                 renderCalendar();
             } catch(e) { schedulesData = []; }
         }
@@ -1243,7 +1249,10 @@
                     } else {
                         const currentFullDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(dateIter).padStart(2, '0')}`;
                         const holidayName = holidays[currentFullDate], isToday = currentFullDate === todayStr;
-                        const dayAudits = schedulesData.filter(s => s.scheduled_date === currentFullDate);
+                        let dayAudits = schedulesData.filter(s => s.scheduled_date === currentFullDate);
+                        if (state.role !== 'MANAGER') {
+                            dayAudits = dayAudits.filter(s => s.status !== 'WYKONANY');
+                        }
                         
                         let badgeHtml = "";
                         dayAudits.forEach(a => {
@@ -1740,6 +1749,7 @@
 
                 showModule('hub');
                 if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
+                if (typeof loadAuditorHistory === 'function') await loadAuditorHistory();
                 if (typeof updateKpiRibbon === 'function') await updateKpiRibbon();
                 if (typeof loadAuditsAndRender === 'function') await loadAuditsAndRender();
                 if (typeof loadAuditorHistory === 'function') await loadAuditorHistory();

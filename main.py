@@ -277,7 +277,7 @@ async def save_audit(
             gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok, bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, 
             bhp_evac_ppoz_ok, bhp_status, slm_analysis, slm_verdict, risk_lvl, checklist_results, photo_path
         ))
-        await db.execute("UPDATE audit_schedules SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP WHERE line = ? AND status = 'PLANOWANY' AND scheduled_date <= date('now')", (line,))
+        await db.execute("UPDATE audit_schedules SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP WHERE line = ? AND status = 'PLANOWANY'", (line,))
         await db.commit()
     
     return {"status": "OK", "slm_verdict": slm_verdict}
