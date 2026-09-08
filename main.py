@@ -1,3 +1,4 @@
+import sqlite3
 import os
 import json
 import base64
@@ -588,3 +589,66 @@ async def export_excel():
         filename="Raport_Dashboard_IFS_Enterprise.xlsx", 
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+# --- MODUŁ BAZA WIEDZY / FAQ CHECKLIST (IFS Food v8 / BRCGS) ---
+from pydantic import BaseModel
+from typing import Optional
+
+class GuidelineUpdate(BaseModel):
+    title: Optional[str] = None
+    question: Optional[str] = None
+    ifs_clause: Optional[str] = None
+    criteria: Optional[str] = None
+    correct_action: Optional[str] = None
+    deviation_action: Optional[str] = None
+    risk_level: Optional[str] = None
+
+@app.get("/api/checklist/guidelines")
+def get_checklist_guidelines():
+    conn = sqlite3.connect("audits.db")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, category, category_label, title, question, 
+               ifs_clause, criteria, correct_action, deviation_action, 
+               risk_level, updated_at
+        FROM checklist_guidelines
+        ORDER BY 
+            CASE category 
+                WHEN 'CCP' THEN 1 
+                WHEN 'GMP' THEN 2 
+                WHEN 'FOREIGN_MATTER' THEN 3 
+                ELSE 4 
+            END, id
+    """)
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.put("/api/checklist/guidelines/{guideline_id}")
+def update_checklist_guideline(guideline_id: str, data: GuidelineUpdate):
+    conn = sqlite3.connect("audits.db")
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM checklist_guidelines WHERE id = ?", (guideline_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Wytyczna nie istnieje")
+
+    fields = []
+    values = []
+    for k, v in data.dict(exclude_unset=True).items():
+        fields.append(f"{k} = ?")
+        values.append(v)
+
+    if not fields:
+        conn.close()
+        return {"status": "no_changes"}
+
+    fields.append("updated_at = datetime('now', 'localtime')")
+    values.append(guideline_id)
+    query = f"UPDATE checklist_guidelines SET {', '.join(fields)} WHERE id = ?"
+    cur.execute(query, values)
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "updated_id": guideline_id}
+

@@ -1,198 +1,249 @@
 /**
  * Quality Audit Enterprise - Baza Wiedzy & Standardy Kontroli
- * Zgodność: IFS Food v8 / BRCGS
+ * Układ: Split-View (Po lewej: lista punktów | Po prawej: pełne wyjaśnienie)
  */
 
-const CHECKLIST_GUIDELINES = [
-  {
-    id: "CCP-1",
-    category: "CCP",
-    categoryLabel: "CCP / OPRP",
-    title: "Detektor Metali / Rentgen (X-Ray) – Weryfikacja sprawności",
-    question: "Czy test sprawności detektora metali/X-Ray został wykonany poprawnie przed startem partii?",
-    ifsClause: "IFS Food v8 p. 4.12.1 • BRCGS p. 4.10",
-    criteria: "Wymagany test na 3 wzorcach (Fe, Non-Fe, SS) umieszczonych w produkcie testowym. Mechanizm odrzutu musi zadziałać i skierować produkt do zamkniętego pojemnika.",
-    correctAction: "Wszystkie 3 wzorce wykryte i odrzucone. Prawidłowy zapis w systemie lub karcie kontrolnej.",
-    deviationAction: "Natychmiastowe zatrzymanie linii, kwarantanna wyrobów od ostatniego poprawnego testu, wezwanie UR."
-  },
-  {
-    id: "CCP-2",
-    category: "CCP",
-    categoryLabel: "CCP / OPRP",
-    title: "Temperatura i parametry obróbki / chłodzenia",
-    question: "Czy temperatura w krytycznym punkcie procesu mieści się w dopuszczalnych limitach technologicznych?",
-    ifsClause: "IFS Food v8 p. 2.2.3.8",
-    criteria: "Pomiar skalibrowanym termometrem bagnetowym lub bieżący odczyt ze SCADA. Brak przekroczeń górnego limitu krytycznego.",
-    correctAction: "Temperatura w normie, rejestrator ciągły aktywny.",
-    deviationAction: "Zatrzymanie partii, zablokowanie surowca w magazynie, powiadomienie Managera Jakości."
-  },
-  {
-    id: "GMP-1",
-    category: "GMP",
-    categoryLabel: "GMP / Higiena",
-    title: "Higiena personelu i odzież ochronna",
-    question: "Czy operatorzy stosują kompletną i czystą odzież strefową zgodnie z instrukcją?",
-    ifsClause: "IFS Food v8 p. 3.2.1 • BRCGS p. 7.4",
-    criteria: "Całkowite zakrycie włosów i zarostu, brak biżuterii, zegarków oraz widocznych kieszeni zewnętrznych powyżej pasa. Czyste obuwie robocze.",
-    correctAction: "100% pracowników spełnia standard strefy czystej.",
-    deviationAction: "Natychmiastowe nakazanie poprawy odzieży, wymiana na czystą. W razie ryzyka – inspekcja produktu."
-  },
-  {
-    id: "GMP-2",
-    category: "GMP",
-    categoryLabel: "GMP / Higiena",
-    title: "Czystość linii (C&D) i brak alergenów resztkowych",
-    question: "Czy linia i jej otoczenie są wolne od zanieczyszczeń organicznych oraz resztek poprzedniej partii?",
-    ifsClause: "IFS Food v8 p. 4.6.1",
-    criteria: "Brak pozostałości po poprzednim produkcie (zwłaszcza alergenów). Wizualna czystość taśm, zsypów, stołów pakujących.",
-    correctAction: "Linia sucha, czysta, zatwierdzona do startu.",
-    deviationAction: "Ponowne mycie linii, wykonanie testu wymazowego ATP/alergenowego przed dopuszczeniem."
-  },
-  {
-    id: "FM-1",
-    category: "FOREIGN_MATTER",
-    categoryLabel: "Ciała obce",
-    title: "Kontrola szkła, twardego plastiku i drewna",
-    question: "Czy w obszarze otwartego produktu nie znajdują się niedozwolone przedmioty drewniane ani uszkodzone osłony?",
-    ifsClause: "IFS Food v8 p. 4.9.3 • BRCGS p. 4.9",
-    criteria: "Całkowity brak drewna w strefie kontaktu. Osłony maszyn z poliwęglanu w stanie nienaruszonym, wpisane do rejestru szkła/tworzyw.",
-    correctAction: "Osłony całe, brak spękań, rejestr aktualny.",
-    deviationAction: "Uruchomienie procedury pęknięcia szkła/plastiku, zatrzymanie linii, inspekcja i kwarantanna partii."
-  }
-];
-
+let CHECKLIST_GUIDELINES = [];
 let currentFaqCategory = 'ALL';
+let activeGuidelineId = null;
 
-function openChecklistKnowledgeBase() {
-  const modal = document.getElementById('checklistFaqModal');
-  if (modal) {
-    modal.classList.remove('hidden');
-    renderFaqList();
+async function loadChecklistGuidelines() {
+  try {
+    const res = await fetch('/api/checklist/guidelines');
+    if (res.ok) {
+      CHECKLIST_GUIDELINES = await res.json();
+    }
+  } catch (err) {
+    console.error("Błąd pobierania wytycznych:", err);
   }
+}
+
+async function openChecklistKnowledgeBase() {
+  const modal = document.getElementById('checklistFaqModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  if (CHECKLIST_GUIDELINES.length === 0) {
+    await loadChecklistGuidelines();
+  }
+
+  // Domyślnie aktywuj pierwszy element
+  if (!activeGuidelineId && CHECKLIST_GUIDELINES.length > 0) {
+    activeGuidelineId = CHECKLIST_GUIDELINES[0].id;
+  }
+  
+  updateCounts();
+  filterFaqItems();
 }
 
 function closeChecklistKnowledgeBase() {
   const modal = document.getElementById('checklistFaqModal');
-  if (modal) {
-    modal.classList.add('hidden');
+  if (modal) modal.classList.add('hidden');
+}
+
+function updateCounts() {
+  const counts = { ALL: CHECKLIST_GUIDELINES.length, CCP: 0, GMP: 0, GHP: 0, FOREIGN_MATTER: 0 };
+  CHECKLIST_GUIDELINES.forEach(item => {
+    if (counts[item.category] !== undefined) counts[item.category]++;
+  });
+  for (let k in counts) {
+    const el = document.getElementById(`count-${k}`);
+    if (el) el.innerText = counts[k];
   }
 }
 
 function setFaqCategory(category, btnElement) {
   currentFaqCategory = category;
-  document.querySelectorAll('.faq-chip').forEach(btn => {
-    btn.className = 'faq-chip px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700 border border-slate-700/50';
+  document.querySelectorAll('.faq-nav-btn').forEach(btn => {
+    btn.className = 'faq-nav-btn w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 flex items-center justify-between transition';
   });
   if (btnElement) {
-    btnElement.className = 'faq-chip px-4 py-2 rounded-xl text-xs font-bold transition-all bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/20 border border-emerald-400';
+    btnElement.className = 'faq-nav-btn w-full text-left px-3 py-2 rounded-xl text-xs font-black bg-emerald-500 text-slate-950 flex items-center justify-between transition shadow-md shadow-emerald-500/20';
   }
-  filterFaqItems();
+  filterFaqItems(true);
 }
 
-function getCategoryBadgeStyle(cat) {
-  switch(cat) {
-    case 'CCP':
-      return 'bg-rose-500/10 text-rose-400 border border-rose-500/30';
-    case 'GMP':
-      return 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30';
-    case 'FOREIGN_MATTER':
-      return 'bg-amber-500/10 text-amber-300 border border-amber-500/30';
-    default:
-      return 'bg-slate-800 text-slate-300 border border-slate-700';
-  }
+function selectGuideline(id) {
+  activeGuidelineId = id;
+  renderItemList();
+  renderDetailPanel();
 }
 
-function renderFaqList(items = CHECKLIST_GUIDELINES) {
-  const container = document.getElementById('faqContainer');
+function getRiskBadge(risk) {
+  if (risk === 'KO') return '<span class="px-2 py-0.5 text-[9px] font-black rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 uppercase">KO</span>';
+  if (risk === 'MAJOR') return '<span class="px-2 py-0.5 text-[9px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">Major</span>';
+  return '<span class="px-2 py-0.5 text-[9px] font-black rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">Minor</span>';
+}
+
+function isManagerLoggedIn() {
+  const roleEl = document.getElementById('display-user-role') || document.querySelector('[data-current-role]');
+  if (roleEl && roleEl.innerText.includes('MANAGER')) return true;
+  return localStorage.getItem('user_role') === 'MANAGER';
+}
+
+let currentFilteredList = [];
+
+function filterFaqItems(autoSelectFirst = false) {
+  const input = document.getElementById('faqSearchInput');
+  const search = input ? input.value.toLowerCase() : '';
+
+  currentFilteredList = CHECKLIST_GUIDELINES.filter(item => {
+    const matchCat = (currentFaqCategory === 'ALL' || item.category === currentFaqCategory);
+    const matchSearch = (item.title || '').toLowerCase().includes(search) || 
+                        (item.question || '').toLowerCase().includes(search) || 
+                        (item.criteria || '').toLowerCase().includes(search);
+    return matchCat && matchSearch;
+  });
+
+  if (autoSelectFirst && currentFilteredList.length > 0) {
+    activeGuidelineId = currentFilteredList[0].id;
+  } else if (currentFilteredList.length > 0 && !currentFilteredList.some(i => i.id === activeGuidelineId)) {
+    activeGuidelineId = currentFilteredList[0].id;
+  }
+
+  renderItemList();
+  renderDetailPanel();
+}
+
+function renderItemList() {
+  const container = document.getElementById('faqItemListContainer');
   if (!container) return;
 
-  if (items.length === 0) {
-    container.innerHTML = `
-      <div class="text-center py-12 text-slate-500 text-sm">
-        <svg class="w-10 h-10 mx-auto text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-        Brak pasujących kryteriów dla wpisanej frazy.
-      </div>
-    `;
+  if (currentFilteredList.length === 0) {
+    container.innerHTML = '<p class="text-center py-6 text-slate-500 text-xs">Brak wyników</p>';
     return;
   }
 
-  container.innerHTML = items.map(item => `
-    <div class="border border-slate-800/80 hover:border-slate-700 rounded-2xl overflow-hidden bg-slate-900/60 backdrop-blur-sm transition shadow-sm mb-3">
-      <div onclick="toggleFaqAccordion('${item.id}')" class="p-4 bg-slate-850/40 hover:bg-slate-800/50 cursor-pointer flex justify-between items-center select-none gap-3">
-        <div class="flex items-center space-x-3 min-w-0">
-          <span class="px-2.5 py-1 text-[10px] font-black rounded-lg tracking-wider uppercase flex-shrink-0 ${getCategoryBadgeStyle(item.category)}">
-            ${item.categoryLabel || item.category}
-          </span>
-          <span class="text-xs sm:text-sm font-bold text-slate-200 truncate">${item.title}</span>
+  container.innerHTML = currentFilteredList.map(item => {
+    const isActive = item.id === activeGuidelineId;
+    const activeClass = isActive 
+      ? 'bg-slate-800 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/30' 
+      : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-850 hover:border-slate-700';
+
+    return `
+      <div onclick="selectGuideline('${item.id}')" 
+           class="p-3 rounded-xl border cursor-pointer transition flex flex-col gap-1 ${activeClass}">
+        <div class="flex items-center justify-between gap-1">
+          <span class="text-[10px] font-black text-slate-400 font-mono">${item.id}</span>
+          ${getRiskBadge(item.risk_level)}
         </div>
-        <div class="flex items-center space-x-3 flex-shrink-0">
-          <span class="text-[11px] text-slate-400 font-mono hidden md:inline bg-slate-950/60 px-2.5 py-1 rounded-lg border border-slate-800">${item.ifsClause}</span>
-          <div id="icon-box-${item.id}" class="w-7 h-7 rounded-lg bg-slate-800/80 flex items-center justify-center text-slate-400 transition-transform duration-200">
-            <svg id="icon-${item.id}" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
+        <p class="text-xs font-bold text-slate-200 line-clamp-2 leading-snug">${item.title}</p>
+        <span class="text-[10px] text-slate-500 font-mono mt-0.5 truncate">${item.ifs_clause}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderDetailPanel() {
+  const panel = document.getElementById('faqDetailPanel');
+  if (!panel) return;
+
+  const item = CHECKLIST_GUIDELINES.find(g => g.id === activeGuidelineId);
+  if (!item) {
+    panel.innerHTML = '<div class="h-full flex items-center justify-center text-slate-500 text-sm">Wybierz punkt z listy po lewej stronie</div>';
+    return;
+  }
+
+  const isManager = isManagerLoggedIn();
+
+  panel.innerHTML = `
+    <div class="space-y-4">
+      <!-- Nagłówek punktu -->
+      <div class="border-b border-slate-800 pb-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-1 text-[10px] font-black rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30">${item.category_label || item.category}</span>
+            ${getRiskBadge(item.risk_level)}
+            <span class="text-xs font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">${item.id}</span>
           </div>
+          <span class="text-xs font-mono text-cyan-400/90 bg-cyan-950/30 px-2.5 py-1 rounded-lg border border-cyan-500/30">${item.ifs_clause}</span>
+        </div>
+        <h1 class="text-lg sm:text-xl font-black text-white">${item.title}</h1>
+      </div>
+
+      <!-- Pytanie audytowe -->
+      <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 flex items-start space-x-3">
+        <span class="text-emerald-400 font-black text-xl leading-none">„</span>
+        <div class="flex-1">
+          <p class="text-xs text-slate-400 uppercase font-black tracking-wider mb-1">Pytanie z formularza audytowego</p>
+          <p class="text-sm text-slate-100 font-medium leading-relaxed">${item.question}</p>
+        </div>
+        ${isManager ? `
+          <button onclick="editGuidelinePrompt('${item.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+            Edytuj
+          </button>
+        ` : ''}
+      </div>
+
+      <!-- Wyjaśnienie 1: Kryterium Zgodności -->
+      <div class="bg-emerald-950/20 p-5 rounded-2xl border border-emerald-500/25 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]"></span>
+            Kryterium Zgodności (Standard Zakładowy)
+          </h3>
+          <span class="text-[10px] font-mono text-emerald-300 bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-500/30">WYMÓG AUDYTOWY</span>
+        </div>
+        <p class="text-sm text-slate-200 leading-relaxed">${item.criteria}</p>
+        <div class="pt-3 border-t border-emerald-500/15 text-xs text-emerald-300 flex items-center gap-2">
+          <strong class="text-white">Stan pożądany na linii:</strong> <span>${item.correct_action}</span>
         </div>
       </div>
 
-      <div id="content-${item.id}" class="hidden p-5 border-t border-slate-800/60 text-xs space-y-4 bg-slate-950/50">
-        <div class="text-slate-300 font-medium bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 flex items-start space-x-2">
-          <span class="text-emerald-400 font-black text-sm leading-none">„</span>
-          <p class="leading-relaxed text-slate-200">${item.question}</p>
+      <!-- Wyjaśnienie 2: Postępowanie Awaryjne & CAPA -->
+      <div class="bg-rose-950/20 p-5 rounded-2xl border border-rose-500/25 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-black text-rose-400 uppercase tracking-wider flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.8)]"></span>
+            Odchylenie, Kwarantanna & Postępowanie Korekcyjne
+          </h3>
+          <span class="text-[10px] font-mono text-rose-300 bg-rose-900/40 px-2 py-0.5 rounded border border-rose-500/30">PROCEDURA AWARYJNA</span>
         </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          <div class="bg-emerald-950/20 p-4 rounded-xl border border-emerald-500/20">
-            <p class="font-black text-emerald-400 uppercase tracking-wider text-[10px] mb-1.5 flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-              Kryterium Zgodności (Standard)
-            </p>
-            <p class="text-slate-300 leading-relaxed">${item.criteria}</p>
-            <div class="mt-3 pt-2.5 border-t border-emerald-500/10 text-emerald-300">
-              <strong class="text-white">Stan pożądany:</strong> ${item.correctAction}
-            </div>
+        <p class="text-sm text-slate-200 leading-relaxed">${item.deviation_action}</p>
+        <div class="pt-3 border-t border-rose-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div class="text-rose-300">
+            <strong class="text-white">Klauzula normy:</strong> ${item.ifs_clause}
           </div>
-
-          <div class="bg-rose-950/20 p-4 rounded-xl border border-rose-500/20">
-            <p class="font-black text-rose-400 uppercase tracking-wider text-[10px] mb-1.5 flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-rose-400"></span>
-              Odchylenie & Postępowanie Korekcyjne
-            </p>
-            <p class="text-slate-300 leading-relaxed">${item.deviationAction}</p>
-            <div class="mt-3 pt-2.5 border-t border-rose-500/10 text-rose-300">
-              <strong class="text-white">Wymóg audytowy:</strong> ${item.ifsClause}
-            </div>
-          </div>
+          <button onclick="navigator.clipboard.writeText('${item.deviation_action}'); alert('Skopiowano działanie CAPA do schowka!');" 
+                  class="px-3.5 py-1.5 bg-rose-900/50 hover:bg-rose-800 text-rose-200 rounded-xl text-xs font-bold border border-rose-500/30 transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            Kopiuj do CAPA
+          </button>
         </div>
       </div>
     </div>
-  `).join('');
+  `;
 }
 
-function toggleFaqAccordion(id) {
-  const content = document.getElementById(`content-${id}`);
-  const icon = document.getElementById(`icon-box-${id}`);
-  if (!content) return;
-  const isHidden = content.classList.contains('hidden');
-  content.classList.toggle('hidden', !isHidden);
-  if (icon) {
-    icon.classList.toggle('rotate-180', isHidden);
-    icon.classList.toggle('bg-emerald-500/20', isHidden);
-    icon.classList.toggle('text-emerald-300', isHidden);
+async function editGuidelinePrompt(id) {
+  const item = CHECKLIST_GUIDELINES.find(g => g.id === id);
+  if (!item) return;
+
+  const newCrit = prompt(`Edycja Kryterium Zgodności dla [${item.id}]:`, item.criteria);
+  if (newCrit === null) return;
+
+  const newDev = prompt(`Edycja Działania Korygującego dla [${item.id}]:`, item.deviation_action);
+  if (newDev === null) return;
+
+  try {
+    const res = await fetch(`/api/checklist/guidelines/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ criteria: newCrit, deviation_action: newDev })
+    });
+    if (res.ok) {
+      item.criteria = newCrit;
+      item.deviation_action = newDev;
+      renderDetailPanel();
+      alert("Zapisano zmiany w bazie danych!");
+    } else {
+      alert("Błąd zapisu w API.");
+    }
+  } catch (err) {
+    alert("Błąd połączenia z serwerem.");
   }
 }
 
-function filterFaqItems() {
-  const input = document.getElementById('faqSearchInput');
-  if (!input) return;
-  const search = input.value.toLowerCase();
-  const filtered = CHECKLIST_GUIDELINES.filter(item => {
-    const matchCat = (currentFaqCategory === 'ALL' || item.category === currentFaqCategory);
-    const matchSearch = item.title.toLowerCase().includes(search) || 
-                        item.question.toLowerCase().includes(search) || 
-                        item.criteria.toLowerCase().includes(search) ||
-                        item.ifsClause.toLowerCase().includes(search);
-    return matchCat && matchSearch;
-  });
-  renderFaqList(filtered);
-}
+// Inicjalizacja
+loadChecklistGuidelines();
