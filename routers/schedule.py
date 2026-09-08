@@ -128,40 +128,33 @@ async def clear_range(payload: Dict[str, int]):
 @router.post("/auto")
 async def auto_plan_audits(payload: AutoPlanModel):
     async with get_db() as conn:
+        # Usuń absolutnie wszystkie audyty w zadanym zakresie miesięcy
+        for m_offset in range(payload.period_months):
+            cur_m = payload.start_month + m_offset
+            yr = payload.start_year + ((cur_m - 1) // 12)
+            mo = ((cur_m - 1) % 12) + 1
+            prefix_match = f"{yr:04d}-{mo:02d}%"
+            await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix_match,))
+        
         current_date = datetime(payload.start_year, payload.start_month, 1)
-        end_date = current_date + timedelta(days=30 * payload.period_months) # Approx months
-
-        # Usunięcie dotychczasowych planowanych audytów z wybranego okresu
-        await conn.execute("""
-            DELETE FROM audit_schedules 
-            WHERE scheduled_date >= ? AND scheduled_date <= ? AND status = 'PLANOWANY'
-        """, (current_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
+        end_date = current_date + timedelta(days=30 * payload.period_months)
 
         scheduled_audits = []
         while current_date < end_date:
-            if not payload.include_weekends and current_date.weekday() >= 5: # Saturday or Sunday
+            if not payload.include_weekends and current_date.weekday() >= 5:
                 current_date += timedelta(days=1)
                 continue
 
             for line in payload.lines:
                 for audit_type in payload.audit_types:
-                    # Simple assignment for now, could be enhanced with auditor availability
                     lead_auditor = "Grzegorz Zarakowski (Lead Auditor)"
                     backup_auditor = "Piotr Kowalski (Audytor)"
-
-                    scheduled_audits.append({
-                        "scheduled_date": current_date.strftime("%Y-%m-%d"),
-                        "line": line,
-                        "audit_type": audit_type,
-                        "lead_auditor": lead_auditor,
-                        "backup_auditor": backup_auditor,
-                        "status": "PLANOWANY",
-                        "notes": "Wygenerowano automatycznie"
-                    })
+                    s_date = current_date.strftime("%Y-%m-%d")
+                    scheduled_audits.append({"scheduled_date": s_date, "line": line})
                     await conn.execute(
                         "INSERT INTO audit_schedules (scheduled_date, line, audit_type, lead_auditor, backup_auditor, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (current_date.strftime("%Y-%m-%d"), line, audit_type, lead_auditor, backup_auditor, "PLANOWANY", "Wygenerowano automatycznie")
+                        (s_date, line, audit_type, lead_auditor, backup_auditor, "PLANOWANY", "Wygenerowano automatycznie")
                     )
             current_date += timedelta(days=1)
         await conn.commit()
-    return {"status": "success", "scheduled_audits_count": len(scheduled_audits)}
+    return {"status": "success", "count": len(scheduled_audits), "scheduled_audits_count": len(scheduled_audits)}

@@ -187,6 +187,15 @@ async def delete_schedule(sched_id: int):
 async def auto_generate_schedule(payload: AutoPlanModel):
     async with get_db() as conn:
         c = await conn.cursor()
+        
+        # Usuń audyty ze wszystkich wybranych miesięcy
+        for m_offset in range(payload.period_months):
+            cur_m = payload.start_month + m_offset
+            yr = payload.start_year + ((cur_m - 1) // 12)
+            mo = ((cur_m - 1) % 12) + 1
+            prefix_match = f"{yr:04d}-{mo:02d}%"
+            await c.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix_match,))
+
         await c.execute("SELECT full_name FROM users WHERE is_active = 1 AND role = 'AUDITOR'")
         auditors = [r["full_name"] for r in await c.fetchall()]
         if len(auditors) < 2:
@@ -197,22 +206,6 @@ async def auto_generate_schedule(payload: AutoPlanModel):
 
         count = 0
         cur = start_date
-
-        # --- KASOWANIE STARYCH AUDYTÓW Z TEGO ZAKRESU PRZED NOWYM PLANEM ---
-        import calendar
-        last_m = (payload.start_month + payload.period_months - 1)
-        target_year = payload.start_year + ((last_m - 1) // 12)
-        target_month = ((last_m - 1) % 12) + 1
-        _, last_day = calendar.monthrange(target_year, target_month)
-        
-        range_start_str = f"{payload.start_year:04d}-{payload.start_month:02d}-01"
-        range_end_str = f"{target_year:04d}-{target_month:02d}-{last_day:02d}"
-
-        await c.execute("""
-            DELETE FROM audit_schedules 
-            WHERE scheduled_date >= ? AND scheduled_date <= ?
-        """, (range_start_str, range_end_str))
-        # -------------------------------------------------------------------
         line_idx = type_idx = aud_idx = 0
 
         while cur <= end_date:
@@ -236,9 +229,6 @@ async def auto_generate_schedule(payload: AutoPlanModel):
 
         await conn.commit()
     return {"count": count}
-
-
-# --- WYKONYWANIE AUDYTÓW I SLM ---
 
 @app.post("/api/slm-analyze")
 async def slm_analyze(payload: dict):
