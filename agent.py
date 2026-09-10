@@ -46,17 +46,62 @@ def clean_json_response(raw_text: str) -> Dict[str, Any]:
     return json.loads(text)
 
 
+HALLUCINATION_TERMS = [
+    "sanityzacja głowicy ramienia", "pułapka rejestracyjna",
+    "głowa ramienia", "weryfikacji rejestracji fizycznej",
+    "przez 72 godziny", "omówionej partii", "odzieżowych",
+    "odzieżow", "na całe tempo", "clothing", "sita odzieżowego",
+    "ccp02_clothing", "sitom sita", "sprawy sita", "ciałko sita"
+]
+
+
+def sanitize_text(text: str) -> str:
+    for term in HALLUCINATION_TERMS:
+        if term in text.lower():
+            return "Awaria CCP (Detektor Metali / Sita). Zatrzymanie linii oraz blokada magazynowa partii wyrobu (Hold Lot) od ostatniego poprawnego testu wzorców."
+    return text
+
+
 def sanitize_audit_vocabulary(text_list: List[str]) -> List[str]:
     cleaned = []
-    hallucination_terms = [
-        "sanityzacja głowicy ramienia", "pułapka rejestracyjna",
-        "głowa ramienia", "weryfikacji rejestracji fizycznej",
-        "przez 72 godziny", "omówionej partii", "odzieżowych"
-    ]
     for item in text_list:
-        if not any(term in item.lower() for term in hallucination_terms):
+        if not any(term in item.lower() for term in HALLUCINATION_TERMS):
             cleaned.append(item)
     return cleaned
+
+
+def format_json_verdict_to_markdown(data: Dict[str, Any], context_line: str = "Linia") -> str:
+    status = str(data.get("status", "OK")).upper()
+    risk = str(data.get("poziom_ryzyka", "NISKIE")).upper()
+    decyzja = sanitize_text(str(data.get("decyzja", "Zezwolenie na kontynuację operacji.")))
+    
+    akcje = sanitize_audit_vocabulary(data.get("akcje_korygujace", []))
+    if not akcje and ("NOK" in status or "KRYTYCZ" in risk or "HOLD" in risk):
+        akcje = STANDARD_ACTIONS_CCP1
+        
+    podpowiedzi = sanitize_audit_vocabulary(data.get("podpowiedzi_prewencyjne", []))
+    if not podpowiedzi and ("NOK" in status or "KRYTYCZ" in risk or "HOLD" in risk):
+        podpowiedzi = PREVENTIVE_ACTIONS_CCP1
+        
+    status_icon = "🚨" if ("NOK" in status or "KRYTYCZ" in risk) else "✅"
+    
+    md = [
+        f"### {status_icon} WERDYKT: **{status}** | Poziom Ryzyka: **{risk}**\n",
+        f"**🛑 Decyzja Operacyjna:**\n> {decyzja}\n"
+    ]
+    
+    if akcje:
+        md.append("**🛠️ Natychmiastowe Działania Korygujące (CAPA):**")
+        for a in akcje:
+            md.append(f"- ⚠️ {a}")
+        md.append("")
+        
+    if podpowiedzi:
+        md.append("**🛡️ Wytyczne Prewencyjne i Standardy Jakości:**")
+        for p in podpowiedzi:
+            md.append(f"- 🔹 {p}")
+            
+    return "\n".join(md)
 
 
 def get_recent_line_history(line_name: str = None, limit: int = 5) -> List[Dict[str, Any]]:
@@ -297,6 +342,13 @@ async def run_agent_turn(audit_payload: Dict[str, Any], line_name: str = None) -
                 data = res.json()
                 reply = data.get("response", "").strip()
                 if reply:
+                    if "{" in reply and "}" in reply:
+                        try:
+                            parsed = clean_json_response(reply)
+                            if isinstance(parsed, dict) and ("status" in parsed or "poziom_ryzyka" in parsed or "decyzja" in parsed):
+                                return format_json_verdict_to_markdown(parsed, context_line=line)
+                        except Exception as parse_err:
+                            print(f"JSON conversion error: {parse_err}")
                     return reply
     except Exception as e:
         print(f"Error calling Ollama in run_agent_turn: {e}")

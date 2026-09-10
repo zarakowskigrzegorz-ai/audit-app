@@ -1973,13 +1973,113 @@
 
         function filterPlanAuditorsByType(v) { loadAuditorsDropdown(v); }
 
+        function renderGraphicAuditCard(obj) {
+            const isNok = String(obj.status || '').toUpperCase().includes('NOK');
+            const risk = obj.poziom_ryzyka || (isNok ? 'KRYTYCZNE (HOLD LOT)' : 'NISKIE');
+            const decyzja = obj.decyzja || 'Zezwolenie na kontynuację operacji.';
+            const akcje = Array.isArray(obj.akcje_korygujace) ? obj.akcje_korygujace : [];
+            const podpowiedzi = Array.isArray(obj.podpowiedzi_prewencyjne) ? obj.podpowiedzi_prewencyjne : [];
+
+            const isCritical = risk.includes('KRYTYCZ') || risk.includes('HOLD') || isNok;
+            const bannerBg = isCritical 
+                ? 'bg-gradient-to-br from-rose-950/90 via-slate-900 to-black border-rose-500/50' 
+                : 'bg-gradient-to-br from-emerald-950/90 via-slate-900 to-black border-emerald-500/50';
+            
+            const badgeBg = isCritical
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+
+            const icon = isCritical ? '🚨' : '✅';
+            const statusLabel = isCritical ? 'NOK (NIEZGODNY)' : 'OK (ZGODNY)';
+
+            let akcjeHtml = '';
+            if (akcje.length > 0) {
+                akcjeHtml = `
+                    <div class="mt-2 pt-2 border-t border-white/10 space-y-1">
+                        <span class="text-[9.5px] font-black text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🛠️</span> <span>Wymagane Działania Korygujące (CAPA):</span>
+                        </span>
+                        <div class="space-y-1">
+                            ${akcje.map(a => `
+                                <div class="p-2 rounded-xl bg-black/40 border border-rose-500/30 text-[11px] text-slate-200 flex items-start gap-2 shadow-inner">
+                                    <span class="text-rose-400 font-bold">⚠️</span>
+                                    <span class="leading-snug">${a}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            let podpowiedziHtml = '';
+            if (podpowiedzi.length > 0) {
+                podpowiedziHtml = `
+                    <div class="mt-2 pt-2 border-t border-white/10 space-y-1">
+                        <span class="text-[9.5px] font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🛡️</span> <span>Wytyczne Prewencyjne & SOP:</span>
+                        </span>
+                        <div class="space-y-1">
+                            ${podpowiedzi.map(p => `
+                                <div class="p-2 rounded-xl bg-black/40 border border-amber-500/30 text-[11px] text-slate-300 flex items-start gap-2 shadow-inner">
+                                    <span class="text-amber-400 font-bold">🔹</span>
+                                    <span class="leading-snug">${p}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="rounded-2xl border p-3.5 shadow-2xl ${bannerBg} space-y-2.5 max-w-[95%]">
+                    <div class="flex items-center justify-between pb-2 border-b border-white/10 gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${icon}</span>
+                            <div>
+                                <span class="text-[9px] text-slate-400 font-bold block uppercase tracking-wider">Ocena Zgodności IFS:</span>
+                                <span class="text-xs font-black ${isCritical ? 'text-rose-400' : 'text-emerald-400'} uppercase">${statusLabel}</span>
+                            </div>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-full border text-[9px] font-black ${badgeBg}">${risk}</span>
+                    </div>
+
+                    <div class="bg-black/40 p-2.5 rounded-xl border border-white/10 shadow-inner">
+                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                            <span>🛑</span> <span>Decyzja Operacyjna:</span>
+                        </span>
+                        <p class="text-xs font-bold text-slate-100 leading-relaxed">${decyzja}</p>
+                    </div>
+
+                    ${akcjeHtml}
+                    ${podpowiedziHtml}
+                </div>
+            `;
+        }
+
         function renderMarkdownToHtml(t) {
             if (!t) return "";
+            
+            let trimmed = t.trim();
+            if (trimmed.startsWith('```json')) {
+                trimmed = trimmed.replace(/```json/g, '').replace(/```/g, '').trim();
+            } else if (trimmed.startsWith('```')) {
+                trimmed = trimmed.replace(/```/g, '').trim();
+            }
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (parsed && typeof parsed === 'object' && (parsed.status || parsed.poziom_ryzyka || parsed.decyzja)) {
+                        return renderGraphicAuditCard(parsed);
+                    }
+                } catch(e) { /* fallback do markdown */ }
+            }
+
             let html = t
-                .replace(/### (.*?)\n/g, '<h3 class="text-xs font-black text-amber-300 mt-2 mb-1">$1</h3>')
+                .replace(/### (.*?)\n/g, '<h3 class="text-xs font-black text-amber-300 mt-2 mb-1 flex items-center gap-1">$1</h3>')
                 .replace(/## (.*?)\n/g, '<h2 class="text-xs font-black text-cyan-300 mt-2 mb-1">$1</h2>')
                 .replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300 font-bold">$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em class="text-slate-300">$1</em>')
+                .replace(/^> (.*?)$/gm, '<blockquote class="border-l-2 border-amber-500/60 pl-2.5 my-1.5 text-slate-200 text-xs italic bg-slate-900/60 py-1 rounded-r-lg">$1</blockquote>')
                 .replace(/`([^`]+)`/g, '<code class="bg-slate-800 text-cyan-200 px-1 py-0.5 rounded text-[10px]">$1</code>')
                 .replace(/^[•\-\*] (.*?)$/gm, '<li class="ml-3 text-slate-200 list-disc">$1</li>')
                 .replace(/\n/g, '<br>');
