@@ -524,8 +524,8 @@
                         <div class="flex items-center gap-2">
                             <div class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
                             <div>
-                                <h2 class="text-sm font-black text-indigo-300">🤖 AI Field Co-Pilot (IFS Food v8)</h2>
-                                <p class="text-[9px] text-slate-400 font-bold">Asystent Terenowy Audytora & Weryfikacja CCP/KO</p>
+                                <h2 class="text-sm font-black text-indigo-300">🤖 Ai Support</h2>
+                                <p class="text-[9px] text-slate-400 font-bold">Asystent Terenowy Audytora & Weryfikacja Standardów</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
@@ -541,25 +541,27 @@
                                 <option value="Cały Zakład">🏢 Cały Zakład (Widok Ogólny)</option>
                             </select>
                         </div>
-                        <button onclick="runAgentBriefing()" id="btn-agent-briefing" class="tile-3d bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-[10.5px] px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1.5">
-                            <span>🚀 Odprawa przed wejściem na linię</span>
+                        <button onclick="runAgentBriefing()" id="btn-agent-briefing" class="tile-3d bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-[9px] px-2 py-1 rounded-lg shadow flex items-center gap-1">
+                            <span>🚀 Wejście na linię</span>
                         </button>
                     </div>
 
                     <!-- Kafelki szybkich ról / promptów -->
                     <div class="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[10px]">
-                        <button onclick="sendQuickPrompt('Jaki jest bieżący stan wskaźników KPI i zgodności IFS dla tego obszaru?')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-indigo-200 whitespace-nowrap hover:text-white">📊 Wskaźnik KPI</button>
-                        <button onclick="sendQuickPrompt('Procedura awaryjna CCP1: Co zrobić przy braku odrzutu wzorca Fe lub uszkodzeniu fotokomórki?')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-rose-300 whitespace-nowrap hover:text-white">🚨 Awaria CCP1 (Hold Lot)</button>
-                        <button onclick="sendQuickPrompt('Procedura PR15.01: Operator ma skaleczenie lub objawy infekcji - jakie są wymogi IFS?')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-amber-300 whitespace-nowrap hover:text-white">🩺 Zdrowie PR15.01</button>
-                        <button onclick="sendQuickPrompt('Wymień 10 kryteriów Knock-Out (KO) w normie IFS Food v8 i konsekwencje ich naruszenia.')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-cyan-300 whitespace-nowrap hover:text-white">📋 Wymagania KO</button>
+                        <button onclick="sendQuickPrompt('HACCP: Jakie są kluczowe punkty krytyczne (CCP1-CCP3) i limity na tej linii?')" class="tile-3d bg-slate-900 border border-emerald-500/40 px-2.5 py-1 text-emerald-300 whitespace-nowrap hover:text-white font-bold">🛡️ HACCP</button>
+                        <button onclick="sendQuickPrompt('GMP: Jakie są kluczowe wymagania dobrej praktyki produkcyjnej, czystości i ochrony przed ciałami obcymi?')" class="tile-3d bg-slate-900 border border-cyan-500/40 px-2.5 py-1 text-cyan-300 whitespace-nowrap hover:text-white font-bold">🧼 GMP</button>
+                        <button onclick="sendQuickPrompt('GHP: Jakie są procedury higieny personelu, śluz sanitarnych i odzieży ochronnej?')" class="tile-3d bg-slate-900 border border-blue-500/40 px-2.5 py-1 text-blue-300 whitespace-nowrap hover:text-white font-bold">🧤 GHP</button>
+                        <button onclick="sendQuickPrompt('Procedura awaryjna CCP1: Co zrobić przy braku odrzutu wzorca Fe lub uszkodzeniu fotokomórki?')" class="tile-3d bg-slate-900 border border-rose-500/30 px-2.5 py-1 text-rose-300 whitespace-nowrap hover:text-white">🚨 Awaria CCP1</button>
+                        <button onclick="sendQuickPrompt('Procedura PR15.01: Operator ma skaleczenie lub objawy infekcji - jakie są wymogi IFS?')" class="tile-3d bg-slate-900 border border-amber-500/30 px-2.5 py-1 text-amber-300 whitespace-nowrap hover:text-white">🩺 Zdrowie PR15.01</button>
+                        <button onclick="sendQuickPrompt('Wymień 10 kryteriów Knock-Out (KO) w normie IFS Food v8 i konsekwencje ich naruszenia.')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-indigo-300 whitespace-nowrap hover:text-white">📋 Wymagania KO</button>
                     </div>
 
                     <!-- Okno czatu -->
                     <div id="agent-chat-box" class="flex-1 overflow-y-auto space-y-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 pr-1 text-xs">
                         <div class="bg-indigo-950/40 p-3 rounded-2xl border border-indigo-500/30 text-slate-200">
-                            <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 AI Field Co-Pilot:</span>
-                            Witaj! Jestem Twoim inteligentnym asystentem inspekcji <b>IFS Food v8, BRCGS v9 i HACCP</b>.<br><br>
-                            Wybierz powyżej linię produkcyjną i kliknij <b>„🚀 Odprawa przed wejściem na linię”</b>, aby otrzymać natychmiastową analizę ryzyka i checklistę z bazy danych, lub zadaj dowolne pytanie w polu poniżej.
+                            <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 Ai Support:</span>
+                            Witaj! Jestem Twoim inteligentnym asystentem <b>Ai Support</b> (IFS Food v8, HACCP, GMP, GHP).<br><br>
+                            Wybierz powyżej linię produkcyjną i kliknij <b>„🚀 Wejście na linię”</b>, aby otrzymać odprawę i checklistę z bazy danych, lub skorzystaj z szybkich kafelków standardów.
                         </div>
                     </div>
 
@@ -568,7 +570,7 @@
                         <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
                         <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
                         <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                        <span>Field Co-Pilot analizuje dane...</span>
+                        <span>Ai Support analizuje dane...</span>
                     </div>
 
                     <!-- Pole wprowadzania -->
@@ -2106,7 +2108,7 @@
                 box.innerHTML += `
                     <div class="flex justify-start">
                         <div class="bg-indigo-950/50 p-3 rounded-2xl border border-indigo-500/30 text-slate-200 max-w-[92%] text-xs leading-relaxed shadow-lg">
-                            <span class="text-[9.5px] font-black text-amber-400 block mb-1">🤖 Field Co-Pilot [${activeLine}]:</span>
+                            <span class="text-[9.5px] font-black text-amber-400 block mb-1">🤖 Ai Support [${activeLine}]:</span>
                             ${renderMarkdownToHtml(d.reply)}
                         </div>
                     </div>
@@ -2132,8 +2134,8 @@
             if (box) {
                 box.innerHTML = `
                     <div class="bg-indigo-950/40 p-3 rounded-2xl border border-indigo-500/30 text-slate-200">
-                        <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 AI Field Co-Pilot:</span>
-                        Czat został wyczyszczony. Wybierz linię i kliknij <b>„🚀 Odprawa przed wejściem na linię”</b> lub zadaj pytanie.
+                        <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 Ai Support:</span>
+                        Czat został wyczyszczony. Wybierz linię i kliknij <b>„🚀 Wejście na linię”</b> lub skorzystaj z szybkich kafelków standardów.
                     </div>
                 `;
             }

@@ -315,6 +315,31 @@ async def run_agent_turn(audit_payload: Dict[str, Any], line_name: str = None) -
             f"- Status bieżący: **{'ZGODNY z IFS Food v8' if nok_cnt == 0 else 'WYMAGA DZIAŁAŃ KORYGUJĄCYCH (CAPA)'}**\n\n"
             f"Zalecenie: Utrzymanie planowej częstotliwości weryfikacji i ciągły nadzór nad punktami krytycznymi."
         )
+    elif any(w in q_lower for w in ["haccp", "plan haccp", "limity"]):
+        return (
+            f"### 🛡️ Standard HACCP (Zagrożenia i Punkty Krytyczne)\n"
+            f"**Obszar:** {line}\n\n"
+            f"1. **CCP1 (Detektor Metali):** Weryfikacja wzorcami Fe 1.5mm / Non-Fe 2.0mm / SS 2.5mm co 1-2h oraz sprawność automatycznego odrzutu.\n"
+            f"2. **CCP2 / oPRP (Magnesy Neodymowe):** Inspekcja wyłapywania cząstek żelaznych, czyszczenie i rejestracja stanu.\n"
+            f"3. **CCP3 (Sita kontrolne):** Weryfikacja integralności siatki (brak przetarć i dziur).\n"
+            f"4. **Zasada KO:** Przekroczenie limitu krytycznego na CCP = natychmiastowe zatrzymanie procesu i blokada wyrobu (Hold Lot)."
+        )
+    elif any(w in q_lower for w in ["gmp", "dobra praktyka produkcyjn", "infrastruktur"]):
+        return (
+            f"### 🧼 Standard GMP (Dobra Praktyka Produkcyjna - IFS v8)\n"
+            f"**Obszar:** {line}\n\n"
+            f"1. **Infrastruktura maszyn:** Brak wycieków oleju/smarów, stabilne orurowanie, brak prowizorycznych napraw (taśmy, trytytki).\n"
+            f"2. **Ochrona przed ciałami obcymi:** Osłony oświetlenia nienaruszone, bezwzględny zakaz drewna w strefie otwartego produktu, rejestr szkła i tworzyw twardych.\n"
+            f"3. **Czystość i mycie (CIP/Sanityzacja):** Brak zalegających resztek masy, czyste posadzki i kratki ściekowe, właściwa segregacja odpadów."
+        )
+    elif any(w in q_lower for w in ["ghp", "higiena personelu", "dobra praktyka higieniczn", "odzież"]):
+        return (
+            f"### 🧤 Standard GHP (Dobra Praktyka Higieniczna - IFS v8)\n"
+            f"**Obszar:** {line}\n\n"
+            f"1. **Śluzy sanitarne:** Obowiązkowe mycie i dezynfekcja rąk przed wejściem, maty dezynfekcyjne lub myjki obuwia roboczego.\n"
+            f"2. **Odzież ochronna:** Czyste fartuchy, czepki zakrywające 100% włosów, osłony brody, bezwzględny zakaz biżuterii, zegarków i sztucznych paznokci.\n"
+            f"3. **Stan zdrowia (PR15.01):** Obowiązek natychmiastowego zgłaszania infekcji pokarmowych; skaleczenia zabezpieczone niebieskim, wykrywalnym plastrem z metalem."
+        )
     elif any(w in q_lower for w in ["ccp", "detektor", "metal", "odrzut", "fe", "ss", "non-fe"]):
         return (
             f"### 🚨 Wytyczne Krytyczne: Detektor Metali (CCP1)\n"
