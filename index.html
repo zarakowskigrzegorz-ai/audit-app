@@ -1969,6 +1969,7 @@
             const a = await res.json();
             document.getElementById('mgr-edit-id').value = a.id;
             document.getElementById('mgr-edit-date').value = a.scheduled_date;
+            document.getElementById('mgr-edit-date').setAttribute('data-original-date', a.scheduled_date);
             document.getElementById('mgr-edit-type').value = a.audit_type;
             document.getElementById('mgr-edit-status').value = a.status;
             document.getElementById('mgr-edit-notes').value = a.notes || "";
@@ -1992,8 +1993,12 @@
             const newDate = document.getElementById('mgr-edit-date').value;
             const today = getLocalDateString();
 
-            if (newDate < today) {
-                return alert("⚠️ Przenoszenie audytów dozwolone jest wyłącznie w przód (data bieżąca lub przyszła)!");
+            const dateInput = document.getElementById("mgr-edit-date");
+            const originalDate = dateInput ? dateInput.getAttribute("data-original-date") : "";
+
+            // Jeśli użytkownik zmienia datę spóźnionego audytu, nowy termin musi być bieżący lub przyszły
+            if (originalDate && newDate !== originalDate && newDate < today) {
+                return alert("⚠️ Nowy wyznaczony termin audytu musi być datą bieżącą lub przyszłą!");
             }
 
             const leadAuditor = document.getElementById('mgr-edit-lead').value;

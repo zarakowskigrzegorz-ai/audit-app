@@ -183,7 +183,6 @@ async def delete_schedule(sched_id: int):
         await conn.commit()
     return {"status": "OK"}
 
-@app.post("/api/schedule/auto")
 class ClearMonthModel(BaseModel):
     month: int
     year: int
@@ -197,6 +196,7 @@ async def clear_month_schedule(payload: ClearMonthModel):
         await conn.commit()
     return {"status": "success", "message": f"Wyczyszczono audyty dla {prefix}"}
 
+@app.post("/api/schedule/auto")
 async def auto_generate_schedule(payload: AutoPlanModel):
     async with get_db() as conn:
         c = await conn.cursor()
