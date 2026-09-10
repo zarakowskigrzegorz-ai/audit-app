@@ -364,13 +364,23 @@
                         </div>
                     </div>
 
-                    <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between text-[8.5px] font-extrabold gap-1">
-                        <span class="flex items-center gap-1 text-emerald-400"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block border border-emerald-400"></span> 🟩 HACCP</span>
-                        <span class="flex items-center gap-1 text-purple-300"><span class="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block border border-purple-400"></span> 🟪 GMP</span>
-                        <span class="flex items-center gap-1 text-cyan-300"><span class="w-2.5 h-2.5 rounded-full bg-cyan-600 inline-block border border-cyan-400"></span> 🟦 GHP</span>
-                        <span class="text-emerald-300 font-extrabold flex items-center gap-1">✓ Wykonany</span>
-                        <span class="text-red-400 font-extrabold flex items-center gap-1"><span class="w-2 rounded-full h-2 bg-red-500 animate-ping inline-block"></span> 🔴 Spóźniony</span>
-                        <span class="text-amber-300 font-extrabold">🏖️ Święto</span>
+                    <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between text-[9px] font-extrabold gap-1">
+                        <button type="button" id="btn-tag-haccp" onclick="selectSingleFilter('HACCP')" class="px-2 py-1 rounded-lg border border-emerald-500/50 bg-emerald-950/40 text-emerald-300 flex items-center gap-1 opacity-40 transition-all cursor-pointer">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> 🟩 HACCP
+                        </button>
+                        <button type="button" id="btn-tag-gmp" onclick="selectSingleFilter('GMP')" class="px-2 py-1 rounded-lg border border-purple-500/50 bg-purple-950/40 text-purple-300 flex items-center gap-1 opacity-40 transition-all cursor-pointer">
+                            <span class="w-2 h-2 rounded-full bg-purple-400 inline-block"></span> 🟪 GMP
+                        </button>
+                        <button type="button" id="btn-tag-ghp" onclick="selectSingleFilter('GHP')" class="px-2 py-1 rounded-lg border border-cyan-500/50 bg-cyan-950/40 text-cyan-300 flex items-center gap-1 opacity-40 transition-all cursor-pointer">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> 🟦 GHP
+                        </button>
+                        <button type="button" id="btn-tag-done" onclick="selectSingleFilter('WYKONANY')" class="px-2 py-1 rounded-lg border border-emerald-400/50 bg-emerald-950/40 text-emerald-300 flex items-center gap-1 opacity-40 transition-all cursor-pointer">
+                            ✓ Wykonany
+                        </button>
+                        <button type="button" id="btn-tag-overdue" onclick="selectSingleFilter('SPOZNIONY')" class="px-2 py-1 rounded-lg border border-red-500/50 bg-red-950/40 text-red-300 flex items-center gap-1 opacity-40 transition-all cursor-pointer">
+                            <span class="w-2 rounded-full h-2 bg-red-500 inline-block"></span> 🔴 Spóźniony
+                        </button>
+                        <span class="text-amber-300 font-extrabold px-1 text-[8.5px]">🏖️ Święto</span>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -1261,6 +1271,38 @@
 
         function changeMonth(delta) { currentCalDate.setMonth(currentCalDate.getMonth() + delta); renderCalendar(); }
 
+                let activeSelectedFilter = null;
+
+        function selectSingleFilter(key) {
+            if (activeSelectedFilter === key) {
+                activeSelectedFilter = null;
+            } else {
+                activeSelectedFilter = key;
+            }
+
+            const map = {
+                'HACCP': 'btn-tag-haccp',
+                'GMP': 'btn-tag-gmp',
+                'GHP': 'btn-tag-ghp',
+                'WYKONANY': 'btn-tag-done',
+                'SPOZNIONY': 'btn-tag-overdue'
+            };
+
+            Object.entries(map).forEach(([k, id]) => {
+                const b = document.getElementById(id);
+                if (!b) return;
+                if (activeSelectedFilter === k) {
+                    b.classList.remove('opacity-40');
+                    b.classList.add('ring-2', 'ring-white', 'brightness-125');
+                } else {
+                    b.classList.add('opacity-40');
+                    b.classList.remove('ring-2', 'ring-white', 'brightness-125');
+                }
+            });
+
+            renderCalendar();
+        }
+
         function renderCalendar() {
             const year = currentCalDate.getFullYear(), month = currentCalDate.getMonth();
             const names = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
@@ -1287,6 +1329,21 @@
                         if (state.role !== 'MANAGER') {
                             dayAudits = dayAudits.filter(s => s.status !== 'WYKONANY');
                         }
+
+                        // Ścisły filtr wyłączny: jeśli nic nie jest wciśnięte -> brak audytów
+                        dayAudits = dayAudits.filter(a => {
+                            if (!activeSelectedFilter) return false;
+                            const aType = (a.audit_type || "HACCP").toUpperCase().trim();
+                            const isCompleted = (a.status === 'WYKONANY');
+                            const isOverdue = (!isCompleted && currentFullDate < todayStr);
+
+                            if (activeSelectedFilter === 'HACCP') return aType === 'HACCP';
+                            if (activeSelectedFilter === 'GMP') return aType === 'GMP';
+                            if (activeSelectedFilter === 'GHP') return aType === 'GHP';
+                            if (activeSelectedFilter === 'WYKONANY') return isCompleted;
+                            if (activeSelectedFilter === 'SPOZNIONY') return isOverdue;
+                            return false;
+                        });
                         
                         let badgeHtml = "";
                         dayAudits.forEach(a => {
