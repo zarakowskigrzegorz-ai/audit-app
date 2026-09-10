@@ -91,7 +91,7 @@
                 </div>
                 <span class="text-xs font-black text-white tracking-wider drop-shadow">AUDYTOR OPERACYJNY</span>
                 <span class="text-[9px] font-bold text-cyan-200/90 text-center mt-0.5">Inspekcja Stanowiskowa</span>
-                <span class="text-[8px] bg-cyan-950/80 text-cyan-300 font-black px-2.5 py-0.5 rounded-full border border-cyan-400/40 mt-2">PIN: 1001-1003</span>
+                <span class="text-[8px] bg-cyan-950/80 text-cyan-300 font-black px-2.5 py-0.5 rounded-full border border-cyan-400/40 mt-2">Wprowadź PIN</span>
             </div>
         </div>
 
@@ -103,11 +103,7 @@
                 </div>
                 <button onclick="closePinPrompt()" class="text-slate-400 hover:text-white font-bold text-lg leading-none">&times;</button>
             </div>
-            <div id="auditor-quick-select" class="grid grid-cols-3 gap-2">
-                <button type="button" onclick="setQuickPin('1001')" class="tile-3d bg-slate-900 border border-slate-700 py-1.5 text-center text-xs font-bold text-cyan-300">1001<span class="block text-[8px] text-slate-400 font-normal">G. Zarakowski</span></button>
-                <button type="button" onclick="setQuickPin('1002')" class="tile-3d bg-slate-900 border border-slate-700 py-1.5 text-center text-xs font-bold text-cyan-300">1002<span class="block text-[8px] text-slate-400 font-normal">J. Kowalski</span></button>
-                <button type="button" onclick="setQuickPin('1003')" class="tile-3d bg-slate-900 border border-slate-700 py-1.5 text-center text-xs font-bold text-cyan-300">1003<span class="block text-[8px] text-slate-400 font-normal">A. Nowak</span></button>
-            </div>
+            <div id="auditor-quick-select" class="hidden grid grid-cols-3 gap-2"></div>
             <input type="password" id="input-pin" maxlength="6" placeholder="Wpisz PIN ••••" onkeydown="if(event.key === 'Enter') submitLogin()" class="w-full text-center bg-slate-950/90 border border-slate-700 rounded-xl p-2.5 text-xl font-black tracking-widest text-cyan-400 focus:outline-none focus:border-cyan-400 shadow-inner">
             <button onclick="submitLogin()" class="w-full tile-3d h-12 bg-gradient-to-br from-cyan-600 to-blue-600 font-black text-xs uppercase tracking-wider text-white flex items-center justify-center gap-2 shadow-lg">
                 <span>Zaloguj do Panelu</span>
@@ -119,7 +115,7 @@
     <div id="main-app" class="hidden flex-col w-full h-full">
         <header class="sticky top-2 z-40 space-y-2 mb-3">
             <div class="flex items-center justify-between px-3.5 py-2 bg-slate-900/90 rounded-2xl border border-slate-800 backdrop-blur-xl shadow-2xl">
-                <div class="flex items-center gap-2.5">
+                <div onclick="showModule('hub')" class="flex items-center gap-2.5 cursor-pointer select-none hover:opacity-90 transition-opacity">
                     <div class="bg-gradient-to-br from-amber-400 to-yellow-600 p-1.5 rounded-xl text-slate-950 shadow-md">
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     </div>
@@ -1120,7 +1116,7 @@
                 document.getElementById('input-pin').value = '9999';
             } else {
                 label.innerText = 'Logowanie Audytora';
-                desc.innerText = 'Wpisz PIN inspekcyjny (1001-1003)';
+                desc.innerText = 'Wpisz Kod PIN (1001-1003)';
                 quickSelect.classList.remove('hidden');
                 document.getElementById('input-pin').value = '';
             }
