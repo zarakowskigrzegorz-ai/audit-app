@@ -1269,7 +1269,11 @@
             } catch(e) { schedulesData = []; }
         }
 
-        function changeMonth(delta) { currentCalDate.setMonth(currentCalDate.getMonth() + delta); renderCalendar(); }
+        function changeMonth(delta) {
+            currentCalDate.setDate(1);
+            currentCalDate.setMonth(currentCalDate.getMonth() + delta);
+            renderCalendar();
+        }
 
                 let activeSelectedFilter = null;
 
