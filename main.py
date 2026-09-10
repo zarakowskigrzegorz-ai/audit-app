@@ -20,7 +20,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from collections import Counter 
-from agent import analyze_audit_risk, run_agent_turn
+from agent import analyze_audit_risk, run_agent_turn, generate_pre_audit_briefing
 
 from database import get_db, run_migrations, DB_PATH
 from routers.lines import router as lines_router
@@ -91,6 +91,7 @@ class AgentChatModel(BaseModel):
     message: str
     user_name: str
     user_role: str
+    line: Optional[str] = None
 
 class AuditEditRequestCreate(BaseModel):
     audit_id: int
@@ -442,14 +443,20 @@ async def undo_last_audit(audit_id: int, role: str = Query(...)):
     return {"status": "OK", "message": "Audyt został usunięty."}
 
 
-# --- CZAT AGENTA ---
+# --- CZAT AGENTA & BRIEFING ---
 @app.post("/api/agent/chat")
 async def agent_chat(payload: AgentChatModel):
+    target_line = payload.line or "Cały Zakład"
     reply = await run_agent_turn(
-        audit_payload={"line": "Ogólna", "notes": payload.message, "user": payload.user_name, "role": payload.user_role},
-        line_name="Ogólna"
+        audit_payload={"line": target_line, "notes": payload.message, "user": payload.user_name, "role": payload.user_role},
+        line_name=target_line
     )
     return {"reply": reply}
+
+@app.get("/api/agent/briefing/{line_name}")
+async def agent_line_briefing(line_name: str):
+    briefing = await generate_pre_audit_briefing(line_name)
+    return briefing
 
 
 # --- RAPORTY & EKSPORT EXCEL ---

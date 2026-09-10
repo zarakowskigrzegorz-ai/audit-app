@@ -518,32 +518,62 @@
 
             <!-- MODUŁ 6: AGENT -->
             <div id="view-agent" class="hidden space-y-3 view-layer">
-                <div class="glass-card p-4 space-y-3 border border-indigo-500/40 shadow-2xl flex flex-col h-[530px]">
-                    <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+                <div class="glass-card p-4 space-y-3 border border-indigo-500/40 shadow-2xl flex flex-col min-h-[580px]">
+                    <!-- Nagłówek Agenta z kontekstem linii i odprawą -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-700/60 pb-3 gap-2">
                         <div class="flex items-center gap-2">
                             <div class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
                             <div>
-                                <h2 class="text-sm font-black text-indigo-300">🤖 Agent ds. Standardów IFS Food v8</h2>
-                                <p class="text-[9px] text-slate-400 font-bold">Weryfikacja KO, procedura Hold Lot</p>
+                                <h2 class="text-sm font-black text-indigo-300">🤖 AI Field Co-Pilot (IFS Food v8)</h2>
+                                <p class="text-[9px] text-slate-400 font-bold">Asystent Terenowy Audytora & Weryfikacja CCP/KO</p>
                             </div>
                         </div>
-                        <button onclick="clearAgentChat()" class="tile-3d bg-slate-800 text-[9px] px-2 py-1 font-bold text-slate-400 hover:text-white">Wyczyść</button>
-                    </div>
-
-                    <div class="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[10px]">
-                        <button onclick="sendQuickPrompt('Jaki jest ogólny stan zgodności i wskaźnik KPI zakładu?')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-indigo-200 whitespace-nowrap hover:text-white">📊 Wskaźnik KPI</button>
-                        <button onclick="sendQuickPrompt('Podsumuj ostatnie usterki detektora metali na Liniach.')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-amber-300 whitespace-nowrap hover:text-white">🚨 Usterki CCP</button>
-                    </div>
-
-                    <div id="agent-chat-box" class="flex-1 overflow-y-auto space-y-2.5 p-2 rounded-xl bg-slate-950/80 border border-slate-800/80 pr-1 text-xs">
-                        <div class="bg-indigo-950/40 p-3 rounded-2xl border border-indigo-500/30 text-slate-200">
-                            <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 Asystent Jakości:</span>
-                            Witaj! Jestem lokalnym silnikiem SLM wspomagającym inspekcje IFS Food v8 i BRCGS v9. W czym mogę pomóc?
+                        <div class="flex items-center gap-2">
+                            <button onclick="clearAgentChat()" class="tile-3d bg-slate-800 text-[9px] px-2.5 py-1.5 font-bold text-slate-400 hover:text-white rounded-lg">Wyczyść czat</button>
                         </div>
                     </div>
 
+                    <!-- Pasek wyboru aktywnej linii & Szybka Odprawa -->
+                    <div class="bg-slate-900/90 p-2.5 rounded-xl border border-indigo-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+                            <span class="text-[10px] font-black text-slate-400 uppercase whitespace-nowrap">📍 Aktywny obszar:</span>
+                            <select id="agent-line-select" onchange="onAgentLineChange()" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 font-bold text-xs focus:outline-none focus:border-indigo-400">
+                                <option value="Cały Zakład">🏢 Cały Zakład (Widok Ogólny)</option>
+                            </select>
+                        </div>
+                        <button onclick="runAgentBriefing()" id="btn-agent-briefing" class="tile-3d bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-[10.5px] px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1.5">
+                            <span>🚀 Odprawa przed wejściem na linię</span>
+                        </button>
+                    </div>
+
+                    <!-- Kafelki szybkich ról / promptów -->
+                    <div class="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[10px]">
+                        <button onclick="sendQuickPrompt('Jaki jest bieżący stan wskaźników KPI i zgodności IFS dla tego obszaru?')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-indigo-200 whitespace-nowrap hover:text-white">📊 Wskaźnik KPI</button>
+                        <button onclick="sendQuickPrompt('Procedura awaryjna CCP1: Co zrobić przy braku odrzutu wzorca Fe lub uszkodzeniu fotokomórki?')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-rose-300 whitespace-nowrap hover:text-white">🚨 Awaria CCP1 (Hold Lot)</button>
+                        <button onclick="sendQuickPrompt('Procedura PR15.01: Operator ma skaleczenie lub objawy infekcji - jakie są wymogi IFS?')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-amber-300 whitespace-nowrap hover:text-white">🩺 Zdrowie PR15.01</button>
+                        <button onclick="sendQuickPrompt('Wymień 10 kryteriów Knock-Out (KO) w normie IFS Food v8 i konsekwencje ich naruszenia.')" class="tile-3d bg-slate-900 border border-indigo-500/30 px-2.5 py-1 text-cyan-300 whitespace-nowrap hover:text-white">📋 Wymagania KO</button>
+                    </div>
+
+                    <!-- Okno czatu -->
+                    <div id="agent-chat-box" class="flex-1 overflow-y-auto space-y-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 pr-1 text-xs">
+                        <div class="bg-indigo-950/40 p-3 rounded-2xl border border-indigo-500/30 text-slate-200">
+                            <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 AI Field Co-Pilot:</span>
+                            Witaj! Jestem Twoim inteligentnym asystentem inspekcji <b>IFS Food v8, BRCGS v9 i HACCP</b>.<br><br>
+                            Wybierz powyżej linię produkcyjną i kliknij <b>„🚀 Odprawa przed wejściem na linię”</b>, aby otrzymać natychmiastową analizę ryzyka i checklistę z bazy danych, lub zadaj dowolne pytanie w polu poniżej.
+                        </div>
+                    </div>
+
+                    <!-- Wskaźnik pisania (typing) -->
+                    <div id="agent-typing" class="hidden px-2 py-1 text-[10px] font-bold text-indigo-400 flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
+                        <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                        <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                        <span>Field Co-Pilot analizuje dane...</span>
+                    </div>
+
+                    <!-- Pole wprowadzania -->
                     <div class="pt-2 border-t border-slate-800 flex gap-2">
-                        <input type="text" id="agent-user-input" placeholder="Wpisz zapytanie..." onkeydown="if(event.key==='Enter') sendAgentMessage()" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 font-bold focus:outline-none focus:border-indigo-400 shadow-inner">
+                        <input type="text" id="agent-user-input" placeholder="Zadaj pytanie dotyczące normy, procedury lub opisz usterkę na linii..." onkeydown="if(event.key==='Enter') sendAgentMessage()" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 font-bold focus:outline-none focus:border-indigo-400 shadow-inner">
                         <button onclick="sendAgentMessage()" id="btn-agent-send" class="tile-3d bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-black text-xs px-4 rounded-xl shadow-lg flex items-center justify-center">
                             <span>Wyślij</span>
                         </button>
@@ -897,6 +927,7 @@
             if(modId === 'lines') renderLinesManagerList();
             if(modId === 'manager-results') { loadAuditResults(); loadManagerEditRequests(); }
             if(modId === 'auditor-history') loadAuditorHistory();
+            if(modId === 'agent') syncAgentLineSelector();
 
             updateTopNavActiveState(modId);
         }
@@ -1886,6 +1917,7 @@
                     <div onclick="selectTile('line', '${l.name}', this)" class="tile-line tile-3d ${idx === 0 ? 'tile-selected' : ''} bg-slate-800 p-2 text-center cursor-pointer text-xs font-bold">${l.code || l.name}</div>
                 `).join('');
             }
+            syncAgentLineSelector();
         }
 
         function selectTile(cat, val, btn) {
@@ -1940,7 +1972,109 @@
         function filterPlanAuditorsByType(v) { loadAuditorsDropdown(v); }
 
         function renderMarkdownToHtml(t) {
-            return t.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300">$1</strong>').replace(/\n/g, '<br>');
+            if (!t) return "";
+            let html = t
+                .replace(/### (.*?)\n/g, '<h3 class="text-xs font-black text-amber-300 mt-2 mb-1">$1</h3>')
+                .replace(/## (.*?)\n/g, '<h2 class="text-xs font-black text-cyan-300 mt-2 mb-1">$1</h2>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300 font-bold">$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em class="text-slate-300">$1</em>')
+                .replace(/`([^`]+)`/g, '<code class="bg-slate-800 text-cyan-200 px-1 py-0.5 rounded text-[10px]">$1</code>')
+                .replace(/^[•\-\*] (.*?)$/gm, '<li class="ml-3 text-slate-200 list-disc">$1</li>')
+                .replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function syncAgentLineSelector() {
+            const sel = document.getElementById('agent-line-select');
+            if (!sel) return;
+            const currVal = sel.value;
+            let opts = `<option value="Cały Zakład">🏢 Cały Zakład (Widok Ogólny)</option>`;
+            if (Array.isArray(productionLinesData) && productionLinesData.length > 0) {
+                opts += productionLinesData.map(l => `<option value="${l.name}">${l.name}</option>`).join('');
+            }
+            sel.innerHTML = opts;
+            if (currVal && Array.from(sel.options).some(o => o.value === currVal)) {
+                sel.value = currVal;
+            } else if (state && state.line && Array.from(sel.options).some(o => o.value === state.line)) {
+                sel.value = state.line;
+            }
+        }
+
+        function onAgentLineChange() {
+            const sel = document.getElementById('agent-line-select');
+            if (sel && sel.value !== "Cały Zakład") {
+                state.line = sel.value;
+            }
+        }
+
+        async function runAgentBriefing() {
+            const sel = document.getElementById('agent-line-select');
+            const line = sel ? sel.value : (state.line || "Cały Zakład");
+            const box = document.getElementById('agent-chat-box');
+            const typing = document.getElementById('agent-typing');
+            const btn = document.getElementById('btn-agent-briefing');
+
+            box.innerHTML += `
+                <div class="flex justify-end">
+                    <div class="bg-cyan-950/70 p-2.5 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%] text-xs font-bold flex items-center gap-1.5 shadow-md">
+                        <span>🚀 Żądanie odprawy dla: <u>${line}</u></span>
+                    </div>
+                </div>
+            `;
+            box.scrollTop = box.scrollHeight;
+            if (typing) typing.classList.remove('hidden');
+            if (btn) btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/agent/briefing/${encodeURIComponent(line)}`);
+                const data = await res.json();
+                
+                let statusBadge = '<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded text-[9px] font-black">STATUS: ZGODNY (OK)</span>';
+                if (data.status === 'KRYTYCZNE') {
+                    statusBadge = '<span class="bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded text-[9px] font-black animate-pulse">STATUS: KRYTYCZNY (HOLD LOT)</span>';
+                } else if (data.status === 'UWAGA') {
+                    statusBadge = '<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black">STATUS: WYMAGA UWAGI (CAPA)</span>';
+                }
+
+                let checkpointsHtml = '';
+                if (data.checkpoints && data.checkpoints.length > 0) {
+                    checkpointsHtml = `
+                        <div class="mt-2.5 pt-2 border-t border-slate-700/60">
+                            <span class="text-[9px] font-black text-cyan-300 uppercase tracking-wider block mb-1.5">🎯 Punkty wzmożonej uwagi podczas inspekcji:</span>
+                            <ul class="space-y-1 text-[11px] text-slate-300 list-none pl-0">
+                                ${data.checkpoints.map(cp => `<li class="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-start gap-1.5"><span class="text-indigo-400">▪</span> <span>${renderMarkdownToHtml(cp)}</span></li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                box.innerHTML += `
+                    <div class="flex justify-start">
+                        <div class="bg-slate-900/95 p-3.5 rounded-2xl border border-indigo-500/40 text-slate-200 max-w-[95%] shadow-xl space-y-2">
+                            <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
+                                <span class="text-[10.5px] font-black text-amber-400 flex items-center gap-1.5">
+                                    📋 ODPRAWA: ${data.line}
+                                </span>
+                                ${statusBadge}
+                            </div>
+                            <div class="text-[11.5px] leading-relaxed text-slate-200">
+                                ${renderMarkdownToHtml(data.briefing_markdown)}
+                            </div>
+                            ${checkpointsHtml}
+                            <div class="text-[9px] text-slate-500 pt-1 flex justify-between border-t border-slate-800/80 mt-1">
+                                <span>Przeanalizowano audytów: <b>${data.total_audits_checked}</b> | Niezgodności NOK: <b>${data.nok_count}</b></span>
+                                <span>Ostatni audyt: <b>${data.last_audit_date || 'N/A'}</b></span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch(e) {
+                box.innerHTML += `<div class="text-rose-400 text-xs p-2.5 bg-rose-950/40 rounded-xl border border-rose-800/40">❌ Nie udało się pobrać odprawy. Sprawdź połączenie z serwerem.</div>`;
+            } finally {
+                if (typing) typing.classList.add('hidden');
+                if (btn) btn.disabled = false;
+                box.scrollTop = box.scrollHeight;
+            }
         }
 
         async function sendAgentMessage() {
@@ -1948,21 +2082,62 @@
             const txt = inp.value.trim();
             if (!txt) return;
             const box = document.getElementById('agent-chat-box');
-            box.innerHTML += `<div class="flex justify-end"><div class="bg-cyan-950/60 p-2 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%]">${txt}</div></div>`;
+            const typing = document.getElementById('agent-typing');
+            const sel = document.getElementById('agent-line-select');
+            const activeLine = sel ? sel.value : (state.line || "Cały Zakład");
+
+            box.innerHTML += `<div class="flex justify-end"><div class="bg-cyan-950/60 p-2.5 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%] text-xs font-semibold shadow-md">${txt}</div></div>`;
             inp.value = "";
             box.scrollTop = box.scrollHeight;
+            if (typing) typing.classList.remove('hidden');
+
             try {
-                const res = await fetch('/api/agent/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ message: txt, user_name: state.auditor_id, user_role: state.role }) });
+                const res = await fetch('/api/agent/chat', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ 
+                        message: txt, 
+                        user_name: state.auditor_id || "Audytor", 
+                        user_role: state.role || "AUDITOR",
+                        line: activeLine
+                    }) 
+                });
                 const d = await res.json();
-                box.innerHTML += `<div class="flex justify-start"><div class="bg-indigo-950/40 p-2 rounded-xl border border-indigo-500/30 text-slate-200 max-w-[92%]">${renderMarkdownToHtml(d.reply)}</div></div>`;
+                box.innerHTML += `
+                    <div class="flex justify-start">
+                        <div class="bg-indigo-950/50 p-3 rounded-2xl border border-indigo-500/30 text-slate-200 max-w-[92%] text-xs leading-relaxed shadow-lg">
+                            <span class="text-[9.5px] font-black text-amber-400 block mb-1">🤖 Field Co-Pilot [${activeLine}]:</span>
+                            ${renderMarkdownToHtml(d.reply)}
+                        </div>
+                    </div>
+                `;
             } catch(e) {
-                box.innerHTML += `<div class="text-rose-400 text-[10px]">❌ Błąd silnika SLM.</div>`;
+                box.innerHTML += `<div class="text-rose-400 text-[10px] p-2 bg-rose-950/30 rounded-lg">❌ Błąd komunikacji z silnikiem SLM.</div>`;
+            } finally {
+                if (typing) typing.classList.add('hidden');
+                box.scrollTop = box.scrollHeight;
             }
-            box.scrollTop = box.scrollHeight;
         }
 
-        function sendQuickPrompt(t) { document.getElementById('agent-user-input').value = t; sendAgentMessage(); }
-        function clearAgentChat() { document.getElementById('agent-chat-box').innerHTML = ""; }
+        function sendQuickPrompt(t) { 
+            const inp = document.getElementById('agent-user-input');
+            if (inp) {
+                inp.value = t;
+                sendAgentMessage();
+            }
+        }
+
+        function clearAgentChat() { 
+            const box = document.getElementById('agent-chat-box');
+            if (box) {
+                box.innerHTML = `
+                    <div class="bg-indigo-950/40 p-3 rounded-2xl border border-indigo-500/30 text-slate-200">
+                        <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 AI Field Co-Pilot:</span>
+                        Czat został wyczyszczony. Wybierz linię i kliknij <b>„🚀 Odprawa przed wejściem na linię”</b> lub zadaj pytanie.
+                    </div>
+                `;
+            }
+        }
 
         async function openMgrModal(id) {
             const res = await fetch(`/api/schedule/${id}`);
