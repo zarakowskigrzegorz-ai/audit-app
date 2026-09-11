@@ -110,10 +110,11 @@ class AuditUpdateRequest(BaseModel):
     updated_fields: Dict[str, Any]
 
 
-# --- ROUTING I INTERFEJS GŁÓWNY ---
 @app.get("/", response_class=HTMLResponse)
 def read_root(response: Response):
-    #response.headers["Content-Security-Policy"] = "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; object-src 'none';"
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     template_path = os.path.join(BASE_DIR, "templates", "index.html")
     root_path = os.path.join(BASE_DIR, "index.html")
     final_path = template_path if os.path.exists(template_path) else root_path

@@ -151,7 +151,7 @@
                 <div class="ios-dock inline-flex items-center justify-center p-1 rounded-2xl gap-1 shrink-0">
                     <button id="tag-hub" onclick="showModule('hub')" class="ios-tab-btn ios-tab-active px-3.5 py-1.5 rounded-xl text-[11px] border border-transparent">❖ Menu</button>
                     <button id="tag-calendar" onclick="showModule('calendar')" class="ios-tab-btn px-3.5 py-1.5 rounded-xl text-[11px] text-amber-300/90 hover:text-white border border-transparent">📅 Harmonogram</button>
-                    <button id="tag-agent" onclick="showModule('agent')" class="ios-tab-btn px-3.5 py-1.5 rounded-xl text-[11px] text-indigo-300/90 hover:text-white border border-transparent">🤖 Agent</button>
+                    <button id="tag-agent" onclick="showModule('agent')" class="ios-tab-btn px-3.5 py-1.5 rounded-xl text-[11px] text-indigo-300/90 hover:text-white border border-transparent">🤖 Ai Support</button>
                 </div>
             </div>
         </header>
@@ -242,7 +242,7 @@
                     </div>
 
                     <!-- KAFELEK 7: RAPORTY & EKSPORT EXCEL -->
-                    <div onclick="openReportsDashboard()" class="tile-3d relative h-32 bg-gradient-to-br from-indigo-700 via-blue-800 to-slate-900 flex flex-col justify-between p-3.5 cursor-pointer border border-cyan-300/40 shadow-xl sm:col-span-2">
+                    <div onclick="openReportsDashboard()" class="tile-3d relative h-32 bg-gradient-to-br from-indigo-700 via-blue-800 to-slate-900 flex flex-col justify-between p-3.5 cursor-pointer border border-cyan-300/40 shadow-xl">
                         <div class="flex justify-between items-start">
                             <div class="p-2 rounded-2xl bg-slate-950 border border-cyan-300/30 w-fit">
                                 <svg class="w-6 h-6 text-cyan-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -251,7 +251,21 @@
                         </div>
                         <div>
                             <h3 class="text-xs font-black text-white">7. Raporty & Dashboard Excel</h3>
-                            <p class="text-[9px] font-bold text-cyan-200/80">Oficjalny arkusz z wykreślonimi wykresami zarządczymi i tabelą danych</p>
+                            <p class="text-[9px] font-bold text-cyan-200/80">Oficjalny arkusz z wykresami zarządczymi</p>
+                        </div>
+                    </div>
+
+                    <!-- KAFELEK 8: AI SUPPORT -->
+                    <div onclick="showModule('agent')" class="tile-3d relative h-32 bg-gradient-to-br from-purple-700 via-indigo-700 to-slate-900 flex flex-col justify-between p-3.5 cursor-pointer border border-indigo-400/40 shadow-xl">
+                        <div class="flex justify-between items-start">
+                            <div class="p-2 rounded-2xl bg-indigo-950/50 border border-indigo-300/30 w-fit text-lg">
+                                🤖
+                            </div>
+                            <span class="text-[8px] font-black bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/40">AI SUPPORT</span>
+                        </div>
+                        <div>
+                            <h3 class="text-xs font-black text-white">8. Ai Support (Asystent Terenowy)</h3>
+                            <p class="text-[9px] font-bold text-indigo-100/80">Odprawa przedaudytowa, analiza ryzyka i standardy IFS Food v8</p>
                         </div>
                     </div>
                 </div>
@@ -302,46 +316,60 @@
 
             <!-- DEDYKOWANY HUB AUDYTORA -->
             <div id="hub-auditor" class="hidden flex items-center justify-center min-h-[60vh] py-8 px-4 view-layer">
-    <div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="w-full max-w-5xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <!-- 1. MÓJ HARMONOGRAM -->
-        <div onclick="showModule('calendar')" class="tile-3d relative aspect-square bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-900 p-6 rounded-2xl flex flex-col justify-between overflow-hidden group cursor-pointer border border-blue-400/30 shadow-xl hover:shadow-blue-500/30 hover:scale-[1.02] transition-all">
+        <div onclick="showModule('calendar')" class="tile-3d relative aspect-square bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-900 p-5 rounded-2xl flex flex-col justify-between overflow-hidden group cursor-pointer border border-blue-400/30 shadow-xl hover:shadow-blue-500/30 hover:scale-[1.02] transition-all">
             <div class="flex justify-between items-start">
-                <span class="text-[10px] font-black bg-blue-950/80 text-blue-300 px-3 py-1 rounded-full border border-blue-500/30 tracking-wider uppercase">Operacyjny</span>
-                <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-blue-200">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <span class="text-[9px] font-black bg-blue-950/80 text-blue-300 px-2.5 py-1 rounded-full border border-blue-500/30 tracking-wider uppercase">Operacyjny</span>
+                <div class="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-blue-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                 </div>
             </div>
             <div>
-                <h2 class="text-base font-black text-white drop-shadow mb-1">1. Mój Harmonogram</h2>
-                <p class="text-xs text-blue-100/80 font-medium leading-normal">Plan inspekcji i start przypisanych audytów.</p>
+                <h2 class="text-sm font-black text-white drop-shadow mb-1">1. Mój Harmonogram</h2>
+                <p class="text-[11px] text-blue-100/80 font-medium leading-normal">Plan inspekcji i start przypisanych audytów.</p>
             </div>
         </div>
 
         <!-- 2. MOJA HISTORIA / KOREKTY -->
-        <div onclick="showModule('auditor-history')" class="tile-3d relative aspect-square bg-gradient-to-br from-orange-600 via-amber-600 to-slate-900 p-6 rounded-2xl flex flex-col justify-between overflow-hidden group cursor-pointer border border-orange-400/30 shadow-xl hover:shadow-orange-500/30 hover:scale-[1.02] transition-all">
+        <div onclick="showModule('auditor-history')" class="tile-3d relative aspect-square bg-gradient-to-br from-orange-600 via-amber-600 to-slate-900 p-5 rounded-2xl flex flex-col justify-between overflow-hidden group cursor-pointer border border-orange-400/30 shadow-xl hover:shadow-orange-500/30 hover:scale-[1.02] transition-all">
             <div class="flex justify-between items-start">
-                <span class="text-[10px] font-black bg-orange-950/80 text-orange-300 px-3 py-1 rounded-full border border-orange-500/30 tracking-wider uppercase">Audit Trail</span>
-                <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-orange-200">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span class="text-[9px] font-black bg-orange-950/80 text-orange-300 px-2.5 py-1 rounded-full border border-orange-500/30 tracking-wider uppercase">Audit Trail</span>
+                <div class="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-orange-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
             </div>
             <div>
-                <h2 class="text-base font-black text-white drop-shadow mb-1">2. Moja Historia</h2>
-                <p class="text-xs text-orange-100/80 font-medium leading-normal">Zrealizowane audyty i wnioski o korektę.</p>
+                <h2 class="text-sm font-black text-white drop-shadow mb-1">2. Moja Historia</h2>
+                <p class="text-[11px] text-orange-100/80 font-medium leading-normal">Zrealizowane audyty i wnioski o korektę.</p>
             </div>
         </div>
 
         <!-- 3. BAZA WIEDZY / FAQ -->
-        <div onclick="openChecklistKnowledgeBase()" class="tile-3d relative aspect-square bg-gradient-to-br from-emerald-600 via-teal-600 to-slate-900 p-6 rounded-2xl flex flex-col justify-between overflow-hidden group cursor-pointer border border-emerald-400/30 shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.02] transition-all">
+        <div onclick="openChecklistKnowledgeBase()" class="tile-3d relative aspect-square bg-gradient-to-br from-emerald-600 via-teal-600 to-slate-900 p-5 rounded-2xl flex flex-col justify-between overflow-hidden group cursor-pointer border border-emerald-400/30 shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.02] transition-all">
             <div class="flex justify-between items-start">
-                <span class="text-[10px] font-black bg-emerald-950/80 text-emerald-300 px-3 py-1 rounded-full border border-emerald-500/30 tracking-wider uppercase">IFS v8 / BRCGS</span>
-                <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-emerald-200">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                <span class="text-[9px] font-black bg-emerald-950/80 text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-500/30 tracking-wider uppercase">IFS v8 / BRCGS</span>
+                <div class="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-emerald-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                 </div>
             </div>
             <div>
-                <h2 class="text-base font-black text-white drop-shadow mb-1">3. Baza Wiedzy & FAQ</h2>
-                <p class="text-xs text-emerald-100/80 font-medium leading-normal">Limity CCP, standardy GMP i wytyczne.</p>
+                <h2 class="text-sm font-black text-white drop-shadow mb-1">3. Baza Wiedzy & FAQ</h2>
+                <p class="text-[11px] text-emerald-100/80 font-medium leading-normal">Limity CCP, standardy GMP i wytyczne.</p>
+            </div>
+        </div>
+
+        <!-- 4. AI SUPPORT (ASYSTENT TERENOWY) -->
+        <div onclick="showModule('agent')" class="tile-3d relative aspect-square bg-gradient-to-br from-purple-600 via-indigo-600 to-slate-900 p-5 rounded-2xl flex flex-col justify-between overflow-hidden group cursor-pointer border border-indigo-400/30 shadow-xl hover:shadow-indigo-500/30 hover:scale-[1.02] transition-all">
+            <div class="flex justify-between items-start">
+                <span class="text-[9px] font-black bg-indigo-950/80 text-indigo-300 px-2.5 py-1 rounded-full border border-indigo-500/30 tracking-wider uppercase">IFS Food v8</span>
+                <div class="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-indigo-200 text-base">
+                    🤖
+                </div>
+            </div>
+            <div>
+                <h2 class="text-sm font-black text-white drop-shadow mb-1">4. Ai Support</h2>
+                <p class="text-[11px] text-indigo-100/80 font-medium leading-normal">Asystent Terenowy, odprawa linii i normy.</p>
             </div>
         </div>
     </div>
