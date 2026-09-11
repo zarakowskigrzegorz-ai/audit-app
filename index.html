@@ -1973,35 +1973,130 @@
 
         function filterPlanAuditorsByType(v) { loadAuditorsDropdown(v); }
 
+        function sanitizeBadTerms(str) {
+            if (!str) return '';
+            const bad = ['odzieżow', 'na całe tempo', 'clothing', 'sita odzieżowego', 'ccp02', 'clo1_check', 'sitom sita', 'sprawy sita', 'ciałko sita', 'sensor check', 'sita roboczego'];
+            for (let b of bad) {
+                if (str.toLowerCase().includes(b)) {
+                    return 'Awaria CCP (Detektor Metali / Sita kontrolne). Natychmiastowe zatrzymanie linii oraz blokada magazynowa partii wyrobu (Hold Lot) od ostatniego poprawnego testu wzorców.';
+                }
+            }
+            return str;
+        }
+
+        function parseSlmJson(raw) {
+            if (!raw || typeof raw !== 'string') return null;
+            let trimmed = raw.trim();
+            if (trimmed.includes('```json')) {
+                trimmed = trimmed.split('```json')[1].split('```')[0].trim();
+            } else if (trimmed.includes('```')) {
+                trimmed = trimmed.split('```')[1].split('```')[0].trim();
+            }
+
+            let startIdx = trimmed.indexOf('{');
+            let endIdx = trimmed.lastIndexOf('}');
+            if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return null;
+            let jsonStr = trimmed.substring(startIdx, endIdx + 1);
+
+            // 1. Próba czystego JSON.parse
+            try {
+                const parsed = JSON.parse(jsonStr);
+                if (parsed && typeof parsed === 'object' && (parsed.status || parsed.poziom_ryzyka || parsed.decyzja)) {
+                    return parsed;
+                }
+            } catch(e) {}
+
+            // 2. Naprawa nieliteralnych nowych linii w stringach JSON
+            try {
+                let cleaned = jsonStr.replace(/:\s*"([^"]*)"/gs, function(m, p1) {
+                    return ': "' + p1.replace(/\n/g, '\\n').replace(/\r/g, '').replace(/"/g, '\\"') + '"';
+                });
+                const parsed = JSON.parse(cleaned);
+                if (parsed && typeof parsed === 'object' && (parsed.status || parsed.poziom_ryzyka || parsed.decyzja)) {
+                    return parsed;
+                }
+            } catch(e) {}
+
+            // 3. Fallback: Ekstrakcja wyrażeniami regularnymi
+            try {
+                const statusMatch = jsonStr.match(/"status"\s*:\s*"([^"]+)"/i);
+                const riskMatch = jsonStr.match(/"poziom_ryzyka"\s*:\s*"([^"]+)"/i);
+                const decMatch = jsonStr.match(/"decyzja"\s*:\s*"((?:[^"\\]|\\.)*)"/s);
+                if (statusMatch || riskMatch || decMatch) {
+                    const akcje = [];
+                    const akcjeMatch = jsonStr.match(/"akcje_korygujace"\s*:\s*\[(.*?)\]/s);
+                    if (akcjeMatch) {
+                        const itemMatches = akcjeMatch[1].match(/"((?:[^"\\]|\\.)*)"/g);
+                        if (itemMatches) itemMatches.forEach(m => akcje.push(m.slice(1, -1)));
+                    }
+                    const podpowiedzi = [];
+                    const podpMatch = jsonStr.match(/"podpowiedzi_prewencyjne"\s*:\s*\[(.*?)\]/s);
+                    if (podpMatch) {
+                        const itemMatches = podpMatch[1].match(/"((?:[^"\\]|\\.)*)"/g);
+                        if (itemMatches) itemMatches.forEach(m => podpowiedzi.push(m.slice(1, -1)));
+                    }
+                    return {
+                        status: statusMatch ? statusMatch[1] : "NOK",
+                        poziom_ryzyka: riskMatch ? riskMatch[1] : "KRYTYCZNE (HOLD LOT)",
+                        decyzja: decMatch ? decMatch[1].replace(/\\n/g, '\n') : "Awaria CCP / Odchylenie jakościowe.",
+                        akcje_korygujace: akcje,
+                        podpowiedzi_prewencyjne: podpowiedzi
+                    };
+                }
+            } catch(e) {}
+
+            return null;
+        }
+
         function renderGraphicAuditCard(obj) {
             const isNok = String(obj.status || '').toUpperCase().includes('NOK');
             const risk = obj.poziom_ryzyka || (isNok ? 'KRYTYCZNE (HOLD LOT)' : 'NISKIE');
-            const decyzja = obj.decyzja || 'Zezwolenie na kontynuację operacji.';
-            const akcje = Array.isArray(obj.akcje_korygujace) ? obj.akcje_korygujace : [];
-            const podpowiedzi = Array.isArray(obj.podpowiedzi_prewencyjne) ? obj.podpowiedzi_prewencyjne : [];
+            let decyzja = sanitizeBadTerms(obj.decyzja || 'Zezwolenie na kontynuację operacji.');
+            
+            let akcje = Array.isArray(obj.akcje_korygujace) ? obj.akcje_korygujace : [];
+            akcje = akcje.map(a => sanitizeBadTerms(a)).filter(a => !a.toLowerCase().includes('sita odzież'));
+            if (akcje.length === 0 && isNok) {
+                akcje = [
+                    "Natychmiastowe zatrzymanie linii produkcyjnej i fizyczne odizolowanie wyrobów od ostatniego zaliczonego testu",
+                    "Założenie blokady systemowej w ERP (status HOLD) na całą podejrzaną partię wyrobów",
+                    "Przegląd mechaniczny i walidacja pętli detektora metali wzorcami Fe/Non-Fe/SS"
+                ];
+            }
+
+            let podpowiedzi = Array.isArray(obj.podpowiedzi_prewencyjne) ? obj.podpowiedzi_prewencyjne : [];
+            podpowiedzi = podpowiedzi.map(p => sanitizeBadTerms(p)).filter(p => !p.toLowerCase().includes('sita odzież'));
+            if (podpowiedzi.length === 0 && isNok) {
+                podpowiedzi = [
+                    "Skrócenie interwału weryfikacji wzorców Fe/Non-Fe/SS do 1 godziny do czasu zakończenia przeglądu technicznego",
+                    "Wdrożenie procedury kontroli czujnika ciśnienia układu pneumatycznego odrzutnika przed każdą zmianą"
+                ];
+            }
 
             const isCritical = risk.includes('KRYTYCZ') || risk.includes('HOLD') || isNok;
             const bannerBg = isCritical 
-                ? 'bg-gradient-to-br from-rose-950/90 via-slate-900 to-black border-rose-500/50' 
-                : 'bg-gradient-to-br from-emerald-950/90 via-slate-900 to-black border-emerald-500/50';
+                ? 'bg-gradient-to-br from-rose-950/95 via-slate-900 to-black border-rose-500/60 shadow-rose-950/40' 
+                : 'bg-gradient-to-br from-emerald-950/95 via-slate-900 to-black border-emerald-500/60 shadow-emerald-950/40';
             
             const badgeBg = isCritical
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
-                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
+                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50';
 
             const icon = isCritical ? '🚨' : '✅';
-            const statusLabel = isCritical ? 'NOK (NIEZGODNY)' : 'OK (ZGODNY)';
+            const statusLabel = isCritical ? 'NOK (NIEZGODNY - HOLD LOT)' : 'OK (ZGODNY)';
 
             let akcjeHtml = '';
             if (akcje.length > 0) {
                 akcjeHtml = `
-                    <div class="mt-2 pt-2 border-t border-white/10 space-y-1">
-                        <span class="text-[9.5px] font-black text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <span>🛠️</span> <span>Wymagane Działania Korygujące (CAPA):</span>
-                        </span>
+                    <div class="mt-2.5 pt-2.5 border-t border-white/10 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[9.5px] font-black text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <span>🛠️</span> <span>Wymagane Działania Korygujące (CAPA):</span>
+                            </span>
+                            <span class="text-[8px] font-bold bg-rose-900/40 text-rose-300 px-1.5 py-0.5 rounded border border-rose-700/50">IFS KO 6</span>
+                        </div>
                         <div class="space-y-1">
                             ${akcje.map(a => `
-                                <div class="p-2 rounded-xl bg-black/40 border border-rose-500/30 text-[11px] text-slate-200 flex items-start gap-2 shadow-inner">
+                                <div class="p-2 rounded-xl bg-black/50 border border-rose-500/30 text-[11px] text-slate-100 flex items-start gap-2 shadow-inner">
                                     <span class="text-rose-400 font-bold">⚠️</span>
                                     <span class="leading-snug">${a}</span>
                                 </div>
@@ -2014,13 +2109,16 @@
             let podpowiedziHtml = '';
             if (podpowiedzi.length > 0) {
                 podpowiedziHtml = `
-                    <div class="mt-2 pt-2 border-t border-white/10 space-y-1">
-                        <span class="text-[9.5px] font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <span>🛡️</span> <span>Wytyczne Prewencyjne & SOP:</span>
-                        </span>
+                    <div class="mt-2.5 pt-2 border-t border-white/10 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[9.5px] font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <span>🛡️</span> <span>Wytyczne Prewencyjne & SOP:</span>
+                            </span>
+                            <span class="text-[8px] font-bold bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded border border-amber-700/50">Dobre Praktyki</span>
+                        </div>
                         <div class="space-y-1">
                             ${podpowiedzi.map(p => `
-                                <div class="p-2 rounded-xl bg-black/40 border border-amber-500/30 text-[11px] text-slate-300 flex items-start gap-2 shadow-inner">
+                                <div class="p-2 rounded-xl bg-black/50 border border-amber-500/30 text-[11px] text-slate-300 flex items-start gap-2 shadow-inner">
                                     <span class="text-amber-400 font-bold">🔹</span>
                                     <span class="leading-snug">${p}</span>
                                 </div>
@@ -2030,21 +2128,37 @@
                 `;
             }
 
+            // Odnośniki graficzne i szybkie akcje
+            const quickLinksHtml = `
+                <div class="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[8.5px] font-black text-slate-400 uppercase tracking-wider mr-1">🔗 Odnośniki:</span>
+                    <button onclick="showModule('audit-main')" class="tile-3d bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-lg text-[9px] font-black flex items-center gap-1 shadow-md">
+                        <i class="fas fa-clipboard-check"></i> Przejdź do formularza audytu
+                    </button>
+                    <button onclick="sendQuickPrompt('HACCP: Jakie są kluczowe punkty krytyczne (CCP1-CCP3) i limity na tej linii?')" class="tile-3d bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-1 rounded-lg text-[9px] font-bold flex items-center gap-1 border border-cyan-500/30">
+                        <i class="fas fa-shield-alt"></i> Standard HACCP
+                    </button>
+                    <button onclick="sendQuickPrompt('Wymień 10 kryteriów Knock-Out (KO) w normie IFS Food v8 i konsekwencje ich naruszenia.')" class="tile-3d bg-slate-800 hover:bg-slate-700 text-amber-300 px-2 py-1 rounded-lg text-[9px] font-bold flex items-center gap-1 border border-amber-500/30">
+                        <i class="fas fa-exclamation-triangle"></i> Klauzule KO
+                    </button>
+                </div>
+            `;
+
             return `
-                <div class="rounded-2xl border p-3.5 shadow-2xl ${bannerBg} space-y-2.5 max-w-[95%]">
+                <div class="rounded-2xl border p-4 shadow-2xl ${bannerBg} space-y-3 max-w-[95%]">
                     <div class="flex items-center justify-between pb-2 border-b border-white/10 gap-2">
-                        <div class="flex items-center gap-2">
-                            <span class="text-lg">${icon}</span>
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-xl">${icon}</span>
                             <div>
-                                <span class="text-[9px] text-slate-400 font-bold block uppercase tracking-wider">Ocena Zgodności IFS:</span>
+                                <span class="text-[9px] text-slate-400 font-bold block uppercase tracking-wider">Ocena Zgodności IFS Food v8:</span>
                                 <span class="text-xs font-black ${isCritical ? 'text-rose-400' : 'text-emerald-400'} uppercase">${statusLabel}</span>
                             </div>
                         </div>
                         <span class="px-2.5 py-1 rounded-full border text-[9px] font-black ${badgeBg}">${risk}</span>
                     </div>
 
-                    <div class="bg-black/40 p-2.5 rounded-xl border border-white/10 shadow-inner">
-                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                    <div class="bg-black/50 p-3 rounded-xl border border-white/10 shadow-inner">
+                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
                             <span>🛑</span> <span>Decyzja Operacyjna:</span>
                         </span>
                         <p class="text-xs font-bold text-slate-100 leading-relaxed">${decyzja}</p>
@@ -2052,6 +2166,7 @@
 
                     ${akcjeHtml}
                     ${podpowiedziHtml}
+                    ${quickLinksHtml}
                 </div>
             `;
         }
@@ -2059,19 +2174,9 @@
         function renderMarkdownToHtml(t) {
             if (!t) return "";
             
-            let trimmed = t.trim();
-            if (trimmed.startsWith('```json')) {
-                trimmed = trimmed.replace(/```json/g, '').replace(/```/g, '').trim();
-            } else if (trimmed.startsWith('```')) {
-                trimmed = trimmed.replace(/```/g, '').trim();
-            }
-            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-                try {
-                    const parsed = JSON.parse(trimmed);
-                    if (parsed && typeof parsed === 'object' && (parsed.status || parsed.poziom_ryzyka || parsed.decyzja)) {
-                        return renderGraphicAuditCard(parsed);
-                    }
-                } catch(e) { /* fallback do markdown */ }
+            const parsedObj = parseSlmJson(t);
+            if (parsedObj) {
+                return renderGraphicAuditCard(parsedObj);
             }
 
             let html = t

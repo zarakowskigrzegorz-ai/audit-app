@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import sqlite3
 import httpx
 from typing import Dict, Any, List
@@ -43,7 +44,12 @@ def clean_json_response(raw_text: str) -> Dict[str, Any]:
     if start_idx != -1 and end_idx != -1:
         text = text[start_idx:end_idx + 1]
 
-    return json.loads(text)
+    try:
+        return json.loads(text, strict=False)
+    except Exception:
+        # Zastąpienie nieliteralnych nowych linii wewnątrz stringów
+        sanitized = re.sub(r':\s*"([^"]*)"', lambda m: ': "' + m.group(1).replace('\n', '\\n').replace('\r', '') + '"', text)
+        return json.loads(sanitized, strict=False)
 
 
 HALLUCINATION_TERMS = [
@@ -51,7 +57,8 @@ HALLUCINATION_TERMS = [
     "głowa ramienia", "weryfikacji rejestracji fizycznej",
     "przez 72 godziny", "omówionej partii", "odzieżowych",
     "odzieżow", "na całe tempo", "clothing", "sita odzieżowego",
-    "ccp02_clothing", "sitom sita", "sprawy sita", "ciałko sita"
+    "ccp02", "clo1_check", "sitom sita", "sprawy sita", "ciałko sita",
+    "sensor check", "sita roboczego"
 ]
 
 
