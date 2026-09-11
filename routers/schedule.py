@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from database import get_db
 from datetime import timedelta, datetime
+import calendar
 
 router = APIRouter(prefix="/api/schedule", tags=["Schedule"])
 
@@ -26,6 +27,7 @@ class ScheduleUpdateModel(BaseModel):
 class AutoPlanModel(BaseModel):
     start_year: int
     start_month: int
+    start_day: Optional[int] = None
     period_months: int
     lines: List[str]
     audit_types: List[str]
@@ -128,36 +130,76 @@ async def clear_range(payload: Dict[str, int]):
 @router.post("/auto")
 async def auto_plan_audits(payload: AutoPlanModel):
     async with get_db() as conn:
-        # Usuń absolutnie wszystkie audyty w zadanym zakresie miesięcy
-        for m_offset in range(payload.period_months):
-            cur_m = payload.start_month + m_offset
-            yr = payload.start_year + ((cur_m - 1) // 12)
-            mo = ((cur_m - 1) % 12) + 1
-            prefix_match = f"{yr:04d}-{mo:02d}%"
-            await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix_match,))
-        
-        current_date = datetime(payload.start_year, payload.start_month, 1)
-        end_date = current_date + timedelta(days=30 * payload.period_months)
+        today = datetime.now().date()
+        target_year = payload.start_year
+        target_month = payload.start_month
 
-        scheduled_audits = []
-        while current_date < end_date:
-            if not payload.include_weekends and current_date.weekday() >= 5:
-                current_date += timedelta(days=1)
+        # Ustalenie start_date - brak planowania wstecz
+        if (target_year, target_month) == (today.year, today.month):
+            # Bieżący miesiąc: planowanie WYŁĄCZNIE od dzisiaj w przód (brak dat wstecznych)
+            s_day = max(payload.start_day or today.day, today.day)
+            start_date = datetime(target_year, target_month, s_day)
+        elif (target_year, target_month) < (today.year, today.month):
+            # Wybrano miesiąc przeszły: bezpieczne przestawienie na dzień bieżący
+            start_date = datetime(today.year, today.month, today.day)
+            target_year = today.year
+            target_month = today.month
+        else:
+            # Miesiąc w przyszłości: start od 1. dnia tego miesiąca
+            s_day = payload.start_day if payload.start_day else 1
+            start_date = datetime(target_year, target_month, s_day)
+
+        # Precyzyjne ustalenie end_date (ostatni dzień ostatniego objętego miesiąca)
+        end_m_total = target_month + payload.period_months - 1
+        end_yr = target_year + ((end_m_total - 1) // 12)
+        end_mo = ((end_m_total - 1) % 12) + 1
+        last_day = calendar.monthrange(end_yr, end_mo)[1]
+        end_date = datetime(end_yr, end_mo, last_day)
+
+        # Bezpieczne usuwanie TYLKO przyszłych planowanych audytów w wygenerowanym oknie dat
+        await conn.execute("""
+            DELETE FROM audit_schedules 
+            WHERE status = 'PLANOWANY' 
+              AND scheduled_date >= ? 
+              AND scheduled_date <= ?
+        """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
+
+        cursor = await conn.execute("SELECT full_name FROM users WHERE is_active = 1 AND role = 'AUDITOR'")
+        rows = await cursor.fetchall()
+        auditors = [r["full_name"] for r in rows]
+        if len(auditors) < 2:
+            auditors = ["Grzegorz Zarakowski (Lead Auditor)", "Piotr Kowalski (Audytor)", "Anna Nowak (Audytor)"]
+
+        count = 0
+        cur = start_date
+        line_idx = type_idx = aud_idx = 0
+
+        while cur <= end_date:
+            if not payload.include_weekends and cur.weekday() in (5, 6):
+                cur += timedelta(days=1)
                 continue
 
-            for line in payload.lines:
-                for audit_type in payload.audit_types:
-                    lead_auditor = "Grzegorz Zarakowski (Lead Auditor)"
-                    backup_auditor = "Piotr Kowalski (Audytor)"
-                    s_date = current_date.strftime("%Y-%m-%d")
-                    scheduled_audits.append({"scheduled_date": s_date, "line": line})
-                    await conn.execute(
-                        "INSERT INTO audit_schedules (scheduled_date, line, audit_type, lead_auditor, backup_auditor, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (s_date, line, audit_type, lead_auditor, backup_auditor, "PLANOWANY", "Wygenerowano automatycznie")
-                    )
-            current_date += timedelta(days=1)
+            assigned_line = payload.lines[line_idx % len(payload.lines)]
+            assigned_type = payload.audit_types[type_idx % len(payload.audit_types)]
+            lead = auditors[aud_idx % len(auditors)]
+            backup = auditors[(aud_idx + 1) % len(auditors)]
+            
+            await conn.execute("""
+                INSERT INTO audit_schedules (scheduled_date, audit_type, line, lead_auditor, backup_auditor, status, notes)
+                VALUES (?, ?, ?, ?, ?, 'PLANOWANY', 'Generacja AI (Optymalizacja IFS Food v8)')
+            """, (cur.strftime("%Y-%m-%d"), assigned_type, assigned_line, lead, backup))
+
+            count += 1
+            line_idx += 1; type_idx += 1; aud_idx += 1
+            cur += timedelta(days=3)
+
         await conn.commit()
-    return {"status": "success", "count": len(scheduled_audits), "scheduled_audits_count": len(scheduled_audits)}
+    return {
+        "status": "success",
+        "count": count,
+        "start_date": start_date.strftime("%Y-%m-%d"),
+        "end_date": end_date.strftime("%Y-%m-%d")
+    }
 
 
 class ClearMonthModel(BaseModel):
@@ -168,6 +210,6 @@ class ClearMonthModel(BaseModel):
 async def router_clear_month(payload: ClearMonthModel):
     async with get_db() as conn:
         prefix = f"{payload.year:04d}-{payload.month:02d}%"
-        await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix,))
+        await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ? AND status = 'PLANOWANY'", (prefix,))
         await conn.commit()
     return {"status": "success"}

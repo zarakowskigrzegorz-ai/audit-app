@@ -495,8 +495,28 @@
                             <button type="button" onclick="setPlanPeriod(12, this)" class="btn-period tile-3d bg-slate-800 p-1.5 font-bold text-[10px]">12 msc</button>
                         </div>
                         <div class="grid grid-cols-2 gap-2">
-                            <select id="autoplan-month" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-white font-bold"><option value="9" selected>Wrzesień</option></select>
-                            <input type="number" id="autoplan-year" value="2026" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 font-bold text-white">
+                            <select id="autoplan-month" onchange="updateAutoPlanPreview()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-white font-bold">
+                                <option value="1">Styczeń</option>
+                                <option value="2">Luty</option>
+                                <option value="3">Marzec</option>
+                                <option value="4">Kwiecień</option>
+                                <option value="5">Maj</option>
+                                <option value="6">Czerwiec</option>
+                                <option value="7">Lipiec</option>
+                                <option value="8">Sierpień</option>
+                                <option value="9" selected>Wrzesień</option>
+                                <option value="10">Październik</option>
+                                <option value="11">Listopad</option>
+                                <option value="12">Grudzień</option>
+                            </select>
+                            <input type="number" id="autoplan-year" value="2026" onchange="updateAutoPlanPreview()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 font-bold text-white">
+                        </div>
+                        <div id="autoplan-range-preview" class="p-2 rounded-xl bg-purple-950/50 border border-purple-500/40 text-[10px] text-purple-200 flex items-center justify-between shadow-inner">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs">📅</span>
+                                <span><b>Zakres:</b> <span id="autoplan-range-text" class="text-white font-black">11.09.2026 – 30.09.2026</span></span>
+                            </div>
+                            <span class="text-[8px] bg-purple-900/80 text-purple-300 font-bold px-1.5 py-0.5 rounded border border-purple-700/50">Bez wstecznych</span>
                         </div>
                         <div class="grid grid-cols-3 gap-1 bg-slate-950/80 p-2 rounded-xl border border-slate-800 text-[10px]">
                             <label class="flex items-center gap-1.5 cursor-pointer font-bold text-emerald-400"><input type="checkbox" id="auto-type-haccp" checked class="accent-emerald-500"> 🟩 HACCP</label>
@@ -1532,12 +1552,55 @@
             if (res.ok) { alert("✅ Audyt zaplanowany!"); closePlanModal(); await loadScheduleAndRender(); }
         }
 
-        function openAutoPlanModal() { document.getElementById('modal-autoplan').classList.remove('hidden'); }
+        function updateAutoPlanPreview() {
+            const mEl = document.getElementById('autoplan-month');
+            const yEl = document.getElementById('autoplan-year');
+            const txtEl = document.getElementById('autoplan-range-text');
+            if (!mEl || !yEl || !txtEl) return;
+
+            const m = parseInt(mEl.value) || (new Date().getMonth() + 1);
+            const y = parseInt(yEl.value) || new Date().getFullYear();
+            const period = state.selected_period_months || 1;
+            const today = new Date();
+            const isCurrentMonth = (y === today.getFullYear() && m === (today.getMonth() + 1));
+            const isPastMonth = (y < today.getFullYear() || (y === today.getFullYear() && m < (today.getMonth() + 1)));
+
+            let startDay = 1;
+            let startM = m;
+            let startY = y;
+
+            if (isCurrentMonth) {
+                startDay = today.getDate();
+            } else if (isPastMonth) {
+                startDay = today.getDate();
+                startM = today.getMonth() + 1;
+                startY = today.getFullYear();
+            }
+
+            const endTotalM = startM + period - 1;
+            const endY = startY + Math.floor((endTotalM - 1) / 12);
+            const endM = ((endTotalM - 1) % 12) + 1;
+            const lastDay = new Date(endY, endM, 0).getDate();
+
+            const pad = (n) => String(n).padStart(2, '0');
+            txtEl.textContent = `${pad(startDay)}.${pad(startM)}.${startY} – ${pad(lastDay)}.${pad(endM)}.${endY}`;
+        }
+
+        function openAutoPlanModal() { 
+            document.getElementById('modal-autoplan').classList.remove('hidden'); 
+            const today = new Date();
+            const mEl = document.getElementById('autoplan-month');
+            const yEl = document.getElementById('autoplan-year');
+            if (mEl && !mEl.value) mEl.value = today.getMonth() + 1;
+            if (yEl && !yEl.value) yEl.value = today.getFullYear();
+            updateAutoPlanPreview();
+        }
         function closeAutoPlanModal() { document.getElementById('modal-autoplan').classList.add('hidden'); }
         function setPlanPeriod(m, btn) {
             state.selected_period_months = m;
             document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('tile-selected'));
             btn.classList.add('tile-selected');
+            updateAutoPlanPreview();
         }
 
         async function runAutoSchedule() {
@@ -1553,14 +1616,15 @@
             const payload = {
                 start_year: parseInt(document.getElementById('autoplan-year').value),
                 start_month: parseInt(document.getElementById('autoplan-month').value),
-                period_months: state.selected_period_months,
+                start_day: new Date().getDate(),
+                period_months: state.selected_period_months || 1,
                 lines: lines, audit_types: types,
                 include_weekends: document.getElementById('auto-include-weekends').checked
             };
             const res = await fetch('/api/schedule/auto', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             if (res.ok) {
                 const d = await res.json();
-                alert(`✨ Wygenerowano plan: ${d.count} audytów.`);
+                alert(`✨ Wygenerowano plan: ${d.count} audytów w zakresie ${d.start_date} – ${d.end_date} (bez dat wstecznych).`);
                 closeAutoPlanModal(); showModule('calendar'); await loadScheduleAndRender();
             }
         }

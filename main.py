@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import json
+import calendar
 import base64
 import secrets
 import aiosqlite
@@ -82,6 +83,7 @@ class ScheduleUpdateModel(BaseModel):
 class AutoPlanModel(BaseModel):
     start_year: int
     start_month: int
+    start_day: Optional[int] = None
     period_months: int
     lines: List[str]
     audit_types: List[str]
@@ -194,30 +196,53 @@ async def clear_month_schedule(payload: ClearMonthModel):
     async with get_db() as conn:
         c = await conn.cursor()
         prefix = f"{payload.year:04d}-{payload.month:02d}%"
-        await c.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix,))
+        await c.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ? AND status = 'PLANOWANY'", (prefix,))
         await conn.commit()
-    return {"status": "success", "message": f"Wyczyszczono audyty dla {prefix}"}
+    return {"status": "success", "message": f"Wyczyszczono planowane audyty dla {prefix}"}
 
 @app.post("/api/schedule/auto")
 async def auto_generate_schedule(payload: AutoPlanModel):
     async with get_db() as conn:
         c = await conn.cursor()
         
-        # Usuń audyty ze wszystkich wybranych miesięcy
-        for m_offset in range(payload.period_months):
-            cur_m = payload.start_month + m_offset
-            yr = payload.start_year + ((cur_m - 1) // 12)
-            mo = ((cur_m - 1) % 12) + 1
-            prefix_match = f"{yr:04d}-{mo:02d}%"
-            await c.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix_match,))
+        today = datetime.now().date()
+        target_year = payload.start_year
+        target_month = payload.start_month
+
+        # Ustalenie start_date - brak planowania wstecz
+        if (target_year, target_month) == (today.year, today.month):
+            # Bieżący miesiąc: planowanie WYŁĄCZNIE od dzisiaj w przód (brak dat wstecznych)
+            s_day = max(payload.start_day or today.day, today.day)
+            start_date = datetime(target_year, target_month, s_day)
+        elif (target_year, target_month) < (today.year, today.month):
+            # Wybrano miesiąc przeszły: bezpieczne przestawienie na dzień bieżący
+            start_date = datetime(today.year, today.month, today.day)
+            target_year = today.year
+            target_month = today.month
+        else:
+            # Miesiąc w przyszłości: start od 1. dnia tego miesiąca
+            s_day = payload.start_day if payload.start_day else 1
+            start_date = datetime(target_year, target_month, s_day)
+
+        # Precyzyjne ustalenie end_date (ostatni dzień ostatniego objętego miesiąca)
+        end_m_total = target_month + payload.period_months - 1
+        end_yr = target_year + ((end_m_total - 1) // 12)
+        end_mo = ((end_m_total - 1) % 12) + 1
+        last_day = calendar.monthrange(end_yr, end_mo)[1]
+        end_date = datetime(end_yr, end_mo, last_day)
+
+        # Bezpieczne usuwanie TYLKO przyszłych planowanych audytów w wygenerowanym oknie dat
+        await c.execute("""
+            DELETE FROM audit_schedules 
+            WHERE status = 'PLANOWANY' 
+              AND scheduled_date >= ? 
+              AND scheduled_date <= ?
+        """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
 
         await c.execute("SELECT full_name FROM users WHERE is_active = 1 AND role = 'AUDITOR'")
         auditors = [r["full_name"] for r in await c.fetchall()]
         if len(auditors) < 2:
             auditors = ["G. Zarakowski (Lead)", "P. Kowalski (Audytor)", "A. Nowak (Audytor)"]
-
-        start_date = datetime(payload.start_year, payload.start_month, 1)
-        end_date = start_date + timedelta(days=payload.period_months * 30)
 
         count = 0
         cur = start_date
@@ -243,7 +268,11 @@ async def auto_generate_schedule(payload: AutoPlanModel):
             cur += timedelta(days=3)
 
         await conn.commit()
-    return {"count": count}
+    return {
+        "count": count,
+        "start_date": start_date.strftime("%Y-%m-%d"),
+        "end_date": end_date.strftime("%Y-%m-%d")
+    }
 
 @app.post("/api/slm-analyze")
 async def slm_analyze(payload: dict):
