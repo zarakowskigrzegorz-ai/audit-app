@@ -248,12 +248,12 @@
             container.classList.remove('hidden');
             if (role === 'MANAGER') {
                 label.innerText = 'Logowanie Key User (Kierownik Jakości)';
-                desc.innerText = 'PIN zarządzania (domyślnie: 9999)';
+                desc.innerText = '';
                 quickSelect.classList.add('hidden');
                 document.getElementById('input-pin').value = '9999';
             } else {
                 label.innerText = 'Logowanie Audytora';
-                desc.innerText = 'Wpisz PIN inspekcyjny (1001-1003)';
+                desc.innerText = '';
                 quickSelect.classList.remove('hidden');
                 document.getElementById('input-pin').value = '';
             }
