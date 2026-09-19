@@ -901,21 +901,24 @@ function updateAuditHud(step, title, desc, mode) {
 
                             let statusIcon = '';
                             if (isCompleted) {
-                                statusIcon = `<span title="Wykonany" class="flex items-center text-emerald-400"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+                                statusIcon = `<svg class="w-3 h-3 text-emerald-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`;
                             } else if (isOverdue) {
-                                statusIcon = `<span title="Spóźniony" class="flex items-center text-rose-400"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 15 13.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>`;
+                                statusIcon = `<svg class="w-3 h-3 text-rose-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 15 13.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
                             }
 
                             badgeHtml += `
                                 <div draggable="true" ondragstart="event.stopPropagation(); event.dataTransfer.setData('text/plain', ${a.id});"
                                      onclick="event.stopPropagation(); state.role === 'MANAGER' ? openMgrModal(${a.id}) : openAudModal(${a.id});" 
                                      title="${aType} • ${cleanAud} (${a.line || ''})"
-                                     class="${badgeStyle} border rounded-lg py-1 px-1.5 shadow-md flex flex-col justify-center mb-1 cursor-pointer relative z-10 hover:scale-[1.02] transition-transform hover:brightness-110 leading-tight">
-                                    <div class="flex items-center justify-between font-black text-[10.5px] uppercase tracking-wider">
-                                        <span class="flex items-center gap-1">${typeIcon}<span>${aType}</span></span>
-                                        ${statusIcon}
+                                     class="${badgeStyle} border rounded-lg py-1 px-1.5 shadow-md flex flex-col justify-center mb-1 cursor-pointer relative z-10 hover:scale-[1.02] transition-transform hover:brightness-110 leading-tight overflow-hidden max-w-full box-border">
+                                    <div class="flex items-center justify-between gap-1 w-full min-w-0 font-black text-[9.5px] sm:text-[10px] uppercase">
+                                        <div class="flex items-center gap-1 min-w-0 truncate">
+                                            ${typeIcon}
+                                            <span class="truncate">${aType}</span>
+                                        </div>
+                                        ${statusIcon ? `<div class="shrink-0 flex items-center justify-center">${statusIcon}</div>` : ''}
                                     </div>
-                                    <div class="text-[9.5px] font-bold text-white/90 truncate mt-0.5" title="${cleanAud}">
+                                    <div class="text-[9px] sm:text-[9.5px] font-bold text-white/90 truncate mt-0.5" title="${cleanAud}">
                                         ${auditorDisplay}
                                     </div>
                                 </div>
@@ -925,12 +928,12 @@ function updateAuditHud(step, title, desc, mode) {
                         grid.innerHTML += `
                             <div ondragover="event.preventDefault()" ondrop="handleAuditDrop(event, '${currentFullDate}')"
                                  onclick="if(state.role==='MANAGER'){openManualPlanModal('${currentFullDate}')}" 
-                                 class="cal-day tile-3d ${holidayName ? 'bg-amber-950/20 border-amber-900/40' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1 flex flex-col justify-between cursor-pointer rounded-xl">
-                                <div class="flex justify-between items-start">
+                                 class="cal-day tile-3d ${holidayName ? 'bg-amber-950/20 border-amber-900/40' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1.5 flex flex-col justify-between cursor-pointer rounded-xl overflow-hidden box-border">
+                                <div class="flex justify-between items-start gap-1">
                                     <span class="text-[10px] font-extrabold ${holidayName ? 'text-amber-400' : 'text-slate-200'}">${dateIter}</span>
                                     ${holidayName ? `<span class="text-[7.5px] text-amber-300 truncate max-w-[65px] font-extrabold flex items-center gap-0.5" title="${holidayName}"><svg class="w-2.5 h-2.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="2" y1="2" x2="22" y2="22"/></svg> ${holidayName}</span>` : ''}
                                 </div>
-                                <div class="space-y-0.5 mt-0.5">${badgeHtml}</div>
+                                <div class="space-y-0.5 mt-0.5 w-full min-w-0 overflow-hidden">${badgeHtml}</div>
                             </div>
                         `;
                         dateIter++;
