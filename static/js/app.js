@@ -2398,24 +2398,30 @@
 
             if (!name) return alert("Wpisz nazwę linii!");
 
-            const res = await fetch('/api/lines', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    name, code, default_zone, allergen_profile, ccp_equipment, line_status, notes
-                })
-            });
+            try {
+                const res = await apiFetch('/api/lines', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        name, code, default_zone, allergen_profile, ccp_equipment, line_status, notes
+                    })
+                });
 
-            if (res.ok) {
-                alert("✅ Zarejestrowano nową linię produkcyjną z profilem sanitarnym!");
-                document.getElementById('new-line-name').value = '';
-                document.getElementById('new-line-code').value = '';
-                document.getElementById('new-line-notes').value = '';
-                toggleLineAddForm();
-                await loadProductionLines();
-                renderLinesManagerList();
-            } else {
-                alert("Błąd podczas dodawania linii.");
+                if (res && res.ok) {
+                    alert("✅ Zarejestrowano nową linię produkcyjną z profilem sanitarnym!");
+                    document.getElementById('new-line-name').value = '';
+                    document.getElementById('new-line-code').value = '';
+                    document.getElementById('new-line-notes').value = '';
+                    toggleLineAddForm();
+                    await loadProductionLines();
+                    renderLinesManagerList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`❌ Błąd podczas dodawania linii: ${err.detail || 'Brak uprawnień lub błąd serwera'}`);
+                }
+            } catch (e) {
+                console.error("Błąd zapisu linii:", e);
+                alert("❌ Błąd połączenia podczas zapisywania linii.");
             }
         }
 
@@ -2425,7 +2431,7 @@
             if (!modal) return;
 
             try {
-                const res = await fetch(`/api/lines/${lineId}`);
+                const res = await apiFetch(`/api/lines/${lineId}`);
                 if (!res.ok) throw new Error("Nie udało się pobrać danych linii");
                 const data = await res.json();
                 const l = data.line || data;
@@ -2482,19 +2488,20 @@
             if (notes === null) return; // anulowano
 
             try {
-                const res = await fetch(`/api/lines/${currentPassportLineId}/status`, {
+                const res = await apiFetch(`/api/lines/${currentPassportLineId}/status`, {
                     method: 'PATCH',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ line_status: newStatus, notes: notes })
                 });
 
-                if (res.ok) {
+                if (res && res.ok) {
                     alert(`✅ Status linii został zaktualizowany na: ${newStatus}`);
                     await loadProductionLines();
                     renderLinesManagerList();
                     openLinePassportModal(currentPassportLineId); // odśwież widok profilu
                 } else {
-                    alert("❌ Błąd podczas zmiany statusu linii.");
+                    const err = await res.json().catch(() => ({}));
+                    alert(`❌ Błąd podczas zmiany statusu linii: ${err.detail || 'Brak uprawnień'}`);
                 }
             } catch(e) {
                 alert("Błąd połączenia: " + e.message);
@@ -2503,9 +2510,14 @@
 
         async function deleteProductionLine(id) {
             if (!confirm("Czy na pewno chcesz usunąć tę linię z rejestru fabrycznego?")) return;
-            await fetch(`/api/lines/${id}`, { method: 'DELETE' });
-            await loadProductionLines();
-            renderLinesManagerList();
+            const res = await apiFetch(`/api/lines/${id}`, { method: 'DELETE' });
+            if (res && res.ok) {
+                await loadProductionLines();
+                renderLinesManagerList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`❌ Błąd usuwania linii: ${err.detail || 'Brak uprawnień'}`);
+            }
         }
 
         async function loadAuditorsDropdown(type = "HACCP") {

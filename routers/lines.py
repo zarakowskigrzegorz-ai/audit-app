@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, List
 from pydantic import BaseModel
 from database import get_db
-from security import require_manager
+from security import require_manager, require_auditor_or_manager
 
 router = APIRouter(prefix="/api/lines", tags=["Production Lines"])
 
@@ -83,7 +83,7 @@ async def get_line_passport(line_id: int):
 
 @router.post("")
 @router.post("/")
-async def create_line(payload: LineCreateModel, manager: dict = Depends(require_manager)):
+async def create_line(payload: LineCreateModel, current_user: dict = Depends(require_auditor_or_manager)):
     final_code = payload.code.strip() if payload.code and payload.code.strip() else generate_backend_line_code(payload.name)
     async with get_db() as conn:
         try:
@@ -109,7 +109,7 @@ async def create_line(payload: LineCreateModel, manager: dict = Depends(require_
     return {"status": "success"}
 
 @router.patch("/{line_id}/status")
-async def update_line_status(line_id: int, payload: LineStatusUpdateModel, manager: dict = Depends(require_manager)):
+async def update_line_status(line_id: int, payload: LineStatusUpdateModel, current_user: dict = Depends(require_auditor_or_manager)):
     async with get_db() as conn:
         await conn.execute("""
             UPDATE production_lines 
@@ -120,7 +120,7 @@ async def update_line_status(line_id: int, payload: LineStatusUpdateModel, manag
     return {"status": "success"}
 
 @router.delete("/{line_id}")
-async def delete_line(line_id: int, manager: dict = Depends(require_manager)):
+async def delete_line(line_id: int, current_user: dict = Depends(require_auditor_or_manager)):
     async with get_db() as conn:
         await conn.execute("UPDATE production_lines SET is_active = 0 WHERE id = ?", (line_id,))
         await conn.commit()
