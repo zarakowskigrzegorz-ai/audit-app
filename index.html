@@ -45,7 +45,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
-    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v6">
+    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v7">
 </head>
 <body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto">
 
@@ -62,21 +62,13 @@
                     <p class="text-[9px] text-slate-400 font-extrabold tracking-wider uppercase">IFS Food v8 Standard</p>
                 </div>
             </div>
-            <button onclick="loginWithBiometrics()" title="Szybkie logowanie biometryczne (Face ID / Touch ID / Windows Hello)" class="btn-bio-animated group flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950/90 border border-emerald-500/50 rounded-2xl shadow-lg cursor-pointer select-none">
-                <div class="relative w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                        <path d="M12 11c0 2.2-1.8 4-4 4s-4-1.8-4-4 1.8-4 4-4 4 1.8 4 4Z"/>
-                        <path d="M19 11c0 3.9-3.1 7-7 7s-7-3.1-7-7 3.1-7 7-7 7 3.1 7 7Z"/>
-                    </svg>
-                    <span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                </div>
-                <div class="text-left hidden sm:block">
-                    <span class="text-[10px] font-black tracking-wider text-white uppercase block leading-none flex items-center gap-1">
-                        <span>Biometria</span>
-                        <span class="text-[8px] text-emerald-400 font-bold">●</span>
-                    </span>
-                    <span class="text-[8px] text-emerald-300/80 font-bold leading-none">Touch ID / Face ID</span>
-                </div>
+            <!-- Szybka animowana ikona biometrii (bez napisów i prostokąta) -->
+            <button onclick="loginWithBiometrics()" title="Logowanie biometryczne (Face ID / Touch ID / Windows Hello)" class="btn-bio-animated group text-emerald-400">
+                <svg class="w-5 h-5 group-hover:scale-110 transition-transform text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M12 11c0 2.2-1.8 4-4 4s-4-1.8-4-4 1.8-4 4-4 4 1.8 4 4Z"/>
+                    <path d="M19 11c0 3.9-3.1 7-7 7s-7-3.1-7-7 3.1-7 7-7 7 3.1 7 7Z"/>
+                </svg>
+                <span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
             </button>
         </div>
 
