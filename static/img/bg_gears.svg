@@ -186,11 +186,4 @@
   <line x1="834.7" y1="934.5" x2="880.7" y2="854.8" stroke="currentColor" stroke-width="1.6"/>
   <circle cx="901.1" cy="913.2" r="10.4" fill="none" stroke="currentColor" stroke-width="1.5"/>
   </g>
-  <!-- Warstwa akcentowa w głębokim złocie / bursztynie (delikatne pierścienie zamiast białych) -->
-  <g class="gear-gold-accent" stroke="#d97706" opacity="0.16">
-    <circle cx="1620" cy="180" r="260" stroke-dasharray="8 8" stroke-width="1.5"/>
-    <circle cx="960" cy="540" r="340" stroke-dasharray="10 10" stroke-width="1.8"/>
-    <circle cx="380" cy="920" r="290" stroke-dasharray="8 8" stroke-width="1.5"/>
-    <circle cx="240" cy="220" r="240" stroke-dasharray="6 6" stroke-width="1.4"/>
-  </g>
 </svg>
