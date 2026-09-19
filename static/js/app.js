@@ -4025,6 +4025,13 @@
         }
     };
 
+    // Automatyczne odwrócenie kapsla z powrotem przy dotknięciu poza nim (np. na tablecie)
+    document.addEventListener('pointerdown', (e) => {
+        if (!e.target.closest('.bws-cap-viewport')) {
+            document.querySelectorAll('.bws-cap-viewport.bws-active').forEach(el => el.classList.remove('bws-active'));
+        }
+    });
+
     window.quickRunSchedule = async function(months) {
         if (typeof openAutoPlanModal === 'function') {
             await openAutoPlanModal();
