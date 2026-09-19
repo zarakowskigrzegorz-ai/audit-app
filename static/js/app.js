@@ -119,6 +119,7 @@
                     try {
                         if (typeof updateKpiRibbon === 'function') updateKpiRibbon();
                         if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
+                        if (typeof loadManagerAuditorNotes === 'function') loadManagerAuditorNotes();
                     } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
                 } else {
                     if (typeof loadProductionLines === 'function') loadProductionLines();
@@ -129,6 +130,7 @@
             if(modId === 'auditors') renderAuditorsList();
             if(modId === 'lines') renderLinesManagerList();
             if(modId === 'manager-results') { loadAuditResults(); loadManagerEditRequests(); }
+            if(modId === 'manager-notes') { loadManagerAuditorNotes(); if(typeof renderManagerNotesView === 'function') renderManagerNotesView(); }
             if(modId === 'auditor-history') loadAuditorHistory();
             if(modId === 'agent') syncAgentLineSelector();
             if(modId === 'faq') loadInlineFaq();
@@ -1280,22 +1282,21 @@
             }
         }
 
-        let activeManagerResultsTab = 'pending'; // 'pending' (oczekujące), 'approved' (zatwierdzone), 'rejected' (odrzucone), 'notes' (notatki z hali)
+        let activeManagerResultsTab = 'pending'; // 'pending' (oczekujące), 'approved' (zatwierdzone), 'rejected' (odrzucone)
         let cachedManagerAudits = [];
         let cachedManagerNotes = [];
+        let activeNotesFilter = 'all';
 
         window.setManagerResultsTab = function(tab) {
             activeManagerResultsTab = tab;
             const btnPending = document.getElementById('tab-btn-manager-pending');
             const btnApproved = document.getElementById('tab-btn-manager-approved');
             const btnRejected = document.getElementById('tab-btn-manager-rejected');
-            const btnNotes = document.getElementById('tab-btn-manager-notes');
 
             const inactiveClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
             if (btnPending) btnPending.className = inactiveClass;
             if (btnApproved) btnApproved.className = inactiveClass;
             if (btnRejected) btnRejected.className = inactiveClass;
-            if (btnNotes) btnNotes.className = inactiveClass;
 
             if (tab === 'pending') {
                 if (btnPending) {
@@ -1308,10 +1309,6 @@
             } else if (tab === 'rejected') {
                 if (btnRejected) {
                     btnRejected.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-rose-500 text-white shadow-md shadow-rose-500/20 flex items-center gap-1.5 transition cursor-pointer';
-                }
-            } else if (tab === 'notes') {
-                if (btnNotes) {
-                    btnNotes.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer';
                 }
             }
 
@@ -1337,25 +1334,166 @@
             return `${firstInitial} ${surLetters}...`;
         }
 
+        window.openAuditorNotesInbox = function(filter = 'all') {
+            showModule('manager-notes');
+            window.filterAuditorNotesInbox(filter);
+        };
+
+        window.filterAuditorNotesInbox = function(filter = 'all') {
+            activeNotesFilter = filter;
+            const btnAll = document.getElementById('filter-inbox-all');
+            const btnUnread = document.getElementById('filter-inbox-unread');
+            const btnHold = document.getElementById('filter-inbox-hold');
+            const btnWarn = document.getElementById('filter-inbox-warning');
+            const btnInfo = document.getElementById('filter-inbox-info');
+            const btnAnon = document.getElementById('filter-inbox-anon');
+
+            const inactive = 'px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer';
+            if (btnAll) btnAll.className = inactive;
+            if (btnUnread) btnUnread.className = inactive;
+            if (btnHold) btnHold.className = inactive;
+            if (btnWarn) btnWarn.className = inactive;
+            if (btnInfo) btnInfo.className = inactive;
+            if (btnAnon) btnAnon.className = inactive + ' ml-auto';
+
+            const activeClass = (color) => `px-2.5 py-1 rounded-lg text-[10px] font-black ${color} shadow-sm transition cursor-pointer`;
+            if (filter === 'all' && btnAll) btnAll.className = activeClass('bg-slate-800 text-white border border-slate-700');
+            if (filter === 'unread' && btnUnread) btnUnread.className = activeClass('bg-amber-500 text-slate-950 border border-amber-300');
+            if (filter === 'HOLD' && btnHold) btnHold.className = activeClass('bg-rose-500 text-white border border-rose-400');
+            if (filter === 'WARNING' && btnWarn) btnWarn.className = activeClass('bg-amber-500/30 text-amber-300 border border-amber-400/50');
+            if (filter === 'INFO' && btnInfo) btnInfo.className = activeClass('bg-cyan-500/30 text-cyan-300 border border-cyan-400/50');
+            if (filter === 'ANON' && btnAnon) btnAnon.className = activeClass('bg-purple-900/60 text-purple-300 border border-purple-400/50 ml-auto');
+
+            renderManagerNotesView();
+        };
+
+        window.markAllAuditorNotesAsRead = async function() {
+            if (!confirm('Czy na pewno chcesz oznaczyć wszystkie notatki jako przeczytane?')) return;
+            try {
+                const res = await fetch('/api/auditor-notes/mark-all-read', { method: 'POST' });
+                if (res.ok) {
+                    await loadManagerAuditorNotes();
+                }
+            } catch(e) {
+                console.error("Błąd oznaczania wszystkich notatek:", e);
+            }
+        };
+
+        function renderManagerNotesView() {
+            const tbody = document.getElementById('inbox-notes-table');
+            if (!tbody) return;
+
+            const notes = Array.isArray(cachedManagerNotes) ? cachedManagerNotes : [];
+            const unreadCount = notes.filter(n => !n.is_read).length;
+            const holdCount = notes.filter(n => n.priority === 'HOLD').length;
+            const warnCount = notes.filter(n => n.priority === 'WARNING').length;
+            const infoCount = notes.filter(n => n.priority === 'INFO').length;
+            const anonCount = notes.filter(n => n.auditor_name && (n.auditor_name.includes('Anonimow') || n.auditor_name.includes('Poufne'))).length;
+
+            const cAll = document.getElementById('inbox-count-all');
+            const cUnread = document.getElementById('inbox-count-unread');
+            const cHold = document.getElementById('inbox-count-hold');
+            const cWarn = document.getElementById('inbox-count-warning');
+            const cInfo = document.getElementById('inbox-count-info');
+            const cAnon = document.getElementById('inbox-count-anon');
+            const headerBadge = document.getElementById('inbox-header-badge');
+
+            if (cAll) cAll.textContent = notes.length;
+            if (cUnread) cUnread.textContent = unreadCount;
+            if (cHold) cHold.textContent = holdCount;
+            if (cWarn) cWarn.textContent = warnCount;
+            if (cInfo) cInfo.textContent = infoCount;
+            if (cAnon) cAnon.textContent = anonCount;
+
+            if (headerBadge) {
+                headerBadge.textContent = unreadCount > 0 ? `${unreadCount} NOWYCH` : '0 NOWYCH';
+                headerBadge.className = unreadCount > 0 
+                    ? 'text-[8px] font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full border border-amber-300 animate-pulse'
+                    : 'text-[8px] font-black bg-slate-900 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700';
+            }
+
+            let filtered = notes;
+            if (activeNotesFilter === 'unread') filtered = notes.filter(n => !n.is_read);
+            else if (activeNotesFilter === 'HOLD') filtered = notes.filter(n => n.priority === 'HOLD');
+            else if (activeNotesFilter === 'WARNING') filtered = notes.filter(n => n.priority === 'WARNING');
+            else if (activeNotesFilter === 'INFO') filtered = notes.filter(n => n.priority === 'INFO');
+            else if (activeNotesFilter === 'ANON') filtered = notes.filter(n => n.auditor_name && (n.auditor_name.includes('Anonimow') || n.auditor_name.includes('Poufne')));
+
+            tbody.innerHTML = '';
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-xs text-slate-400 italic">Brak wiadomości spełniających kryteria wybranego filtra.</td></tr>';
+                return;
+            }
+
+            filtered.forEach(n => {
+                const isUnread = !n.is_read;
+                const prioBadge = n.priority === 'HOLD' 
+                    ? `<span class="bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
+                         <svg class="w-3 h-3 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                         <span>Wstrzymanie (HOLD)</span>
+                       </span>`
+                    : n.priority === 'WARNING'
+                    ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
+                         <svg class="w-3 h-3 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m13 7-3 5h4l-2 5"/></svg>
+                         <span>Odchylenie (Uwaga)</span>
+                       </span>`
+                    : `<span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
+                         <svg class="w-3 h-3 text-cyan-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1.5" ry="1.5"/><path d="m9 14 2 2 4-4"/></svg>
+                         <span>Rutynowa (Info)</span>
+                       </span>`;
+
+                const readBtn = isUnread 
+                    ? `<button onclick="markAuditorNoteAsRead(${n.id})" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap">✓ Oznacz przeczytane</button>`
+                    : `<span class="text-[9px] text-slate-500 italic">Przeczytano (${n.read_at ? n.read_at.substring(11, 16) : '—'})</span>`;
+
+                const rowBg = isUnread ? 'bg-amber-950/25 border-l-2 border-l-amber-400 font-semibold' : 'hover:bg-slate-900/50';
+
+                const isAnon = (n.auditor_name && (n.auditor_name.includes('Anonimow') || n.auditor_name.includes('Poufne')));
+                const auditorDisplay = isAnon 
+                    ? '<span class="inline-flex items-center gap-1 text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded-lg border border-amber-500/40 text-[9.5px] font-black"><i class="fas fa-user-secret text-amber-400"></i> Poufne (IFS Culture)</span>'
+                    : `<span class="text-white font-bold">${n.auditor_name || 'Audytor'}</span>`;
+
+                tbody.innerHTML += `
+                <tr class="border-b border-slate-800/80 text-xs ${rowBg} transition">
+                    <td class="p-2.5 text-slate-400 font-mono text-[10px] whitespace-nowrap">${n.timestamp ? n.timestamp.substring(0, 16) : '—'}</td>
+                    <td class="p-2.5 whitespace-nowrap">${auditorDisplay}</td>
+                    <td class="p-2.5 text-cyan-300 font-bold whitespace-nowrap">${n.line_name || 'Ogólna / Cała Hala'}</td>
+                    <td class="p-2.5 whitespace-nowrap">${prioBadge}</td>
+                    <td class="p-2.5 text-slate-200 font-medium break-words max-w-md">${n.content}</td>
+                    <td class="p-2.5 text-right whitespace-nowrap">${readBtn}</td>
+                </tr>`;
+            });
+        }
+
         async function loadManagerAuditorNotes() {
             try {
                 const res = await fetch('/api/auditor-notes?limit=100');
                 if (!res.ok) return;
                 cachedManagerNotes = await res.json();
                 
-                const badgeNotes = document.getElementById('badge-count-manager-notes');
-                if (badgeNotes && Array.isArray(cachedManagerNotes)) {
-                    const unread = cachedManagerNotes.filter(n => !n.is_read).length;
-                    badgeNotes.textContent = unread;
+                const unread = Array.isArray(cachedManagerNotes) ? cachedManagerNotes.filter(n => !n.is_read).length : 0;
+                
+                // Kafel 8 na pulpicie Key Usera:
+                const hubBadge = document.getElementById('badge-hub-notes-unread');
+                const hubPing = document.getElementById('hub-notes-ping');
+                const hubCounterPill = document.getElementById('hub-notes-counter-pill');
+
+                if (hubBadge) {
+                    hubBadge.textContent = unread > 0 ? `${unread} NOWE` : '0 NOWYCH';
                     if (unread > 0) {
-                        badgeNotes.className = 'bg-amber-500 text-slate-950 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black animate-pulse';
+                        hubBadge.className = 'text-[8px] font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full border border-amber-300 animate-pulse';
                     } else {
-                        badgeNotes.className = 'bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold';
+                        hubBadge.className = 'text-[8px] font-black bg-slate-900 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700';
                     }
                 }
-                if (activeManagerResultsTab === 'notes') {
-                    renderManagerAuditsTable();
+                if (hubPing) {
+                    hubPing.style.display = unread > 0 ? 'inline-flex' : 'none';
                 }
+                if (hubCounterPill) {
+                    hubCounterPill.textContent = `${cachedManagerNotes.length} notatek (${unread} nowych)`;
+                }
+
+                renderManagerNotesView();
             } catch(e) {
                 console.warn("Błąd ładowania notatek audytorów:", e);
             }
@@ -1377,64 +1515,6 @@
             const heading = document.getElementById('manager-audits-heading');
             const badgeCount = document.getElementById('manager-audits-counter-badge');
             if (!tbody) return;
-
-            // OBSŁUGA ZAKŁADKI NOTATEK Z HALI
-            if (activeManagerResultsTab === 'notes') {
-                if (heading) {
-                    heading.textContent = 'Notatki i uwagi audytorów z hali produkcyjnej:';
-                    heading.className = 'text-[10px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5';
-                }
-                if (badgeCount) {
-                    const unreadCount = cachedManagerNotes.filter(n => !n.is_read).length;
-                    badgeCount.textContent = `${cachedManagerNotes.length} notatek (${unreadCount} nowych)`;
-                }
-
-                tbody.innerHTML = '';
-                if (!cachedManagerNotes || cachedManagerNotes.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-400 italic">Brak notatek od audytorów. Gdy audytor wyśle uwagę z menu operacyjnego, pojawi się tutaj natychmiast.</td></tr>';
-                    return;
-                }
-
-                cachedManagerNotes.forEach(n => {
-                    const isUnread = !n.is_read;
-                    const prioBadge = n.priority === 'HOLD' 
-                        ? `<span class="bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
-                             <svg class="w-3 h-3 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                             <span>Wstrzymanie (HOLD)</span>
-                           </span>`
-                        : n.priority === 'WARNING'
-                        ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
-                             <svg class="w-3 h-3 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m13 7-3 5h4l-2 5"/></svg>
-                             <span>Odchylenie (Uwaga)</span>
-                           </span>`
-                        : `<span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
-                             <svg class="w-3 h-3 text-cyan-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1.5" ry="1.5"/><path d="m9 14 2 2 4-4"/></svg>
-                             <span>Rutynowa (Info)</span>
-                           </span>`;
-                    
-                    const readBtn = isUnread 
-                        ? `<button onclick="markAuditorNoteAsRead(${n.id})" class="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap">✓ Oznacz jako przeczytane</button>`
-                        : `<span class="text-[9px] text-slate-500 italic">Przeczytano (${n.read_at ? n.read_at.substring(11, 16) : '—'})</span>`;
-
-                    const rowBg = isUnread ? 'bg-amber-950/20 border-l-2 border-l-amber-400' : 'hover:bg-slate-900/50';
-
-                    const isAnon = (n.auditor_name && (n.auditor_name.includes('Anonimow') || n.auditor_name.includes('Poufne')));
-                    const auditorDisplay = isAnon 
-                        ? '<span class="inline-flex items-center gap-1.5 text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded-lg border border-amber-500/40 text-[9.5px] font-black"><i class="fas fa-user-secret text-amber-400"></i> Poufne (IFS Culture)</span>'
-                        : `<span class="text-white font-bold">${n.auditor_name || 'Audytor'}</span>`;
-
-                    tbody.innerHTML += `
-                    <tr class="border-b border-slate-800/80 text-xs ${rowBg} transition">
-                        <td class="p-2.5 text-slate-400 font-mono text-[10px] whitespace-nowrap">${n.timestamp ? n.timestamp.substring(0, 16) : '—'}</td>
-                        <td class="p-2.5 whitespace-nowrap">${auditorDisplay}</td>
-                        <td class="p-2.5 text-cyan-300 font-semibold whitespace-nowrap">${n.line_name || 'Ogólna / Hala'}</td>
-                        <td class="p-2.5 whitespace-nowrap">${prioBadge}</td>
-                        <td class="p-2.5 text-slate-200 font-medium break-words max-w-xs" colspan="3">${n.content}</td>
-                        <td class="p-2.5 text-right whitespace-nowrap">${readBtn}</td>
-                    </tr>`;
-                });
-                return;
-            }
 
             const pendingAudits = [];
             const approvedAudits = [];

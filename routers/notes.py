@@ -90,3 +90,17 @@ async def mark_note_as_read(note_id: int):
         """, (now_str, note_id))
         await conn.commit()
     return {"status": "success", "note_id": note_id, "read_at": now_str}
+
+@router.post("/mark-all-read")
+async def mark_all_notes_as_read():
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            UPDATE auditor_notes 
+            SET is_read = 1, read_at = ?
+            WHERE is_read = 0
+        """, (now_str,))
+        await conn.commit()
+    return {"status": "success", "read_at": now_str}
+
