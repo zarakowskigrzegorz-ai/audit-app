@@ -2302,6 +2302,49 @@
             }
         }
 
+        function getStatusBadgeClass(status) {
+            const s = (status || '').toUpperCase();
+            if (s.includes('HOLD') || s.includes('KWARANTANNA') || s.includes('BLOKAD')) {
+                return 'bg-rose-950 text-rose-300 border border-rose-500 animate-pulse';
+            } else if (s.includes('WARUNKOW')) {
+                return 'bg-amber-950 text-amber-300 border border-amber-500/50';
+            } else if (s.includes('CIP') || s.includes('MYCIE') || s.includes('SANITYZ')) {
+                return 'bg-blue-950 text-blue-300 border border-blue-500/50';
+            } else {
+                return 'bg-emerald-950 text-emerald-300 border border-emerald-500/40';
+            }
+        }
+
+        function getStatusBadge(status) {
+            const s = (status || '').toUpperCase();
+            if (s.includes('HOLD') || s.includes('KWARANTANNA') || s.includes('BLOKAD')) {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500 animate-pulse">🔴 HOLD LOT</span>`;
+            } else if (s.includes('WARUNKOW')) {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/50">🟡 Warunkowo</span>`;
+            } else if (s.includes('CIP') || s.includes('MYCIE') || s.includes('SANITYZ')) {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/50">🔵 Mycie CIP</span>`;
+            } else {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">🟢 Zwolniona</span>`;
+            }
+        }
+
+        function getZoneBadge(zone) {
+            const z = (zone || '').toLowerCase();
+            if (z.includes('wysok') || z.includes('high')) {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500/40">🔴 High Care</span>`;
+            } else if (z.includes('średni') || z.includes('medium')) {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40">🟠 Medium Care</span>`;
+            } else if (z.includes('nisk') || z.includes('low')) {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-yellow-950 text-yellow-300 border border-yellow-500/40">🟡 Low Care</span>`;
+            } else if (z.includes('pakow') || z.includes('pack')) {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40">🟣 Packaging</span>`;
+            } else if (z.includes('magazyn') || z.includes('warehous')) {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40">🔵 Magazyn</span>`;
+            } else {
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">⚪ Pomocnicza</span>`;
+            }
+        }
+
         function renderLinesManagerList() {
             const c = document.getElementById('lines-list-container');
             if (!c) return;
@@ -2323,36 +2366,6 @@
             if (document.getElementById('stat-lines-active')) document.getElementById('stat-lines-active').innerText = active;
             if (document.getElementById('stat-lines-hold')) document.getElementById('stat-lines-hold').innerText = hold;
             if (document.getElementById('stat-lines-clean')) document.getElementById('stat-lines-clean').innerText = clean;
-
-            const getZoneBadge = (zone) => {
-                const z = (zone || '').toLowerCase();
-                if (z.includes('wysok') || z.includes('high')) {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500/40">🔴 High Care</span>`;
-                } else if (z.includes('średni') || z.includes('medium')) {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40">🟠 Medium Care</span>`;
-                } else if (z.includes('nisk') || z.includes('low')) {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-yellow-950 text-yellow-300 border border-yellow-500/40">🟡 Low Care</span>`;
-                } else if (z.includes('pakow') || z.includes('pack')) {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40">🟣 Packaging</span>`;
-                } else if (z.includes('magazyn') || z.includes('warehous')) {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40">🔵 Magazyn</span>`;
-                } else {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">⚪ Pomocnicza</span>`;
-                }
-            };
-
-            const getStatusBadge = (status) => {
-                const s = (status || '').toUpperCase();
-                if (s.includes('HOLD') || s.includes('KWARANTANNA') || s.includes('BLOKAD')) {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500 animate-pulse">🔴 HOLD LOT</span>`;
-                } else if (s.includes('WARUNKOW')) {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/50">🟡 Warunkowo</span>`;
-                } else if (s.includes('CIP') || s.includes('MYCIE') || s.includes('SANITYZ')) {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/50">🔵 Mycie CIP</span>`;
-                } else {
-                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">🟢 Zwolniona</span>`;
-                }
-            };
 
             if (productionLinesData.length === 0) {
                 c.innerHTML = '<p class="text-xs text-slate-500 italic p-3 text-center">Brak zdefiniowanych linii produkcyjnych.</p>';
