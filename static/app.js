@@ -1148,7 +1148,7 @@ function updateAuditHud(step, title, desc, mode) {
             }
         }
 
-        let activeAuditorHistoryTab = 'pending'; // 'pending' (<7 dni oczekujące), 'completed' (<7 dni wykonane), 'approved' (<7 dni zaakceptowane), 'history' (>7 dni starsze)
+        let activeAuditorHistoryTab = 'pending'; // 'pending' (<5 dni oczekujące), 'completed' (<5 dni wykonane), 'approved' (<5 dni zaakceptowane), 'history' (>5 dni starsze)
 
         window.setAuditorHistoryTab = function(tab) {
             if (tab === 'recent') tab = 'pending';
@@ -1208,7 +1208,7 @@ function updateAuditHud(step, title, desc, mode) {
                 });
 
                 const now = new Date();
-                const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+                const fiveDaysAgo = new Date(now.getTime() - (5 * 24 * 60 * 60 * 1000));
 
                 const pendingAudits = [];
                 const completedAudits = [];
@@ -1221,9 +1221,9 @@ function updateAuditHud(step, title, desc, mode) {
                     const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
 
                     const auditDate = a.timestamp ? new Date(a.timestamp.replace(' ', 'T')) : new Date();
-                    const isOlderThan7Days = !isNaN(auditDate.getTime()) && (auditDate < sevenDaysAgo);
+                    const isOlderThan5Days = !isNaN(auditDate.getTime()) && (auditDate < fiveDaysAgo);
 
-                    if (isOlderThan7Days) {
+                    if (isOlderThan5Days) {
                         historyAudits.push(a);
                     } else {
                         completedAudits.push(a);
@@ -1257,7 +1257,7 @@ function updateAuditHud(step, title, desc, mode) {
                 list.innerHTML = '';
                 if (displayAudits.length === 0) {
                     if (activeAuditorHistoryTab === 'history') {
-                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak starszych audytów w Historii (>7 dni).</p></div>';
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak starszych audytów w Historii (>5 dni).</p></div>';
                     } else if (activeAuditorHistoryTab === 'approved') {
                         list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak jeszcze zaakceptowanych audytów przez Key Usera w bieżącym tygodniu.</p></div>';
                     } else if (activeAuditorHistoryTab === 'completed') {

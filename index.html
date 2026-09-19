@@ -735,10 +735,16 @@
                                     <span>✓ Zatwierdzone</span>
                                 </button>
                             </div>
-                            <button onclick="event.stopPropagation(); showModule('manager-results');" class="w-full py-1 px-2 bg-slate-900/90 hover:bg-emerald-900/50 rounded-lg text-[9px] font-black text-emerald-200 border border-emerald-400/40 hover:border-emerald-300 transition-colors flex items-center justify-center gap-1">
-                                <i class="fas fa-clipboard-check text-emerald-400"></i>
-                                <span>Otwórz pełną listę i historię ➔</span>
-                            </button>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <button onclick="event.stopPropagation(); showModule('manager-results'); showManagerTab('history');" class="py-1 px-2 bg-slate-900/90 hover:bg-sky-900/50 rounded-lg text-[9px] font-black text-sky-300 border border-sky-500/40 hover:border-sky-400 transition-colors flex items-center justify-center gap-1 cursor-pointer">
+                                    <svg class="w-3 h-3 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                                    <span>Historia (>5 dni)</span>
+                                </button>
+                                <button onclick="event.stopPropagation(); showModule('manager-results');" class="py-1 px-2 bg-slate-900/90 hover:bg-emerald-900/50 rounded-lg text-[9px] font-black text-emerald-200 border border-emerald-400/40 hover:border-emerald-300 transition-colors flex items-center justify-center gap-1 cursor-pointer">
+                                    <i class="fas fa-clipboard-check text-emerald-400"></i>
+                                    <span>Pełna lista ➔</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1111,7 +1117,7 @@
                         </div>
                     </div>
 
-                    <!-- ZAKŁADKI: OCZEKUJĄCE AUDYTY (OKNO GŁÓWNE) VS ZATWIERDZONE AUDYTY VS ODRZUCONE AUDYTY -->
+                    <!-- ZAKŁADKI: OCZEKUJĄCE AUDYTY (OKNO GŁÓWNE) VS ZATWIERDZONE AUDYTY VS ODRZUCONE AUDYTY VS HISTORIA (>5 DNI) -->
                     <div class="flex items-center gap-2 border-b border-slate-800 pb-2 pt-1 flex-wrap">
                         <button type="button" id="tab-btn-manager-pending" onclick="setManagerResultsTab('pending')" class="px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer">
                             <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1125,14 +1131,22 @@
                             <span id="badge-count-manager-pending" class="bg-slate-950/40 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">0</span>
                         </button>
                         <button type="button" id="tab-btn-manager-approved" onclick="setManagerResultsTab('approved')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer">
-                            <span>✓ Zatwierdzone audyty</span>
+                            <span>✓ Zatwierdzone (<5 dni)</span>
                             <span id="badge-count-manager-approved" class="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">0</span>
                         </button>
                         <button type="button" id="tab-btn-manager-rejected" onclick="setManagerResultsTab('rejected')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer">
                             <span>✕ Odrzucone audyty</span>
                             <span id="badge-count-manager-rejected" class="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">0</span>
                         </button>
+                        <button type="button" id="tab-btn-manager-history" onclick="setManagerResultsTab('history')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer">
+                            <svg class="w-3.5 h-3.5 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                            <span>Historia audytów (>5 dni)</span>
+                            <span id="badge-count-manager-history" class="bg-slate-800 text-sky-400 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">0</span>
+                        </button>
                     </div>
+                    <p class="text-[10px] text-slate-400 bg-slate-950/60 p-2 rounded-xl border border-slate-800 leading-snug">
+                        <i class="fas fa-info-circle text-cyan-400 mr-1"></i> W oknie <b>„Zatwierdzone (<5 dni)”</b> widoczne są bieżące audyty z ostatnich 5 dni roboczych. Wszystkie wcześniejsze zatwierdzone wpisy trafiają automatycznie do <b>„Historii audytów (>5 dni)”</b>.
+                    </p>
 
                     <!-- SEKCJA REJESTRU AUDYTÓW -->
                     <div class="pt-1">
@@ -2129,10 +2143,10 @@
                         </button>
                     </div>
                     <p class="text-[10.5px] text-slate-400 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 leading-snug">
-                        <i class="fas fa-info-circle text-cyan-400 mr-1"></i> Zgodnie z procedurą IFS Food v8: w widoku głównym widoczne są wpisy oczekujące na akceptację, wszystkie zrealizowane audyty są w <b>„Audyty wykonane”</b>, zatwierdzone przez Key Usera automatycznie trafiają do <b>„Zaakceptowane”</b>, a audyty starsze niż 7 dni do <b>„Historii audytów”</b>.
+                        <i class="fas fa-info-circle text-cyan-400 mr-1"></i> Zgodnie z procedurą IFS Food v8: w widoku głównym widoczne są wpisy oczekujące na akceptację, wszystkie zrealizowane audyty są w <b>„Audyty wykonane”</b>, zatwierdzone przez Key Usera automatycznie trafiają do <b>„Zaakceptowane”</b>, a audyty starsze niż 5 dni do <b>„Historii audytów (>5 dni)”</b>.
                     </p>
 
-                    <!-- ZAKŁADKI: OCZEKUJĄCE VS WYKONANE VS ZAAKCEPTOWANE (KEY USER) VS HISTORIA (>7 DNI) -->
+                    <!-- ZAKŁADKI: OCZEKUJĄCE VS WYKONANE VS ZAAKCEPTOWANE (KEY USER) VS HISTORIA (>5 DNI) -->
                     <div class="flex items-center gap-2 border-b border-slate-800 pb-2.5 pt-1 flex-wrap">
                         <!-- Zakładka 1: Oczekujące na akceptację -->
                         <button type="button" id="tab-btn-auditor-pending" onclick="setAuditorHistoryTab('pending')" class="px-3.5 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer">
@@ -2158,10 +2172,10 @@
                             <span>Zaakceptowane</span>
                             <span id="badge-count-auditor-approved" class="bg-slate-800 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-mono font-bold">0</span>
                         </button>
-                        <!-- Zakładka 4: Historia audytów (>7 dni) -->
+                        <!-- Zakładka 4: Historia audytów (>5 dni) -->
                         <button type="button" id="tab-btn-auditor-history" onclick="setAuditorHistoryTab('history')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer">
                             <svg class="w-3.5 h-3.5 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-                            <span>Historia audytów (>7 dni)</span>
+                            <span>Historia audytów (>5 dni)</span>
                             <span id="badge-count-auditor-history" class="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded-full font-mono font-bold">0</span>
                         </button>
                     </div>
@@ -2650,7 +2664,7 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260919_v33"></script>
+    <script src="/static/js/app.js?v=20260919_v34"></script>
     <script src="/static/js/auth_caps.js?v=20260919_v2"></script>
 
 <div id="auditor-profile-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">

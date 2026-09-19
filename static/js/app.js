@@ -1282,7 +1282,7 @@
             }
         }
 
-        let activeManagerResultsTab = 'pending'; // 'pending' (oczekujące), 'approved' (zatwierdzone), 'rejected' (odrzucone)
+        let activeManagerResultsTab = 'pending'; // 'pending' (oczekujące), 'approved' (zatwierdzone <5 dni), 'rejected' (odrzucone), 'history' (starsze >5 dni)
         let cachedManagerAudits = [];
         let cachedManagerNotes = [];
         let activeNotesFilter = 'all';
@@ -1292,11 +1292,13 @@
             const btnPending = document.getElementById('tab-btn-manager-pending');
             const btnApproved = document.getElementById('tab-btn-manager-approved');
             const btnRejected = document.getElementById('tab-btn-manager-rejected');
+            const btnHistory = document.getElementById('tab-btn-manager-history');
 
             const inactiveClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
             if (btnPending) btnPending.className = inactiveClass;
             if (btnApproved) btnApproved.className = inactiveClass;
             if (btnRejected) btnRejected.className = inactiveClass;
+            if (btnHistory) btnHistory.className = inactiveClass;
 
             if (tab === 'pending') {
                 if (btnPending) {
@@ -1309,6 +1311,10 @@
             } else if (tab === 'rejected') {
                 if (btnRejected) {
                     btnRejected.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-rose-500 text-white shadow-md shadow-rose-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            } else if (tab === 'history') {
+                if (btnHistory) {
+                    btnHistory.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center gap-1.5 transition cursor-pointer';
                 }
             }
 
@@ -1516,9 +1522,13 @@
             const badgeCount = document.getElementById('manager-audits-counter-badge');
             if (!tbody) return;
 
+            const now = new Date();
+            const fiveDaysAgo = new Date(now.getTime() - (5 * 24 * 60 * 60 * 1000));
+
             const pendingAudits = [];
             const approvedAudits = [];
             const rejectedAudits = [];
+            const historyAudits = [];
 
             cachedManagerAudits.forEach(a => {
                 const cv = String(a.compliance_verdict || '').trim().toUpperCase();
@@ -1526,8 +1536,15 @@
                 const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
                 const isRejected = (cv === 'ODRZUCONY' || ps === 'ODRZUCONY');
 
+                const auditDate = a.timestamp ? new Date(a.timestamp.replace(' ', 'T')) : new Date();
+                const isOlderThan5Days = !isNaN(auditDate.getTime()) && (auditDate < fiveDaysAgo);
+
                 if (isApproved) {
-                    approvedAudits.push(a);
+                    if (isOlderThan5Days) {
+                        historyAudits.push(a);
+                    } else {
+                        approvedAudits.push(a);
+                    }
                 } else if (isRejected) {
                     rejectedAudits.push(a);
                 } else {
@@ -1539,24 +1556,31 @@
             const badgePending = document.getElementById('badge-count-manager-pending');
             const badgeApproved = document.getElementById('badge-count-manager-approved');
             const badgeRejected = document.getElementById('badge-count-manager-rejected');
+            const badgeHistory = document.getElementById('badge-count-manager-history');
             if (badgePending) badgePending.textContent = pendingAudits.length;
             if (badgeApproved) badgeApproved.textContent = approvedAudits.length;
             if (badgeRejected) badgeRejected.textContent = rejectedAudits.length;
+            if (badgeHistory) badgeHistory.textContent = historyAudits.length;
 
             let displayAudits = pendingAudits;
             if (activeManagerResultsTab === 'approved') {
                 displayAudits = approvedAudits;
             } else if (activeManagerResultsTab === 'rejected') {
                 displayAudits = rejectedAudits;
+            } else if (activeManagerResultsTab === 'history') {
+                displayAudits = historyAudits;
             }
 
             if (heading) {
                 if (activeManagerResultsTab === 'approved') {
-                    heading.textContent = 'Zatwierdzone audyty jakości:';
+                    heading.textContent = 'Zatwierdzone audyty jakości (bieżące, ostatnie 5 dni):';
                     heading.className = 'text-[10px] font-black text-emerald-400 uppercase tracking-wider';
                 } else if (activeManagerResultsTab === 'rejected') {
                     heading.textContent = 'Odrzucone audyty jakości:';
                     heading.className = 'text-[10px] font-black text-rose-400 uppercase tracking-wider';
+                } else if (activeManagerResultsTab === 'history') {
+                    heading.textContent = 'Archiwum i historia zatwierdzonych audytów (>5 dni):';
+                    heading.className = 'text-[10px] font-black text-sky-400 uppercase tracking-wider';
                 } else {
                     heading.textContent = 'Oczekujące audyty (wymagające decyzji):';
                     heading.className = 'text-[10px] font-black text-amber-400 uppercase tracking-wider';
@@ -1569,8 +1593,10 @@
 
             tbody.innerHTML = '';
             if (displayAudits.length === 0) {
-                if (activeManagerResultsTab === 'approved') {
-                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-500 italic">Brak zatwierdzonych audytów. Gdy zatwierdzisz audyt w oknie głównym, pojawi się tutaj.</td></tr>';
+                if (activeManagerResultsTab === 'history') {
+                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-500 italic">Brak starszych audytów w historii (>5 dni). Wszystkie zatwierdzone audyty starsze niż 5 dni pojawią się tutaj automatycznie.</td></tr>';
+                } else if (activeManagerResultsTab === 'approved') {
+                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-500 italic">Brak bieżących zatwierdzonych audytów z ostatnich 5 dni. Starsze zatwierdzone audyty znajdziesz w zakładce „Historia audytów (>5 dni)”.</td></tr>';
                 } else if (activeManagerResultsTab === 'rejected') {
                     tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-500 italic">Brak odrzuconych audytów. Wszystkie niezaakceptowane audyty pojawią się tutaj.</td></tr>';
                 } else {
@@ -1664,7 +1690,7 @@
             }
         }
 
-        let activeAuditorHistoryTab = 'pending'; // 'pending' (oczekujące <7 dni), 'completed' (wykonane <7 dni), 'approved' (zaakceptowane <7 dni), 'history' (starsze >7 dni)
+        let activeAuditorHistoryTab = 'pending'; // 'pending' (oczekujące <5 dni), 'completed' (wykonane <5 dni), 'approved' (zaakceptowane <5 dni), 'history' (starsze >5 dni)
 
         window.setAuditorHistoryTab = function(tab) {
             if (tab === 'recent') tab = 'pending';
@@ -1724,12 +1750,12 @@
                 });
 
                 // REGUŁA PODZIAŁU AUDYTÓW (IFS FOOD V8):
-                // 1. Audyty starsze niż 7 dni automatycznie wpadają do zakładki „Historia audytów (>7 dni)”.
+                // 1. Audyty starsze niż 5 dni automatycznie wpadają do zakładki „Historia audytów (>5 dni)”.
                 // 2. Wszystkie wykonane audyty z bieżącego tygodnia trafiają do „Audyty wykonane”.
                 // 3. Audyty zaakceptowane przez Key Usera (ZATWIERDZONY) trafiają do „Zaakceptowane”.
                 // 4. W widoku głównym („Oczekujące na akceptację”) pozostają tylko bieżące wpisy oczekujące na decyzję!
                 const now = new Date();
-                const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+                const fiveDaysAgo = new Date(now.getTime() - (5 * 24 * 60 * 60 * 1000));
 
                 const pendingAudits = [];
                 const completedAudits = [];
@@ -1742,12 +1768,12 @@
                     const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
 
                     const auditDate = a.timestamp ? new Date(a.timestamp.replace(' ', 'T')) : new Date();
-                    const isOlderThan7Days = !isNaN(auditDate.getTime()) && (auditDate < sevenDaysAgo);
+                    const isOlderThan5Days = !isNaN(auditDate.getTime()) && (auditDate < fiveDaysAgo);
 
-                    if (isOlderThan7Days) {
+                    if (isOlderThan5Days) {
                         historyAudits.push(a);
                     } else {
-                        // Bieżący tydzień (<7 dni):
+                        // Bieżący tydzień (<5 dni):
                         completedAudits.push(a); // Każdy zrealizowany bieżący audyt jest w wykonanych
                         if (isApproved) {
                             approvedAudits.push(a); // Po zatwierdzeniu przez Key Usera automatycznie wpada do Zaakceptowane
@@ -1780,7 +1806,7 @@
                 list.innerHTML = '';
                 if (displayAudits.length === 0) {
                     if (activeAuditorHistoryTab === 'history') {
-                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak starszych audytów w Historii (>7 dni).</p></div>';
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak starszych audytów w Historii (>5 dni).</p></div>';
                     } else if (activeAuditorHistoryTab === 'approved') {
                         list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak jeszcze zaakceptowanych audytów przez Key Usera w bieżącym tygodniu.</p></div>';
                     } else if (activeAuditorHistoryTab === 'completed') {
