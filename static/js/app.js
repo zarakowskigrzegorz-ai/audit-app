@@ -1306,16 +1306,16 @@
 
                 tbody.innerHTML += `
                     <tr class="hover:bg-slate-800/60 transition">
-                        <td class="py-2 px-2 border-b border-white/5 font-mono text-[10px] text-slate-300">#${a.id}</td>
-                        <td class="py-2 px-2 border-b border-white/5 text-[9px] text-slate-400 whitespace-nowrap">${dateShort}</td>
-                        <td class="py-2 px-2 border-b border-white/5 font-bold text-[10px] text-white truncate max-w-[130px]" title="${a.line}">${a.line}</td>
-                        <td class="py-2 px-2 border-b border-white/5 text-[10px] text-slate-300">${a.shift}</td>
-                        <td class="py-2 px-2 border-b border-white/5 text-[9px] text-slate-400">${audName}</td>
-                        <td id="status-${a.id}" class="py-2 px-2 border-b border-white/5 text-[8px] font-black ${statusColor}">
+                        <td class="py-2.5 px-3 border-b border-white/5 font-mono text-[10px] text-slate-300">#${a.id}</td>
+                        <td class="py-2.5 px-3 border-b border-white/5 text-[9px] text-slate-400 whitespace-nowrap">${dateShort}</td>
+                        <td class="py-2.5 px-3 border-b border-white/5 font-bold text-[10px] text-white truncate max-w-[200px]" title="${a.line}">${a.line}</td>
+                        <td class="py-2.5 px-3 border-b border-white/5 text-[10px] text-slate-300 whitespace-nowrap font-medium">${a.shift || '—'}</td>
+                        <td class="py-2.5 px-3 border-b border-white/5 text-[9px] text-slate-400 whitespace-nowrap">${audName}</td>
+                        <td id="status-${a.id}" class="py-2.5 px-3 border-b border-white/5 text-[8px] font-black whitespace-nowrap ${statusColor}">
                             ${a.record_status}${isApproved ? ' <span class="text-emerald-400">(✓)</span>' : isRejected ? ' <span class="text-rose-500">(✕)</span>' : ''}
                         </td>
-                        <td class="py-2 px-2 border-b border-white/5 ${slmColor} text-[9px] whitespace-nowrap">${a.slm_verdict} <span class="text-[8px] text-slate-400">(${a.risk_level})</span></td>
-                        <td class="py-2 px-2 border-b border-white/5 text-right whitespace-nowrap">
+                        <td class="py-2.5 px-3 border-b border-white/5 ${slmColor} text-[9px] whitespace-nowrap">${a.slm_verdict} <span class="text-[8px] text-slate-400">(${a.risk_level})</span></td>
+                        <td class="py-2.5 px-3 border-b border-white/5 text-right whitespace-nowrap">
                             <div id="actions-${a.id}" class="flex items-center justify-end gap-1">
                                 ${actionsHtml}
                                 <button onclick="handleAuditAction('details', ${a.id})" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-[8px] font-semibold cursor-pointer">Szczegóły</button>
