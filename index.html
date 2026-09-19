@@ -47,7 +47,12 @@
     </style>
     <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v7">
 </head>
-<body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto">
+<body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto relative">
+
+    <!-- Stałe tło z subtelnymi kołami zębatymi (Watermark Gears Background widoczny we wszystkich menu) -->
+    <div class="fixed inset-0 pointer-events-none -z-50 overflow-hidden select-none" aria-hidden="true">
+        <img src="/static/img/bg_gears.svg?v=20260919_v1" alt="" class="w-full h-full object-cover">
+    </div>
 
     <!-- EKRAN LOGOWANIA -->
     <div id="view-auth" class="my-auto w-full max-w-xl mx-auto space-y-5 view-layer">
