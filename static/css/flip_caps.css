@@ -292,3 +292,42 @@
     border-color: rgba(251, 191, 36, 0.9);
 }
 
+/* Wariant 3D Flip dla Kapsla Ciekawostek & Żartów Audytora */
+.bws-cap-trivia {
+    min-height: 290px;
+    height: 100%;
+    border-radius: 16px;
+    perspective: 1200px;
+    position: relative;
+    user-select: none;
+}
+.bws-cap-trivia .bws-cap-front {
+    transform: rotateX(0deg) translateZ(0);
+    transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s;
+    border-radius: 16px;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+.bws-cap-trivia .bws-cap-back {
+    transform: rotateX(90deg) translateZ(0);
+    transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s;
+    border-radius: 16px;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+.bws-cap-trivia:hover .bws-cap-front,
+.bws-cap-trivia.bws-active .bws-cap-front {
+    transform: rotateX(-90deg) translateZ(0);
+    filter: brightness(0.85);
+}
+.bws-cap-trivia:hover .bws-cap-back,
+.bws-cap-trivia.bws-active .bws-cap-back {
+    transform: rotateX(0deg) translateZ(0);
+    filter: brightness(1.05);
+    z-index: 10;
+}
+
