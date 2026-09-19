@@ -157,3 +157,55 @@
 .bws-cap-back {
     z-index: 1;
 }
+
+/* Animowany przycisk logowania biometrycznego */
+@keyframes bioPulseGlow {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.35), inset 0 0 8px rgba(52, 211, 153, 0.2);
+        border-color: rgba(52, 211, 153, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 25px rgba(16, 185, 129, 0.7), 0 0 40px rgba(6, 182, 212, 0.3), inset 0 0 14px rgba(52, 211, 153, 0.4);
+        border-color: rgba(52, 211, 153, 0.85);
+    }
+}
+
+@keyframes bioWaveScan {
+    0% { transform: translateY(-100%); opacity: 0; }
+    50% { opacity: 0.8; }
+    100% { transform: translateY(100%); opacity: 0; }
+}
+
+.btn-bio-animated {
+    position: relative;
+    overflow: hidden;
+    animation: bioPulseGlow 3s ease-in-out infinite;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-bio-animated::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    transform: skewX(-20deg);
+    transition: left 0.75s ease;
+}
+
+.btn-bio-animated:hover::after {
+    left: 100%;
+}
+
+.btn-bio-animated:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.8), 0 0 50px rgba(6, 182, 212, 0.45);
+    border-color: rgba(52, 211, 153, 1);
+}
+
+.btn-bio-animated:active {
+    transform: scale(0.95);
+}
+
