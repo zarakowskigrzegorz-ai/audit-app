@@ -699,7 +699,7 @@
                 label.innerText = 'Logowanie Key User (Kierownik Jakości)';
                 desc.innerText = '';
                 quickSelect.classList.add('hidden');
-                document.getElementById('input-pin').value = '9999';
+                document.getElementById('input-pin').value = '';
             } else {
                 label.innerText = 'Logowanie Audytora';
                 desc.innerText = '';
