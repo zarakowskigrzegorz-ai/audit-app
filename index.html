@@ -54,8 +54,35 @@
         <!-- Pasek górny: logo i nazwa w lewym górnym rogu -->
         <div class="flex items-center justify-between pb-2">
             <div class="flex items-center gap-2.5 select-none">
-                <div class="bg-gradient-to-br from-amber-400 to-yellow-600 p-2 rounded-xl text-slate-950 shadow-md">
-                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <div class="w-10 h-10 flex-shrink-0 text-amber-400 drop-shadow-[0_0_12px_rgba(245,158,11,0.5)]">
+                    <svg class="w-full h-full" viewBox="0 0 100 100" fill="none" stroke="currentColor">
+                        <!-- Tarcza Zewnętrzna -->
+                        <path d="M 50 8 C 64 8 78 12 84 17 C 85 48 81 74 50 93 C 19 74 15 48 16 17 C 22 12 36 8 50 8 Z" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <!-- Tarcza Wewnętrzna -->
+                        <path d="M 50 14 C 62 14 74 17 79 22 C 80 47 76 68 50 85 C 24 68 20 47 21 22 C 26 17 38 14 50 14 Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.85"/>
+                        <!-- Koło zębate (proces z prawej strony za lupą) -->
+                        <path d="M 64 28 L 70 26 L 72 31 L 66 33" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M 67 37 L 73 36 L 74 41 L 68 42" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M 67 47 L 73 48 L 72 53 L 66 52" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <!-- Podwójny pierścień lupy -->
+                        <circle cx="47" cy="45" r="18" stroke-width="2.6"/>
+                        <circle cx="47" cy="45" r="14.8" stroke-width="1.4" stroke-opacity="0.6"/>
+                        <!-- Uchwyt lupy -->
+                        <path d="M 59 57 L 62 60" stroke-width="3.2" stroke-linecap="round"/>
+                        <rect x="62" y="60" width="5.5" height="15" rx="2.5" transform="rotate(-45 62 60)" stroke-width="2.6" fill="currentColor" fill-opacity="0.2"/>
+                        <!-- Wstęga ptaszka (Checkmark) z podwójną linią przecinająca obwódkę lupy -->
+                        <path d="M 31 43 L 40 52 L 72 20 L 68 16 L 39 46 L 34 40 Z" fill="currentColor" fill-opacity="0.3" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        <!-- Dwa Listki Bio nad ptaszkiem -->
+                        <path d="M 42 33 C 38 30 38 26 41 24 C 44 25 44 29 42 33 Z" stroke-width="1.6" fill="currentColor" fill-opacity="0.35" stroke-linejoin="round"/>
+                        <path d="M 40 30 L 42 26" stroke-width="1.1" stroke-linecap="round"/>
+                        <path d="M 44 32 C 45 28 48 26 51 27 C 51 30 48 33 44 32 Z" stroke-width="1.6" fill="currentColor" fill-opacity="0.35" stroke-linejoin="round"/>
+                        <path d="M 46 30 L 49 28" stroke-width="1.1" stroke-linecap="round"/>
+                        <!-- Zęby procesowe w dolnej części lupy -->
+                        <path d="M 47 57 C 50 56 53 54 55 51" stroke-width="1.4" stroke-dasharray="2 2" stroke-linecap="round"/>
+                        <path d="M 45 58 L 46 55" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M 49 56 L 51 53" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M 54 53 L 55 50" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
                 </div>
                 <div>
                     <h1 class="text-base font-black tracking-tight leading-none text-white"><span class="text-amber-400">FOOD</span> QUALITY</h1>
@@ -184,8 +211,27 @@
         <header class="sticky top-2 z-40 space-y-2 mb-3">
             <div class="flex items-center justify-between px-3.5 py-2 bg-slate-900/90 rounded-2xl border border-slate-800 backdrop-blur-xl shadow-2xl">
                 <div onclick="handleLogoClick()" title="Kliknij, aby cofnąć się krok w tył / wyjść do logowania" class="flex items-center gap-2.5 cursor-pointer select-none hover:opacity-90 active:scale-95 transition-all">
-                    <div class="bg-gradient-to-br from-amber-400 to-yellow-600 p-1.5 rounded-xl text-slate-950 shadow-md">
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <div class="w-7 h-7 flex-shrink-0 text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]">
+                        <svg class="w-full h-full" viewBox="0 0 100 100" fill="none" stroke="currentColor">
+                            <path d="M 50 8 C 64 8 78 12 84 17 C 85 48 81 74 50 93 C 19 74 15 48 16 17 C 22 12 36 8 50 8 Z" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M 50 14 C 62 14 74 17 79 22 C 80 47 76 68 50 85 C 24 68 20 47 21 22 C 26 17 38 14 50 14 Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.85"/>
+                            <path d="M 64 28 L 70 26 L 72 31 L 66 33" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M 67 37 L 73 36 L 74 41 L 68 42" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M 67 47 L 73 48 L 72 53 L 66 52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="47" cy="45" r="18" stroke-width="2.8"/>
+                            <circle cx="47" cy="45" r="14.8" stroke-width="1.6" stroke-opacity="0.6"/>
+                            <path d="M 59 57 L 62 60" stroke-width="3.4" stroke-linecap="round"/>
+                            <rect x="62" y="60" width="5.5" height="15" rx="2.5" transform="rotate(-45 62 60)" stroke-width="2.8" fill="currentColor" fill-opacity="0.2"/>
+                            <path d="M 31 43 L 40 52 L 72 20 L 68 16 L 39 46 L 34 40 Z" fill="currentColor" fill-opacity="0.3" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M 42 33 C 38 30 38 26 41 24 C 44 25 44 29 42 33 Z" stroke-width="1.8" fill="currentColor" fill-opacity="0.35" stroke-linejoin="round"/>
+                            <path d="M 40 30 L 42 26" stroke-width="1.2" stroke-linecap="round"/>
+                            <path d="M 44 32 C 45 28 48 26 51 27 C 51 30 48 33 44 32 Z" stroke-width="1.8" fill="currentColor" fill-opacity="0.35" stroke-linejoin="round"/>
+                            <path d="M 46 30 L 49 28" stroke-width="1.2" stroke-linecap="round"/>
+                            <path d="M 47 57 C 50 56 53 54 55 51" stroke-width="1.6" stroke-dasharray="2 2" stroke-linecap="round"/>
+                            <path d="M 45 58 L 46 55" stroke-width="2.2" stroke-linecap="round"/>
+                            <path d="M 49 56 L 51 53" stroke-width="2.2" stroke-linecap="round"/>
+                            <path d="M 54 53 L 55 50" stroke-width="2.2" stroke-linecap="round"/>
+                        </svg>
                     </div>
                     <div>
                         <h1 class="text-sm font-black tracking-tight leading-none text-white"><span class="text-amber-400">FOOD</span> QUALITY</h1>

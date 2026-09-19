@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="currentColor">
+  <!-- Tarcza Zewnętrzna -->
+  <path d="M 50 8 C 64 8 78 12 84 17 C 85 48 81 74 50 93 C 19 74 15 48 16 17 C 22 12 36 8 50 8 Z" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Tarcza Wewnętrzna -->
+  <path d="M 50 14 C 62 14 74 17 79 22 C 80 47 76 68 50 85 C 24 68 20 47 21 22 C 26 17 38 14 50 14 Z" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.85"/>
+  <!-- Zęby koła zębatego za lupą z prawej -->
+  <path d="M 64 28 L 70 26 L 72 31 L 66 33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 67 37 L 73 36 L 74 41 L 68 42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 67 47 L 73 48 L 72 53 L 66 52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Podwójny pierścień lupy -->
+  <circle cx="47" cy="45" r="18" stroke-width="2.5"/>
+  <circle cx="47" cy="45" r="14.8" stroke-width="1.4" stroke-opacity="0.6"/>
+  <!-- Uchwyt lupy -->
+  <path d="M 59 57 L 62 60" stroke-width="3" stroke-linecap="round"/>
+  <rect x="62" y="60" width="5.5" height="15" rx="2.5" transform="rotate(-45 62 60)" stroke-width="2.5" fill="currentColor" fill-opacity="0.15"/>
+  <!-- Checkmark (wstęga z podwójną linią przecinająca obwódkę lupy) -->
+  <path d="M 31 43 L 40 52 L 72 20 L 68 16 L 39 46 L 34 40 Z" fill="currentColor" fill-opacity="0.25" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Dwa Listki Bio nad ptaszkiem -->
+  <path d="M 42 33 C 38 30 38 26 41 24 C 44 25 44 29 42 33 Z" stroke-width="1.5" fill="currentColor" fill-opacity="0.3" stroke-linejoin="round"/>
+  <path d="M 40 30 L 42 26" stroke-width="1" stroke-linecap="round"/>
+  <path d="M 44 32 C 45 28 48 26 51 27 C 51 30 48 33 44 32 Z" stroke-width="1.5" fill="currentColor" fill-opacity="0.3" stroke-linejoin="round"/>
+  <path d="M 46 30 L 49 28" stroke-width="1" stroke-linecap="round"/>
+  <!-- Zęby procesowe w dolnej części lupy -->
+  <path d="M 47 57 C 50 56 53 54 55 51" stroke-width="1.4" stroke-dasharray="2 2" stroke-linecap="round"/>
+  <path d="M 45 58 L 46 55" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M 49 56 L 51 53" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M 54 53 L 55 50" stroke-width="1.8" stroke-linecap="round"/>
+</svg>
