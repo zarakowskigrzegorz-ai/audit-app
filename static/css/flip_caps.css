@@ -31,9 +31,35 @@
 .bws-cap-h32.bws-active .bws-cap-back,
 .bws-cap-h32.bws-focused .bws-cap-back {
     transform: rotateX(0deg) translateZ(64px);
-    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(168, 85, 247, 0.45);
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(255, 255, 255, 0.15);
     filter: brightness(1.05);
     z-index: 10;
+}
+
+/* Warianty poświaty 3D dla poszczególnych motywów kolorystycznych w menu */
+.bws-glow-amber:hover .bws-cap-back,
+.bws-glow-amber.bws-active .bws-cap-back {
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(245, 158, 11, 0.45);
+}
+.bws-glow-cyan:hover .bws-cap-back,
+.bws-glow-cyan.bws-active .bws-cap-back {
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(6, 182, 212, 0.45);
+}
+.bws-glow-purple:hover .bws-cap-back,
+.bws-glow-purple.bws-active .bws-cap-back {
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(168, 85, 247, 0.45);
+}
+.bws-glow-emerald:hover .bws-cap-back,
+.bws-glow-emerald.bws-active .bws-cap-back {
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(16, 185, 129, 0.45);
+}
+.bws-glow-indigo:hover .bws-cap-back,
+.bws-glow-indigo.bws-active .bws-cap-back {
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(99, 102, 241, 0.45);
+}
+.bws-glow-slate:hover .bws-cap-back,
+.bws-glow-slate.bws-active .bws-cap-back {
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(245, 158, 11, 0.35);
 }
 
 /* Wariant ekranu logowania (wysokość 220px) */
