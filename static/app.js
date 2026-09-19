@@ -619,7 +619,16 @@ function updateAuditHud(step, title, desc, mode) {
             state.role = user.role;
 
             document.getElementById('display-auditor').innerText = state.auditor_id;
-            document.getElementById('display-role').innerText = state.role === "MANAGER" ? "👑 KEY USER (MANAGER)" : "👤 AUDYTOR";
+            const roleEl = document.getElementById('display-role');
+            if (roleEl) {
+                if (state.role === "MANAGER") {
+                    roleEl.innerText = "👑 KEY USER (MANAGER)";
+                    roleEl.className = "text-[8.5px] font-black text-blue-400 uppercase block tracking-wider";
+                } else {
+                    roleEl.innerText = "👤 AUDYTOR";
+                    roleEl.className = "text-[8.5px] font-black text-emerald-400 uppercase block tracking-wider";
+                }
+            }
             
             if (state.role === "MANAGER") {
                 await renderAuditorsList();
