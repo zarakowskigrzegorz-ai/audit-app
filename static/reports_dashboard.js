@@ -53,11 +53,12 @@ function ensureReportsViewExists() {
                     <span>Excel (.XLSX)</span>
                 </button>
                 <button type="button" onclick="openPowerBiExportModal()" class="px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-amber-950/40 cursor-pointer active:scale-95">
-                    <svg class="w-3.5 h-3.5 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="14" width="3.5" height="7" rx="1" fill="currentColor"/>
-                        <rect x="9.5" y="9" width="3.5" height="12" rx="1" fill="currentColor"/>
-                        <rect x="16" y="4" width="3.5" height="17" rx="1" fill="currentColor"/>
-                        <path d="M15 4l5-1m0 0l-1 5m1-5l-6 6" stroke-width="2"/>
+                    <svg class="w-4 h-4 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3.5 20V14.5a2 2 0 0 1 4 0V20"/>
+                        <path d="M9.5 20V9.5a2 2 0 0 1 4 0V20"/>
+                        <path d="M15.5 20V4"/>
+                        <path d="M15.5 12H21"/>
+                        <path d="m18 8.5 3.5 3.5-3.5 3.5"/>
                     </svg>
                     <span>Power BI</span>
                 </button>
@@ -479,8 +480,14 @@ window.openPowerBiExportModal = function() {
             <div class="glass-card bg-slate-900 border border-amber-500/50 p-6 rounded-2xl w-full max-w-lg shadow-2xl space-y-4 text-left relative">
                 <div class="flex items-center justify-between border-b border-white/10 pb-3">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-lg shadow-inner">
-                            <i class="fa-solid fa-chart-simple"></i>
+                        <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shadow-inner">
+                            <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3.5 20V14.5a2 2 0 0 1 4 0V20"/>
+                                <path d="M9.5 20V9.5a2 2 0 0 1 4 0V20"/>
+                                <path d="M15.5 20V4"/>
+                                <path d="M15.5 12H21"/>
+                                <path d="m18 8.5 3.5 3.5-3.5 3.5"/>
+                            </svg>
                         </div>
                         <div>
                             <h3 class="text-sm font-black text-white">Eksport Danych do Microsoft Power BI</h3>
