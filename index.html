@@ -45,7 +45,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
-    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v4">
+    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v5">
 </head>
 <body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto">
 
@@ -951,72 +951,172 @@
             <div id="auditor-workspace-wrapper" class="w-full flex flex-col lg:flex-row gap-5 items-start">
                 
                 <!-- LEWA KOLUMNA: PIONOWE KAFLE MENU AUDYTORA -->
-                <div id="auditor-sidebar-menu" class="w-full lg:w-60 xl:w-64 flex flex-col gap-2.5 shrink-0 hidden">
+                <div id="auditor-sidebar-menu" class="w-full lg:w-60 xl:w-64 flex flex-col gap-3.5 shrink-0 hidden">
                     <!-- 1. MÓJ HARMONOGRAM -->
-                    <div id="aud-tile-calendar" onclick="showModule('calendar')" class="aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-blue-400/50 bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 shadow-xl shadow-blue-500/25 ring-2 ring-blue-400/50 text-white scale-[1.01]">
-                        <div class="flex justify-between items-center mb-1.5">
-                            <span class="text-[8.5px] font-black bg-blue-950/80 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/30 tracking-wider uppercase">Operacyjny</span>
-                            <div class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-blue-200">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    <div id="aud-tile-calendar" class="bws-cap-viewport bws-cap-aud bws-glow-blue relative cursor-pointer select-none" onclick="toggleCapFlip(this, event)">
+                        <!-- Awers -->
+                        <div class="bws-cap-front flex flex-col justify-between p-3 border shadow-xl bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 border-blue-400/60 shadow-blue-500/25 ring-2 ring-blue-400/50 text-white">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[8.5px] font-black bg-blue-950/80 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/30 tracking-wider uppercase">Operacyjny</span>
+                                <div class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-blue-200">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-xs sm:text-[13px] font-black text-white drop-shadow mb-0.5 flex items-center justify-between">
+                                    <span>1. Mój Harmonogram</span>
+                                    <span class="aud-tile-indicator text-xs text-blue-300 transition-opacity">●</span>
+                                </h3>
+                                <p class="text-[10px] text-blue-100/80 font-medium leading-snug">Plan inspekcji i start audytów.</p>
                             </div>
                         </div>
-                        <div>
-                            <h3 class="text-xs sm:text-[13px] font-black text-white drop-shadow mb-0.5 flex items-center justify-between">
-                                <span>1. Mój Harmonogram</span>
-                                <span class="aud-tile-indicator text-xs text-blue-300 transition-opacity">●</span>
-                            </h3>
-                            <p class="text-[10.5px] text-blue-100/80 font-medium leading-snug">Plan inspekcji i start audytów.</p>
+                        <!-- Rewers -->
+                        <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex flex-col justify-between p-2.5 border border-blue-400/60 shadow-2xl">
+                            <div class="flex items-center justify-between border-b border-blue-500/20 pb-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping"></span>
+                                    <span class="text-[9.5px] font-black text-blue-300 uppercase tracking-wide">Harmonogram Dnia</span>
+                                </div>
+                                <span class="text-[7.5px] text-blue-300 font-bold bg-blue-900/60 px-1 py-0.5 rounded">Dziś</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1 my-auto">
+                                <button onclick="event.stopPropagation(); showModule('calendar');" class="px-2 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-lg text-[9px] font-black text-white shadow-md border border-blue-300/30 transition-transform active:scale-95 flex items-center justify-center gap-1">
+                                    <span>📅 Otwórz</span>
+                                </button>
+                                <button onclick="event.stopPropagation(); showModule('calendar');" class="px-2 py-1 bg-slate-900 hover:bg-blue-900/50 rounded-lg text-[9px] font-black text-blue-300 border border-blue-400/40 hover:border-blue-300 transition-transform active:scale-95 flex items-center justify-center gap-1">
+                                    <span>⚡ Audyty</span>
+                                </button>
+                            </div>
+                            <button onclick="event.stopPropagation(); showModule('calendar');" class="w-full py-0.5 px-1.5 bg-slate-900/90 hover:bg-blue-900/50 rounded text-[8.5px] font-black text-blue-200 border border-blue-400/40 hover:border-blue-300 transition-colors flex items-center justify-center gap-1">
+                                <i class="fas fa-calendar-alt text-blue-400"></i>
+                                <span>Przejdź do zadań ➔</span>
+                            </button>
                         </div>
                     </div>
 
                     <!-- 2. MOJA HISTORIA / KOREKTY -->
-                    <div id="aud-tile-history" onclick="showModule('auditor-history')" class="aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-slate-800 bg-slate-900/80 hover:bg-slate-850 hover:border-slate-700 shadow-md text-slate-400 group">
-                        <div class="flex justify-between items-center mb-1.5">
-                            <span class="text-[8.5px] font-black bg-orange-950/80 text-orange-300 px-2 py-0.5 rounded-full border border-orange-500/30 tracking-wider uppercase">Audit Trail</span>
-                            <div class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-orange-200">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <div id="aud-tile-history" class="bws-cap-viewport bws-cap-aud bws-glow-orange relative cursor-pointer select-none" onclick="toggleCapFlip(this, event)">
+                        <!-- Awers -->
+                        <div class="bws-cap-front flex flex-col justify-between p-3 border shadow-md bg-slate-900/90 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300 transition-all">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[8.5px] font-black bg-orange-950/80 text-orange-300 px-2 py-0.5 rounded-full border border-orange-500/30 tracking-wider uppercase">Audit Trail</span>
+                                <div class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-orange-200">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-xs sm:text-[13px] font-black text-white drop-shadow mb-0.5 flex items-center justify-between">
+                                    <span>2. Moja Historia</span>
+                                    <span class="aud-tile-indicator text-xs text-orange-300 opacity-0 transition-opacity">●</span>
+                                </h3>
+                                <p class="text-[10px] text-orange-100/80 font-medium leading-snug">Zrealizowane audyty i korekty.</p>
                             </div>
                         </div>
-                        <div>
-                            <h3 class="text-xs sm:text-[13px] font-black text-white drop-shadow mb-0.5 flex items-center justify-between">
-                                <span>2. Moja Historia</span>
-                                <span class="aud-tile-indicator text-xs text-orange-300 opacity-0 transition-opacity">●</span>
-                            </h3>
-                            <p class="text-[10.5px] text-orange-100/80 font-medium leading-snug">Zrealizowane audyty i korekty.</p>
+                        <!-- Rewers -->
+                        <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 flex flex-col justify-between p-2.5 border border-orange-400/60 shadow-2xl">
+                            <div class="flex items-center justify-between border-b border-orange-500/20 pb-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
+                                    <span class="text-[9.5px] font-black text-orange-300 uppercase tracking-wide">Historia Audytów</span>
+                                </div>
+                                <span class="text-[7.5px] text-orange-300 font-bold bg-orange-900/60 px-1 py-0.5 rounded">Archiwum</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1 my-auto">
+                                <button onclick="event.stopPropagation(); showModule('auditor-history');" class="px-2 py-1 bg-gradient-to-r from-orange-600 to-amber-700 hover:from-orange-500 hover:to-amber-600 rounded-lg text-[9px] font-black text-white shadow-md border border-orange-300/30 transition-transform active:scale-95 flex items-center justify-center gap-1">
+                                    <span>📑 Otwórz</span>
+                                </button>
+                                <button onclick="event.stopPropagation(); showModule('auditor-history'); setTimeout(() => loadAuditorHistory(), 100);" class="px-2 py-1 bg-slate-900 hover:bg-orange-900/50 rounded-lg text-[9px] font-black text-orange-300 border border-orange-400/40 hover:border-orange-300 transition-transform active:scale-95 flex items-center justify-center gap-1">
+                                    <span>🔄 Odśwież</span>
+                                </button>
+                            </div>
+                            <button onclick="event.stopPropagation(); showModule('auditor-history');" class="w-full py-0.5 px-1.5 bg-slate-900/90 hover:bg-orange-900/50 rounded text-[8.5px] font-black text-orange-200 border border-orange-400/40 hover:border-orange-300 transition-colors flex items-center justify-center gap-1">
+                                <i class="fas fa-history text-orange-400"></i>
+                                <span>Przejrzyj swoje audyty ➔</span>
+                            </button>
                         </div>
                     </div>
 
                     <!-- 3. BAZA WIEDZY / FAQ -->
-                    <div id="aud-tile-faq" onclick="showModule('faq')" class="aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-slate-800 bg-slate-900/80 hover:bg-slate-850 hover:border-slate-700 shadow-md text-slate-400 group">
-                        <div class="flex justify-between items-center mb-1.5">
-                            <span class="text-[8.5px] font-black bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 tracking-wider uppercase">IFS v8 / BRCGS</span>
-                            <div class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-emerald-200">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                    <div id="aud-tile-faq" class="bws-cap-viewport bws-cap-aud bws-glow-emerald relative cursor-pointer select-none" onclick="toggleCapFlip(this, event)">
+                        <!-- Awers -->
+                        <div class="bws-cap-front flex flex-col justify-between p-3 border shadow-md bg-slate-900/90 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300 transition-all">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[8.5px] font-black bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 tracking-wider uppercase">IFS v8 / BRCGS</span>
+                                <div class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-emerald-200">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-xs sm:text-[13px] font-black text-white drop-shadow mb-0.5 flex items-center justify-between">
+                                    <span>3. Baza Wiedzy & FAQ</span>
+                                    <span class="aud-tile-indicator text-xs text-emerald-300 opacity-0 transition-opacity">●</span>
+                                </h3>
+                                <p class="text-[10px] text-emerald-100/80 font-medium leading-snug">Limity CCP, standardy i wytyczne.</p>
                             </div>
                         </div>
-                        <div>
-                            <h3 class="text-xs sm:text-[13px] font-black text-white drop-shadow mb-0.5 flex items-center justify-between">
-                                <span>3. Baza Wiedzy & FAQ</span>
-                                <span class="aud-tile-indicator text-xs text-emerald-300 opacity-0 transition-opacity">●</span>
-                            </h3>
-                            <p class="text-[10.5px] text-emerald-100/80 font-medium leading-snug">Limity CCP, standardy i wytyczne.</p>
+                        <!-- Rewers -->
+                        <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 flex flex-col justify-between p-2.5 border border-emerald-400/60 shadow-2xl">
+                            <div class="flex items-center justify-between border-b border-emerald-500/20 pb-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                                    <span class="text-[9.5px] font-black text-emerald-300 uppercase tracking-wide">Limity i Standardy</span>
+                                </div>
+                                <span class="text-[7.5px] text-emerald-300 font-bold bg-emerald-900/60 px-1 py-0.5 rounded">IFS Food</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1 my-auto">
+                                <button onclick="event.stopPropagation(); showModule('faq');" class="px-2 py-1 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 rounded-lg text-[9px] font-black text-white shadow-md border border-emerald-300/30 transition-transform active:scale-95 flex items-center justify-center gap-1">
+                                    <span>📖 Przewodnik</span>
+                                </button>
+                                <button onclick="event.stopPropagation(); showModule('faq'); setTimeout(() => filterInlineFaq('CCP'), 100);" class="px-2 py-1 bg-slate-900 hover:bg-emerald-900/50 rounded-lg text-[9px] font-black text-emerald-300 border border-emerald-400/40 hover:border-emerald-300 transition-transform active:scale-95 flex items-center justify-center gap-1">
+                                    <span>🛡️ Limity CCP</span>
+                                </button>
+                            </div>
+                            <button onclick="event.stopPropagation(); showModule('faq');" class="w-full py-0.5 px-1.5 bg-slate-900/90 hover:bg-emerald-900/50 rounded text-[8.5px] font-black text-emerald-200 border border-emerald-400/40 hover:border-emerald-300 transition-colors flex items-center justify-center gap-1">
+                                <i class="fas fa-book-open text-emerald-400"></i>
+                                <span>Otwórz bazę standardów IFS ➔</span>
+                            </button>
                         </div>
                     </div>
 
                     <!-- 4. AI SUPPORT (ASYSTENT TERENOWY) -->
-                    <div id="aud-tile-agent" onclick="showModule('agent')" class="aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-slate-800 bg-slate-900/80 hover:bg-slate-850 hover:border-slate-700 shadow-md text-slate-400 group">
-                        <div class="flex justify-between items-center mb-1.5">
-                            <span class="text-[8.5px] font-black bg-indigo-950/80 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 tracking-wider uppercase">IFS Food v8</span>
-                            <div class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-indigo-200 text-xs">
-                                🤖
+                    <div id="aud-tile-agent" class="bws-cap-viewport bws-cap-aud bws-glow-purple relative cursor-pointer select-none" onclick="toggleCapFlip(this, event)">
+                        <!-- Awers -->
+                        <div class="bws-cap-front flex flex-col justify-between p-3 border shadow-md bg-slate-900/90 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300 transition-all">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[8.5px] font-black bg-indigo-950/80 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 tracking-wider uppercase">ASYSTENT AI</span>
+                                <div class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-indigo-200 text-xs">
+                                    🤖
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-xs sm:text-[13px] font-black text-white drop-shadow mb-0.5 flex items-center justify-between">
+                                    <span>4. Ai Support</span>
+                                    <span class="aud-tile-indicator text-xs text-indigo-300 opacity-0 transition-opacity">●</span>
+                                </h3>
+                                <p class="text-[10px] text-indigo-100/80 font-medium leading-snug">Asystent Terenowy i odprawa linii.</p>
                             </div>
                         </div>
-                        <div>
-                            <h3 class="text-xs sm:text-[13px] font-black text-white drop-shadow mb-0.5 flex items-center justify-between">
-                                <span>4. Ai Support</span>
-                                <span class="aud-tile-indicator text-xs text-indigo-300 opacity-0 transition-opacity">●</span>
-                            </h3>
-                            <p class="text-[10.5px] text-indigo-100/80 font-medium leading-snug">Asystent Terenowy i odprawa linii.</p>
+                        <!-- Rewers -->
+                        <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 flex flex-col justify-between p-2.5 border border-purple-400/60 shadow-2xl">
+                            <div class="flex items-center justify-between border-b border-purple-500/20 pb-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping"></span>
+                                    <span class="text-[9.5px] font-black text-purple-300 uppercase tracking-wide">Asystent Terenowy</span>
+                                </div>
+                                <span class="text-[7.5px] text-purple-300 font-bold bg-purple-900/60 px-1 py-0.5 rounded">24/7 AI</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1 my-auto">
+                                <button onclick="event.stopPropagation(); showModule('agent');" class="px-2 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 rounded-lg text-[9px] font-black text-white shadow-md border border-purple-300/30 transition-transform active:scale-95 flex items-center justify-center gap-1">
+                                    <span>🤖 Czat AI</span>
+                                </button>
+                                <button onclick="event.stopPropagation(); showModule('agent'); setTimeout(() => sendQuickPrompt('HACCP: Jakie są kluczowe punkty krytyczne (CCP1-CCP3) i limity na tej linii?'), 200);" class="px-2 py-1 bg-slate-900 hover:bg-purple-900/50 rounded-lg text-[9px] font-black text-purple-300 border border-purple-400/40 hover:border-purple-300 transition-transform active:scale-95 flex items-center justify-center gap-1">
+                                    <span>⚡ Briefing</span>
+                                </button>
+                            </div>
+                            <button onclick="event.stopPropagation(); showModule('agent');" class="w-full py-0.5 px-1.5 bg-slate-900/90 hover:bg-purple-900/50 rounded text-[8.5px] font-black text-purple-200 border border-purple-400/40 hover:border-purple-300 transition-colors flex items-center justify-center gap-1">
+                                <i class="fas fa-robot text-purple-400"></i>
+                                <span>Zapytaj Asystenta Terenowego ➔</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1789,7 +1889,7 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260919_v18"></script>
+    <script src="/static/js/app.js?v=20260919_v19"></script>
     <script src="/static/js/auth_caps.js?v=20260919_v1"></script>
 
 <div id="auditor-profile-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">

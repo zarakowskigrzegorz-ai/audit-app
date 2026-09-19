@@ -61,6 +61,39 @@
 .bws-glow-slate.bws-active .bws-cap-back {
     box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(245, 158, 11, 0.35);
 }
+.bws-glow-orange:hover .bws-cap-back,
+.bws-glow-orange.bws-active .bws-cap-back {
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(249, 115, 22, 0.45);
+}
+.bws-glow-blue:hover .bws-cap-back,
+.bws-glow-blue.bws-active .bws-cap-back {
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(59, 130, 246, 0.45);
+}
+
+/* Wariant wysokości dla pionowego paska menu audytora (pad audytora) */
+.bws-cap-aud {
+    height: 7.25rem; /* ~116px */
+}
+.bws-cap-aud .bws-cap-front {
+    transform: rotateX(0deg) translateZ(0);
+}
+.bws-cap-aud .bws-cap-back {
+    transform: rotateX(90deg) translateZ(0);
+}
+.bws-cap-aud:hover .bws-cap-front,
+.bws-cap-aud.bws-active .bws-cap-front,
+.bws-cap-aud.bws-focused .bws-cap-front {
+    transform: rotateX(-90deg) translateZ(0);
+    filter: brightness(0.85);
+}
+.bws-cap-aud:hover .bws-cap-back,
+.bws-cap-aud.bws-active .bws-cap-back,
+.bws-cap-aud.bws-focused .bws-cap-back {
+    transform: rotateX(0deg) translateZ(0);
+    box-shadow: 0 16px 30px -6px rgba(0, 0, 0, 0.95), 0 0 20px rgba(255, 255, 255, 0.15);
+    filter: brightness(1.05);
+    z-index: 10;
+}
 
 /* Wariant ekranu logowania (wysokość 220px) */
 .bws-cap-auth {

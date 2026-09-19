@@ -158,24 +158,28 @@
                 'agent': document.getElementById('aud-tile-agent')
             };
 
-            const inactiveClass = "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-slate-800 bg-slate-900/80 hover:bg-slate-850 hover:border-slate-700 shadow-md text-slate-400 group";
-            
-            const activeClasses = {
-                'calendar': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-blue-400/50 bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 shadow-xl shadow-blue-500/25 ring-2 ring-blue-400/50 text-white scale-[1.01]",
-                'auditor-history': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-orange-400/50 bg-gradient-to-br from-orange-600 via-amber-700 to-slate-900 shadow-xl shadow-orange-500/25 ring-2 ring-orange-400/50 text-white scale-[1.01]",
-                'faq': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-emerald-400/50 bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 shadow-xl shadow-emerald-500/25 ring-2 ring-emerald-400/50 text-white scale-[1.01]",
-                'agent': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-indigo-400/50 bg-gradient-to-br from-purple-600 via-indigo-700 to-slate-900 shadow-xl shadow-indigo-500/25 ring-2 ring-indigo-400/50 text-white scale-[1.01]"
+            const frontActiveThemes = {
+                'calendar': 'bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 border-blue-400/60 shadow-xl shadow-blue-500/25 ring-2 ring-blue-400/50 text-white',
+                'auditor-history': 'bg-gradient-to-br from-orange-600 via-amber-700 to-slate-900 border-orange-400/60 shadow-xl shadow-orange-500/25 ring-2 ring-orange-400/50 text-white',
+                'faq': 'bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 border-emerald-400/60 shadow-xl shadow-emerald-500/25 ring-2 ring-emerald-400/50 text-white',
+                'agent': 'bg-gradient-to-br from-purple-600 via-indigo-700 to-slate-900 border-indigo-400/60 shadow-xl shadow-indigo-500/25 ring-2 ring-indigo-400/50 text-white'
             };
+
+            const frontInactiveTheme = 'bg-slate-900/90 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300 shadow-md';
 
             for (const [key, el] of Object.entries(tiles)) {
                 if (!el) continue;
+                const front = el.querySelector('.bws-cap-front');
+                const ind = el.querySelector('.aud-tile-indicator');
                 if (key === modId) {
-                    el.className = activeClasses[key] || activeClasses['calendar'];
-                    const ind = el.querySelector('.aud-tile-indicator');
+                    if (front) {
+                        front.className = `bws-cap-front flex flex-col justify-between p-3 border transition-all ${frontActiveThemes[key]}`;
+                    }
                     if (ind) ind.classList.remove('opacity-0');
                 } else {
-                    el.className = inactiveClass;
-                    const ind = el.querySelector('.aud-tile-indicator');
+                    if (front) {
+                        front.className = `bws-cap-front flex flex-col justify-between p-3 border transition-all ${frontInactiveTheme}`;
+                    }
                     if (ind) ind.classList.add('opacity-0');
                 }
             }
