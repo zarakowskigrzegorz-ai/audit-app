@@ -334,17 +334,25 @@
                         </div>
                     </div>
 
-                    <!-- KAFELEK 7: RAPORTY & EKSPORT EXCEL -->
+                    <!-- KAFELEK 7: RAPORTY, EXCEL & POWER BI -->
                     <div onclick="openReportsDashboard()" class="tile-3d relative h-32 bg-gradient-to-br from-indigo-700 via-blue-800 to-slate-900 flex flex-col justify-between p-3.5 cursor-pointer border border-cyan-300/40 shadow-xl sm:col-span-2">
                         <div class="flex justify-between items-start">
-                            <div class="p-2 rounded-2xl bg-slate-950 border border-cyan-300/30 w-fit">
-                                <svg class="w-6 h-6 text-cyan-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <div class="flex items-center gap-2">
+                                <div class="p-2 rounded-2xl bg-slate-950 border border-cyan-300/30 w-fit">
+                                    <svg class="w-6 h-6 text-cyan-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                </div>
+                                <div class="p-2 rounded-2xl bg-amber-950/80 border border-amber-400/40 w-fit text-amber-300 text-sm flex items-center justify-center">
+                                    <i class="fa-solid fa-chart-simple"></i>
+                                </div>
                             </div>
-                            <span class="text-[8px] font-black bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40">EXCEL (.XLSX)</span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[8px] font-black bg-amber-950 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40">POWER BI</span>
+                                <span class="text-[8px] font-black bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40">EXCEL (.XLSX)</span>
+                            </div>
                         </div>
                         <div>
-                            <h3 class="text-xs font-black text-white">7. Raporty & Dashboard Excel</h3>
-                            <p class="text-[9px] font-bold text-cyan-200/80">Oficjalny arkusz z wykreślonimi wykresami zarządczymi i tabelą danych</p>
+                            <h3 class="text-xs font-black text-white">7. Raporty Telemetryczne, Excel & Power BI</h3>
+                            <p class="text-[9px] font-bold text-cyan-200/80">SCADA Live, eksport modeli do Microsoft Power BI (CSV & Web Connector) oraz arkusz Excel</p>
                         </div>
                     </div>
                 </div>
@@ -1777,7 +1785,7 @@
         </div>
     </div>
 
-    <script src="/static/reports_dashboard.js?v=20260919_v2"></script>
+    <script src="/static/reports_dashboard.js?v=20260919_v3"></script>
 
 
     <!-- AUDIT PROGRESS HUD -->

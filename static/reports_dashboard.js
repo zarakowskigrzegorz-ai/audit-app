@@ -42,8 +42,11 @@ function ensureReportsViewExists() {
                     <button type="button" id="rf-btn-year" onclick="setReportsFilterRange('year')" class="px-3 py-1.5 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition cursor-pointer">Bieżący Rok</button>
                     <button type="button" id="rf-btn-all" onclick="setReportsFilterRange('all')" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-cyan-500 text-slate-950 shadow-md transition cursor-pointer">Wszystko</button>
                 </div>
-                <button type="button" onclick="window.location.href='/api/audits/export/excel'" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer">
+                <button type="button" onclick="window.location.href='/api/audits/export/excel'" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-emerald-950/40 cursor-pointer active:scale-95">
                     <i class="fa-solid fa-file-excel"></i> Excel (.XLSX)
+                </button>
+                <button type="button" onclick="openPowerBiExportModal()" class="px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-amber-950/40 cursor-pointer active:scale-95">
+                    <i class="fa-solid fa-chart-simple"></i> Power BI
                 </button>
                 <button type="button" onclick="showModule('hub')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
                     <i class="fa-solid fa-arrow-left"></i> Wróć do Menu
@@ -371,3 +374,72 @@ window.openReportsDashboard = async function() {
 document.addEventListener('DOMContentLoaded', () => {
     ensureReportsViewExists();
 });
+
+window.openPowerBiExportModal = function() {
+    let modal = document.getElementById('modal-powerbi-export');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-powerbi-export';
+        modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4';
+        const webUrl = window.location.origin + '/api/audits/export/powerbi/feed';
+        modal.innerHTML = `
+            <div class="glass-card bg-slate-900 border border-amber-500/50 p-6 rounded-2xl w-full max-w-lg shadow-2xl space-y-4 text-left relative">
+                <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-lg shadow-inner">
+                            <i class="fa-solid fa-chart-simple"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-black text-white">Eksport Danych do Microsoft Power BI</h3>
+                            <p class="text-[10px] text-amber-300/80 font-semibold">Integracja analityczna IFS Food v8 / BRCGS v9</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="document.getElementById('modal-powerbi-export').classList.add('hidden')" class="text-slate-400 hover:text-white font-bold text-lg p-1">&times;</button>
+                </div>
+
+                <div class="space-y-3">
+                    <!-- OPCJA 1: POBIERZ PLIK CSV -->
+                    <div class="p-4 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-amber-500/40 transition space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-csv text-sm"></i> 1. Gotowy Plik CSV (UTF-8 BOM)
+                            </span>
+                            <span class="text-[9px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-400/30">Zalecane</span>
+                        </div>
+                        <p class="text-[11px] text-slate-300">Zoptymalizowany plik ze znormalizowanymi kolumnami dla modelu gwiazdy (Star Schema) w Power BI Desktop.</p>
+                        <button type="button" onclick="window.location.href='/api/audits/export/powerbi/csv'" class="w-full py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase rounded-lg shadow flex items-center justify-center gap-2 transition active:scale-95">
+                            <i class="fa-solid fa-download"></i> Pobierz Raport CSV dla Power BI
+                        </button>
+                    </div>
+
+                    <!-- OPCJA 2: ODŚWIEŻANIE NA ŻYWO WEB CONNECTOR -->
+                    <div class="p-4 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-cyan-500/40 transition space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black text-cyan-400 uppercase tracking-wide flex items-center gap-1.5">
+                                <i class="fa-solid fa-globe text-sm"></i> 2. Web Feed (Odświeżanie na żywo)
+                            </span>
+                            <span class="text-[9px] bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded font-bold border border-cyan-400/30">Automatyzacja</span>
+                        </div>
+                        <p class="text-[11px] text-slate-300">W Power BI Desktop wybierz: <b>Pobierz dane &rarr; Ze stron sieci Web</b> i wklej poniższy adres URL:</p>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="pbi-feed-url" readonly value="${webUrl}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] font-mono text-cyan-300 select-all">
+                            <button type="button" onclick="navigator.clipboard.writeText('${webUrl}'); alert('Skopiowano adres URL do schowka!');" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg border border-slate-700 whitespace-nowrap cursor-pointer">
+                                Kopiuj
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-2 border-t border-white/5">
+                    <button type="button" onclick="document.getElementById('modal-powerbi-export').classList.add('hidden')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer">
+                        Zamknij
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        modal.classList.remove('hidden');
+    }
+};
+

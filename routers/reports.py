@@ -1,6 +1,8 @@
 import os
+import io
+import csv
 from collections import Counter
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from fastapi.responses import FileResponse
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -161,3 +163,110 @@ async def export_excel():
         filename="Raport_Dashboard_IFS_Enterprise.xlsx", 
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+@router.get("/api/audits/export/powerbi/csv")
+async def export_powerbi_csv():
+    """Generuje zoptymalizowany pod kątem Microsoft Power BI plik CSV (kodowanie UTF-8-SIG z BOM)"""
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            SELECT id, timestamp, auditor_id, line, shift, zone,
+                   health_ok, dispense_no, line_status,
+                   ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked,
+                   ccp2_magnet_ok, ccp3_sieve_ok,
+                   gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok,
+                   bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, bhp_evac_ppoz_ok, bhp_status,
+                   slm_verdict, risk_level, record_status, compliance_verdict,
+                   total_score_pct, audit_score, ko_failed, notes
+            FROM audits ORDER BY id DESC
+        """)
+        rows = [dict(r) for r in await c.fetchall()]
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    
+    headers = [
+        "Audit_ID", "Timestamp", "Data", "Godzina", "Rok", "Miesiac", "Kwartal",
+        "Audytor", "Linia_Produkcyjna", "Zmiana", "Strefa", "Status_Linii",
+        "Werdykt_SLM", "Poziom_Ryzyka", "Status_Decyzji", "Zgodnosc_Standardu",
+        "CCP_Zgodny", "GMP_Zgodny", "BHP_Zgodny", "Blokada_KO",
+        "Wynik_Punktowy", "Uwagi"
+    ]
+    writer.writerow(headers)
+
+    for r in rows:
+        ts = r.get("timestamp") or ""
+        date_part = ts.split(" ")[0] if " " in ts else ts
+        time_part = ts.split(" ")[1] if " " in ts else ""
+        year_part = date_part.split("-")[0] if "-" in date_part else ""
+        month_part = date_part.split("-")[1] if "-" in date_part else ""
+        
+        q_part = ""
+        if month_part.isdigit():
+            m_int = int(month_part)
+            q_part = f"Q{(m_int - 1) // 3 + 1}"
+
+        ccp_ok = "TAK" if (r.get("ccp1_fe_ok") == "OK" and r.get("ccp1_reject_ok") == "OK" and r.get("ccp2_magnet_ok") == "OK") else "NIE"
+        gmp_ok = "TAK" if r.get("gmp_cleanliness_ok") == "OK" else "NIE"
+        bhp_ok = "TAK" if r.get("bhp_status") == "OK" else "NIE"
+        ko_flag = "TAK" if r.get("ko_failed") == 1 else "NIE"
+
+        writer.writerow([
+            r.get("id"),
+            ts,
+            date_part,
+            time_part,
+            year_part,
+            month_part,
+            q_part,
+            r.get("auditor_id") or "Nieprzypisany",
+            r.get("line") or "Nieznana",
+            r.get("shift") or "1",
+            r.get("zone") or "Standard",
+            r.get("line_status") or "PRODUKCJA",
+            r.get("slm_verdict") or "OK",
+            r.get("risk_level") or "NISKIE",
+            r.get("compliance_verdict") or "ZATWIERDZONY",
+            r.get("record_status") or "ZABLOKOWANY",
+            ccp_ok,
+            gmp_ok,
+            bhp_ok,
+            ko_flag,
+            r.get("total_score_pct") or 100,
+            (r.get("notes") or "").replace("\n", " ").replace("\r", "")
+        ])
+
+    csv_data = output.getvalue()
+    encoded_bytes = csv_data.encode("utf-8-sig")
+
+    return Response(
+        content=encoded_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=Raport_Audyty_IFS_PowerBI.csv",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
+@router.get("/api/audits/export/powerbi/feed")
+async def export_powerbi_feed():
+    """Zwraca tabelaryczny JSON zoptymalizowany pod kątem Power BI Web Connector"""
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            SELECT id, timestamp, auditor_id, line, shift, zone,
+                   slm_verdict, risk_level, record_status, compliance_verdict,
+                   total_score_pct, ko_failed, notes
+            FROM audits ORDER BY id DESC
+        """)
+        rows = [dict(r) for r in await c.fetchall()]
+
+    for r in rows:
+        ts = r.get("timestamp") or ""
+        date_part = ts.split(" ")[0] if " " in ts else ts
+        r["date"] = date_part
+        r["year"] = date_part.split("-")[0] if "-" in date_part else ""
+        r["month"] = date_part.split("-")[1] if "-" in date_part else ""
+
+    return {"value": rows}
+
