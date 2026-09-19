@@ -4016,3 +4016,29 @@
             console.error('Błąd podczas czyszczenia miesiąca:', err);
         }
     };
+
+    // Obsługa efektu obracającego się kapsla 3D (Browar Wielka Sowa style)
+    window.toggleCapFlip = function(el, ev) {
+        if (ev && ev.target && ev.target.closest('button')) return;
+        if (el) {
+            el.classList.toggle('bws-active');
+        }
+    };
+
+    window.quickRunSchedule = async function(months) {
+        if (typeof openAutoPlanModal === 'function') {
+            await openAutoPlanModal();
+        }
+        const btns = document.querySelectorAll('.btn-period');
+        let targetBtn = null;
+        btns.forEach(b => {
+            const txt = b.textContent.trim();
+            if (parseInt(txt) === months || txt.startsWith(String(months))) {
+                targetBtn = b;
+            }
+        });
+        if (typeof setPlanPeriod === 'function') {
+            setPlanPeriod(months, targetBtn || btns[0]);
+        }
+    };
+
