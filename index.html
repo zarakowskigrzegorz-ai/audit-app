@@ -6,6 +6,7 @@
     <title>Quality Audit Enterprise (IFS Food v8 / BRCGS v9)</title>
     <script src="https://cdn.jsdelivr.net/npm/drag-drop-touch@1.3.1/DragDropTouch.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
@@ -217,8 +218,11 @@
                         <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
                         <span>STAN IFS: <b id="ribbon-compliance">100% ZGODNY</b></span>
                     </div>
-                    <div class="text-slate-400 border-x border-slate-700/80 px-3">
+                    <div class="text-slate-400 border-x border-slate-700/80 px-2.5">
                         INCIDENTY CCP: <b id="ribbon-incidents" class="text-rose-400">0</b>
+                    </div>
+                    <div class="text-emerald-400 border-r border-slate-700/80 pr-2.5">
+                        ODBYTE AUDYTY: <b id="ribbon-total-audits" class="text-white">0</b>
                     </div>
                     <div class="text-amber-300">
                         STATUS: <b class="text-emerald-400">NADZÓR 24/7</b>
@@ -1773,7 +1777,7 @@
         </div>
     </div>
 
-    <script src="/static/reports_dashboard.js"></script>
+    <script src="/static/reports_dashboard.js?v=20260919_v2"></script>
 
 
     <!-- AUDIT PROGRESS HUD -->

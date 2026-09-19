@@ -132,6 +132,7 @@
                 const hubEl = document.getElementById('hub-manager');
                 if (hubEl) hubEl.classList.remove('hidden');
                 try {
+                    if (typeof updateKpiRibbon === 'function') updateKpiRibbon();
                     if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
                 } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
             }
@@ -142,6 +143,9 @@
             if(modId === 'auditor-history') loadAuditorHistory();
             if(modId === 'agent') syncAgentLineSelector();
             if(modId === 'faq') loadInlineFaq();
+            if(modId === 'reports') {
+                if (typeof openReportsDashboard === 'function') openReportsDashboard();
+            }
 
             updateTopNavActiveState(modId);
         }
@@ -760,8 +764,12 @@
                 const res = await fetch('/api/reports/kpi');
                 if (!res.ok) return;
                 const data = await res.json();
-                document.getElementById('ribbon-incidents').innerText = data.incidents_count || 0;
-                document.getElementById('ribbon-compliance').innerText = `${data.compliance_rate}% ZGODNY`;
+                const incEl = document.getElementById('ribbon-incidents');
+                const compEl = document.getElementById('ribbon-compliance');
+                const totEl = document.getElementById('ribbon-total-audits');
+                if (incEl) incEl.innerText = data.incidents_count || 0;
+                if (compEl) compEl.innerText = `${data.compliance_rate}% ZGODNY`;
+                if (totEl) totEl.innerText = data.total_audits || 0;
             } catch(e) {}
         }
 
