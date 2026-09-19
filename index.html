@@ -45,7 +45,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
-    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v3">
+    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v4">
 </head>
 <body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto">
 
@@ -212,7 +212,7 @@
         <div id="app-content" class="w-full space-y-4 mt-2 pb-36">
             
             <!-- PANEL KEY USER (MANAGER) -->
-            <div id="hub-manager" class="hidden space-y-3.5 view-layer max-w-2xl mx-auto w-full">
+            <div id="hub-manager" class="hidden space-y-4 view-layer max-w-2xl sm:max-w-3xl mx-auto w-full">
                 <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-2.5 rounded-2xl border border-slate-700/80 flex items-center justify-between text-[10px] font-black shadow-lg">
                     <div class="flex items-center gap-1.5 text-cyan-400">
                         <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
@@ -229,7 +229,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                     <!-- Kafel 1 z obracającym się kapslem 3D -->
                     <div class="bws-cap-viewport bws-cap-h32 bws-glow-amber relative cursor-pointer select-none" onclick="toggleCapFlip(this, event)">
                         <!-- Awers: front kafelka -->
@@ -238,18 +238,10 @@
                                 <div class="p-2 rounded-2xl bg-amber-950/50 border border-amber-300/30 w-fit">
                                     <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                                 </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-[8px] font-black bg-amber-950/80 text-amber-300 px-2 py-0.5 rounded-full border border-amber-400/40">ZAKŁAD 24/7</span>
-                                    <span class="text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-400/40 flex items-center gap-1 shadow-inner">
-                                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> OBRÓĆ
-                                    </span>
-                                </div>
+                                <span class="text-[8px] font-black bg-amber-950/80 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-400/40">ZAKŁAD 24/7</span>
                             </div>
                             <div>
-                                <h2 class="text-xs font-black text-white drop-shadow flex items-center justify-between">
-                                    <span>1. Harmonogram i Dni</span>
-                                    <span class="text-[10px] text-amber-200/70 font-normal">3D ▾</span>
-                                </h2>
+                                <h2 class="text-xs font-black text-white drop-shadow">1. Harmonogram i Dni</h2>
                                 <p class="text-[9px] font-bold text-amber-100/80">Globalny podgląd audytów całego zakładu</p>
                             </div>
                         </div>
@@ -285,18 +277,10 @@
                                 <div class="p-2 rounded-2xl bg-cyan-950/50 border border-cyan-300/30 w-fit">
                                     <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                                 </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-[8px] font-black bg-cyan-950/80 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-400/40">PLANOWANIE</span>
-                                    <span class="text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-400/40 flex items-center gap-1 shadow-inner">
-                                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> OBRÓĆ
-                                    </span>
-                                </div>
+                                <span class="text-[8px] font-black bg-cyan-950/80 text-cyan-300 px-2.5 py-0.5 rounded-full border border-cyan-400/40">PLANOWANIE</span>
                             </div>
                             <div>
-                                <h3 class="text-xs font-black text-white flex items-center justify-between">
-                                    <span>2. Ustaw audyt ręcznie</span>
-                                    <span class="text-[10px] text-cyan-200/70 font-normal">3D ▾</span>
-                                </h3>
+                                <h3 class="text-xs font-black text-white">2. Ustaw audyt ręcznie</h3>
                                 <p class="text-[9px] font-bold text-cyan-100/80">Planer 2-kolumnowy z mini-kalendarzem</p>
                             </div>
                         </div>
@@ -332,16 +316,11 @@
                                 <div class="p-2 rounded-2xl bg-purple-950/60 border border-purple-300/30 w-fit shadow-md">
                                     <svg class="w-6 h-6 text-amber-300 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
                                 </div>
-                                <span class="text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-purple-950/80 text-amber-300 border border-purple-400/40 flex items-center gap-1 shadow-inner">
-                                    <i class="fa-solid fa-arrows-rotate text-[7px]"></i> OBRÓĆ
-                                </span>
+                                <span class="text-[8px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-purple-950/80 text-amber-300 border border-purple-400/40">AI AUTOPLANER</span>
                             </div>
                             <div>
-                                <h3 class="text-xs font-black text-amber-200 flex items-center justify-between">
-                                    <span>3. Generuj audyt automatycznie</span>
-                                    <span class="text-[10px] text-amber-300/70 font-normal">3D ▾</span>
-                                </h3>
-                                <p class="text-[9px] font-bold text-purple-200/80">Dotknij lub najedź, aby rozwinąć opcje</p>
+                                <h3 class="text-xs font-black text-amber-200">3. Generuj audyt automatycznie</h3>
+                                <p class="text-[9px] font-bold text-purple-200/80">Inteligentny rozkład harmonogramu IFS Food</p>
                             </div>
                         </div>
 
@@ -379,18 +358,10 @@
                                 <div class="p-2 rounded-2xl bg-emerald-950 border border-emerald-300/30 w-fit">
                                     <svg class="w-6 h-6 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                                 </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-[8px] font-black bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40">KADRA JAKOŚCI</span>
-                                    <span class="text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-400/40 flex items-center gap-1 shadow-inner">
-                                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> OBRÓĆ
-                                    </span>
-                                </div>
+                                <span class="text-[8px] font-black bg-emerald-950 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/40">KADRA JAKOŚCI</span>
                             </div>
                             <div>
-                                <h3 class="text-xs font-black text-emerald-200 flex items-center justify-between">
-                                    <span>4. Zarządzanie Audytorami</span>
-                                    <span class="text-[10px] text-emerald-300/70 font-normal">3D ▾</span>
-                                </h3>
+                                <h3 class="text-xs font-black text-emerald-200">4. Zarządzanie Audytorami</h3>
                                 <p class="text-[9px] font-bold text-emerald-100/80">Dodaj audytora, edycja PIN & kwalifikacje</p>
                             </div>
                         </div>
@@ -426,23 +397,15 @@
                                 <div class="p-2 rounded-2xl bg-slate-950 border border-amber-300/30 w-fit">
                                     <svg class="w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>
                                 </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-[8px] font-black bg-slate-950 text-amber-300 px-2 py-0.5 rounded-full border border-amber-400/40">PARK MASZYN</span>
-                                    <span class="text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-950/80 text-amber-300 border border-amber-400/40 flex items-center gap-1 shadow-inner">
-                                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> OBRÓĆ
-                                    </span>
-                                </div>
+                                <span class="text-[8px] font-black bg-slate-950 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-400/40">PARK MASZYN</span>
                             </div>
                             <div>
-                                <h3 class="text-xs font-black text-amber-300 flex items-center justify-between">
-                                    <span>5. Linie Produkcyjne</span>
-                                    <span class="text-[10px] text-amber-300/70 font-normal">3D ▾</span>
-                                </h3>
+                                <h3 class="text-xs font-black text-amber-300">5. Linie Produkcyjne</h3>
                                 <p class="text-[9px] font-bold text-slate-400">Konfiguracja maszyn i stref higieny</p>
                             </div>
                         </div>
                         <!-- Rewers: spód kapsla wyłaniający się w 3D po obrocie -->
-                        <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col justify-between p-3 border border-amber-400/60 shadow-2xl">
+                        <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-slate-900 to-slate-900 flex flex-col justify-between p-3 border border-amber-400/60 shadow-2xl">
                             <div class="flex items-center justify-between border-b border-amber-500/20 pb-1.5">
                                 <div class="flex items-center gap-1.5">
                                     <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
@@ -473,18 +436,10 @@
                                 <div class="p-2 rounded-2xl bg-emerald-950 border border-emerald-400/30 w-fit">
                                     <i class="fas fa-list-check text-emerald-400 text-xl"></i>
                                 </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-[8px] font-black bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/40">ZATWIERDZENIA I DANE</span>
-                                    <span class="text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-400/40 flex items-center gap-1 shadow-inner">
-                                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> OBRÓĆ
-                                    </span>
-                                </div>
+                                <span class="text-[8px] font-black bg-emerald-950 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/40">ZATWIERDZENIA I DANE</span>
                             </div>
                             <div>
-                                <h3 class="text-xs font-black text-white flex items-center justify-between">
-                                    <span>6. Wnioski i zatwierdzenia audytów</span>
-                                    <span class="text-[10px] text-emerald-300/70 font-normal">3D ▾</span>
-                                </h3>
+                                <h3 class="text-xs font-black text-white">6. Wnioski i zatwierdzenia audytów</h3>
                                 <p class="text-[9px] font-bold text-emerald-200/80">Wnioski audytorów, zatwierdzenia, werdykty SLM i rejestr audytów</p>
                             </div>
                         </div>
@@ -526,18 +481,12 @@
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1.5">
-                                    <span class="text-[8px] font-black bg-amber-950 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40">POWER BI</span>
-                                    <span class="text-[8px] font-black bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40">EXCEL (.XLSX)</span>
-                                    <span class="text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-950/80 text-cyan-300 border border-cyan-400/40 flex items-center gap-1 shadow-inner">
-                                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> OBRÓĆ
-                                    </span>
+                                    <span class="text-[8px] font-black bg-amber-950 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/40">POWER BI</span>
+                                    <span class="text-[8px] font-black bg-cyan-950 text-cyan-300 px-2.5 py-0.5 rounded-full border border-cyan-500/40">EXCEL (.XLSX)</span>
                                 </div>
                             </div>
                             <div>
-                                <h3 class="text-xs font-black text-white flex items-center justify-between">
-                                    <span>7. Raporty Telemetryczne, Excel & Power BI</span>
-                                    <span class="text-[10px] text-cyan-200/70 font-normal">3D ▾</span>
-                                </h3>
+                                <h3 class="text-xs font-black text-white">7. Raporty Telemetryczne, Excel & Power BI</h3>
                                 <p class="text-[9px] font-bold text-cyan-200/80">SCADA Live, eksport modeli do Microsoft Power BI (CSV & Web Connector) oraz arkusz Excel</p>
                             </div>
                         </div>

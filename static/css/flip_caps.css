@@ -13,24 +13,24 @@
 
 /* Wariant wysokości i promienia osi 3D dla kafelka w menu Key Usera */
 .bws-cap-h32 {
-    height: 8rem; /* 128px */
+    height: 8.5rem; /* 136px */
 }
 .bws-cap-h32 .bws-cap-front {
-    transform: rotateX(0deg) translateZ(64px);
+    transform: rotateX(0deg) translateZ(0);
 }
 .bws-cap-h32 .bws-cap-back {
-    transform: rotateX(90deg) translateZ(64px);
+    transform: rotateX(90deg) translateZ(0);
 }
 .bws-cap-h32:hover .bws-cap-front,
 .bws-cap-h32.bws-active .bws-cap-front,
 .bws-cap-h32.bws-focused .bws-cap-front {
-    transform: rotateX(-90deg) translateZ(64px);
+    transform: rotateX(-90deg) translateZ(0);
     filter: brightness(0.85);
 }
 .bws-cap-h32:hover .bws-cap-back,
 .bws-cap-h32.bws-active .bws-cap-back,
 .bws-cap-h32.bws-focused .bws-cap-back {
-    transform: rotateX(0deg) translateZ(64px);
+    transform: rotateX(0deg) translateZ(0);
     box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(255, 255, 255, 0.15);
     filter: brightness(1.05);
     z-index: 10;
