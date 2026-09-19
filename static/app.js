@@ -2087,3 +2087,42 @@ function updateAuditHud(step, title, desc, mode) {
                 console.error("Błąd podczas czyszczenia miesiąca:", err);
             }
         };
+
+        window.enforceBiometricHeaderIcon = function() {
+            const btn = document.getElementById('btn-bind-biometrics') || document.querySelector('button[onclick*="registerCurrentDeviceBiometrics"]');
+            if (btn) {
+                btn.innerHTML = `<svg class="w-7 h-4 group-hover:scale-105 transition-transform drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]" viewBox="0 0 32 18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <!-- LEWA CZĘŚĆ: Narożniki Face ID + oczy/uśmiech -->
+                    <g stroke-width="1.8">
+                        <!-- Narożniki Face ID -->
+                        <path d="M4 2H2v2"/>
+                        <path d="M12 2h2v2"/>
+                        <path d="M4 16H2v-2"/>
+                        <path d="M12 16h2v-2"/>
+                        <!-- Twarz: oczy, nos, uśmiech -->
+                        <circle cx="5.5" cy="6.5" r="0.8" fill="currentColor"/>
+                        <circle cx="10.5" cy="6.5" r="0.8" fill="currentColor"/>
+                        <path d="M8 8.5v2"/>
+                        <path d="M5.5 12.5a3.2 3.2 0 0 0 5 0" stroke-width="1.4"/>
+                    </g>
+                    <!-- SEPARATOR / ŁĄCZNIK SUBTELNY -->
+                    <line x1="16" y1="4" x2="16" y2="14" stroke="currentColor" stroke-width="1" stroke-opacity="0.3" stroke-dasharray="1.5 1.5"/>
+                    <!-- PRAWA CZĘŚĆ: Linie Papilarne / Odcisk Palca (Fingerprint) -->
+                    <g stroke-width="1.6">
+                        <!-- Łuki linii papilarnych -->
+                        <path d="M20 15a4.5 4.5 0 0 1-1-3.2 5 5 0 0 1 9-2.5"/>
+                        <path d="M21.5 13.5a2.8 2.8 0 0 1-.5-1.7 3 3 0 0 1 5.5-1.5"/>
+                        <path d="M23.5 12a1 1 0 0 1 1-1 1 1 0 0 1 1 1v2"/>
+                        <path d="M27.5 14.5a6 6 0 0 0 .5-2.5 7 7 0 0 0-9.8-6.2"/>
+                    </g>
+                </svg>`;
+                btn.className = "tile-3d px-1.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 hover:text-white rounded-xl border border-emerald-700 flex items-center justify-center transition-all group";
+            }
+        };
+
+        try { window.enforceBiometricHeaderIcon(); } catch(e) {}
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                try { window.enforceBiometricHeaderIcon(); } catch(e) {}
+            });
+        }
