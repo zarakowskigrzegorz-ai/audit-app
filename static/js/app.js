@@ -1307,6 +1307,7 @@
 
             renderManagerAuditsTable();
         };
+        window.showManagerTab = window.setManagerResultsTab;
 
         function formatAuditorInitials(auditor) {
             if (!auditor) return "—";
