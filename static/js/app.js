@@ -428,6 +428,16 @@
             updateTopNavActiveState('hub');
         }
 
+        function handleLogoClick() {
+            if (currentModule === 'hub') {
+                // Gdy jesteśmy w menu głównym (audytora lub key usera), cofnięcie wychodzi do ekranu logowania (strona startowa)
+                logout();
+            } else {
+                // Gdy jesteśmy w dowolnym podmenu/module, wracamy krok w tył do menu głównego
+                navGoHome();
+            }
+        }
+
         function updateDockButtons() {
             const btnBack = document.getElementById('nav-btn-back');
             const btnFwd = document.getElementById('nav-btn-forward');
