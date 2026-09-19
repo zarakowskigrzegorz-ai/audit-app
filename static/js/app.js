@@ -2277,16 +2277,53 @@
             }
         }
 
+        let editingLineId = null;
+
+        function resetLineFormToNew() {
+            editingLineId = null;
+            const titleEl = document.getElementById('form-line-title');
+            if (titleEl) {
+                titleEl.innerHTML = '<i class="fas fa-plus-circle mr-1"></i> Formularz Nowej Linii Produkcyjnej';
+            }
+            const btnSave = document.getElementById('btn-save-line');
+            if (btnSave) {
+                btnSave.innerHTML = '💾 Zapisz Linię w Rejestrze Fabrycznym';
+            }
+            const nameEl = document.getElementById('new-line-name');
+            const codeEl = document.getElementById('new-line-code');
+            const notesEl = document.getElementById('new-line-notes');
+            if (nameEl) nameEl.value = '';
+            if (codeEl) codeEl.value = '';
+            if (notesEl) notesEl.value = '';
+            isCodeManuallyEdited = false;
+            const badge = document.getElementById('badge-code-auto');
+            if (badge) {
+                badge.textContent = '⚡ Auto-kod';
+                badge.className = 'text-[9px] text-amber-400 font-black tracking-wider uppercase';
+            }
+        }
+
         function toggleLineAddForm() {
             const form = document.getElementById('form-add-line-container');
             const btn = document.getElementById('btn-toggle-add-line');
             if (!form) return;
-            const isHidden = form.classList.contains('hidden');
-            form.classList.toggle('hidden', !isHidden);
-            if (btn) {
-                btn.innerHTML = isHidden ? '<i class="fas fa-times"></i> Zwiń Formularz' : '<i class="fas fa-plus"></i> Nowa Linia';
+
+            const isCurrentlyHidden = form.classList.contains('hidden');
+
+            if (editingLineId && !isCurrentlyHidden) {
+                resetLineFormToNew();
+                form.classList.add('hidden');
+                if (btn) btn.innerHTML = '<i class="fas fa-plus"></i> Nowa Linia';
+                return;
             }
-            if (isHidden) {
+
+            form.classList.toggle('hidden', !isCurrentlyHidden);
+            if (btn) {
+                btn.innerHTML = isCurrentlyHidden ? '<i class="fas fa-times"></i> Zwiń Formularz' : '<i class="fas fa-plus"></i> Nowa Linia';
+            }
+
+            if (isCurrentlyHidden) {
+                resetLineFormToNew();
                 isCodeManuallyEdited = false;
                 const codeInput = document.getElementById('new-line-code');
                 if (codeInput) {
@@ -2301,6 +2338,65 @@
                 }
             }
         }
+
+        window.startEditLineFromPassport = function() {
+            if (!currentPassportLineId) return;
+            const targetId = Number(currentPassportLineId);
+            const line = productionLinesData.find(l => Number(l.id) === targetId);
+            if (!line) {
+                alert("Nie odnaleziono danych wybranej linii.");
+                return;
+            }
+
+            editingLineId = targetId;
+
+            // 1. Zamykamy modal profilu linii
+            closeLinePassportModal();
+
+            // 2. Otwieramy formularz linii
+            const form = document.getElementById('form-add-line-container');
+            const btnToggle = document.getElementById('btn-toggle-add-line');
+            if (form) form.classList.remove('hidden');
+            if (btnToggle) btnToggle.innerHTML = '<i class="fas fa-times"></i> Zwiń Edycję';
+
+            // 3. Zmieniamy nagłówek formularza i przycisk zapisu
+            const titleEl = document.getElementById('form-line-title');
+            if (titleEl) {
+                titleEl.innerHTML = `<i class="fas fa-edit mr-1 text-amber-400"></i> Edycja linii: <span class="text-white">${line.name}</span>`;
+            }
+            const btnSave = document.getElementById('btn-save-line');
+            if (btnSave) {
+                btnSave.innerHTML = `💾 Zapisz Zmiany w Linii #${targetId}`;
+            }
+
+            // 4. Wypełniamy pola danymi wybranej linii
+            const nameEl = document.getElementById('new-line-name');
+            const codeEl = document.getElementById('new-line-code');
+            const zoneEl = document.getElementById('new-line-zone');
+            const allergenEl = document.getElementById('new-line-allergen');
+            const ccpEl = document.getElementById('new-line-ccp');
+            const statusEl = document.getElementById('new-line-status');
+            const notesEl = document.getElementById('new-line-notes');
+
+            if (nameEl) nameEl.value = line.name || '';
+            if (codeEl) codeEl.value = line.code || '';
+            if (zoneEl && line.default_zone) zoneEl.value = line.default_zone;
+            if (allergenEl && line.allergen_profile) allergenEl.value = line.allergen_profile;
+            if (ccpEl) ccpEl.value = line.ccp_equipment || '';
+            if (statusEl && line.line_status) statusEl.value = line.line_status;
+            if (notesEl) notesEl.value = line.notes || '';
+
+            isCodeManuallyEdited = true;
+            const badge = document.getElementById('badge-code-auto');
+            if (badge) {
+                badge.textContent = '✏️ Edycja';
+                badge.className = 'text-[9px] text-cyan-400 font-black tracking-wider uppercase';
+            }
+
+            // 5. Płynne przewinięcie do formularza
+            if (form) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (nameEl) nameEl.focus();
+        };
 
         function getStatusBadgeClass(status) {
             const s = (status || '').toUpperCase();
@@ -2400,7 +2496,7 @@
             `).join('');
         }
 
-        async function addNewProductionLine() {
+        async function saveProductionLine() {
             const name = document.getElementById('new-line-name').value.trim();
             const code = document.getElementById('new-line-code').value.trim();
             const default_zone = document.getElementById('new-line-zone').value;
@@ -2411,32 +2507,49 @@
 
             if (!name) return alert("Wpisz nazwę linii!");
 
+            const payload = {
+                name, code, default_zone, allergen_profile, ccp_equipment, line_status, notes
+            };
+
             try {
-                const res = await apiFetch('/api/lines', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        name, code, default_zone, allergen_profile, ccp_equipment, line_status, notes
-                    })
-                });
+                let res;
+                if (editingLineId) {
+                    res = await apiFetch(`/api/lines/${editingLineId}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                } else {
+                    res = await apiFetch('/api/lines', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                }
 
                 if (res && res.ok) {
-                    alert("✅ Zarejestrowano nową linię produkcyjną z profilem sanitarnym!");
-                    document.getElementById('new-line-name').value = '';
-                    document.getElementById('new-line-code').value = '';
-                    document.getElementById('new-line-notes').value = '';
-                    toggleLineAddForm();
+                    const msg = editingLineId 
+                        ? `✅ Pomyślnie zaktualizowano dane linii "${name}"!` 
+                        : "✅ Zarejestrowano nową linię produkcyjną z profilem sanitarnym!";
+                    alert(msg);
+                    resetLineFormToNew();
+                    const form = document.getElementById('form-add-line-container');
+                    if (form) form.classList.add('hidden');
+                    const btn = document.getElementById('btn-toggle-add-line');
+                    if (btn) btn.innerHTML = '<i class="fas fa-plus"></i> Nowa Linia';
                     await loadProductionLines();
                     renderLinesManagerList();
                 } else {
                     const err = await res.json().catch(() => ({}));
-                    alert(`❌ Błąd podczas dodawania linii: ${err.detail || 'Brak uprawnień lub błąd serwera'}`);
+                    alert(`❌ Błąd podczas zapisu linii: ${err.detail || 'Brak uprawnień lub błąd serwera'}`);
                 }
             } catch (e) {
                 console.error("Błąd zapisu linii:", e);
                 alert("❌ Błąd połączenia podczas zapisywania linii.");
             }
         }
+        window.saveProductionLine = saveProductionLine;
+        window.addNewProductionLine = saveProductionLine;
 
         async function openLinePassportModal(lineId) {
             currentPassportLineId = lineId;

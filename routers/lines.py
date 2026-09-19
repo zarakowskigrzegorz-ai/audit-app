@@ -125,3 +125,35 @@ async def delete_line(line_id: int, current_user: dict = Depends(require_auditor
         await conn.execute("UPDATE production_lines SET is_active = 0 WHERE id = ?", (line_id,))
         await conn.commit()
     return {"status": "success"}
+
+@router.put("/{line_id}")
+async def update_line(
+    line_id: int,
+    payload: LineCreateModel,
+    current_user: dict = Depends(require_auditor_or_manager)
+):
+    final_code = payload.code.strip() if payload.code and payload.code.strip() else generate_backend_line_code(payload.name)
+    async with get_db() as conn:
+        try:
+            await conn.execute("""
+                UPDATE production_lines 
+                SET name = ?, code = ?, default_zone = ?, line_status = ?, 
+                    allergen_profile = ?, ccp_equipment = ?, notes = ?
+                WHERE id = ?
+            """, (
+                payload.name.strip(),
+                final_code,
+                payload.default_zone,
+                payload.line_status or "PRODUKCJA (Zwolniona)",
+                payload.allergen_profile or "Dedykowana (Bez alergenów)",
+                payload.ccp_equipment or "Detektor Metali, Sito",
+                payload.notes or "",
+                line_id
+            ))
+            await conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                status_code=400,
+                detail="Linia o podanej nazwie lub kodzie już istnieje w systemie."
+            )
+    return {"status": "success", "message": "Linia została pomyślnie zaktualizowana."}

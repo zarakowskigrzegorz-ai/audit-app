@@ -342,7 +342,7 @@
                     <!-- FORMULARZ DODAWANIA NOWEJ LINII (ROZWIJANY) -->
                     <div id="form-add-line-container" class="hidden bg-slate-950/90 p-4 rounded-2xl border border-amber-500/30 space-y-3 text-xs shadow-inner">
                         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                            <span class="font-black text-amber-300 text-xs uppercase tracking-wider"><i class="fas fa-plus-circle mr-1"></i> Formularz Nowej Linii Produkcyjnej</span>
+                            <span id="form-line-title" class="font-black text-amber-300 text-xs uppercase tracking-wider"><i class="fas fa-plus-circle mr-1"></i> Formularz Nowej Linii Produkcyjnej</span>
                             <button onclick="toggleLineAddForm()" class="text-slate-400 hover:text-white font-bold">&times;</button>
                         </div>
                         
@@ -404,7 +404,7 @@
                             <input type="text" id="new-line-notes" placeholder="np. Max wydajność 120 szt/min, wymagana kalibracja wzorców co 2h" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-300 font-medium outline-none focus:border-amber-400">
                         </div>
 
-                        <button onclick="addNewProductionLine()" class="w-full tile-3d bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-500 text-slate-950 font-black text-xs py-2.5 rounded-xl shadow-lg cursor-pointer active:scale-95 transition-all">
+                        <button id="btn-save-line" onclick="saveProductionLine()" class="w-full tile-3d bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-500 text-slate-950 font-black text-xs py-2.5 rounded-xl shadow-lg cursor-pointer active:scale-95 transition-all">
                             💾 Zapisz Linię w Rejestrze Fabrycznym
                         </button>
                     </div>
@@ -480,8 +480,11 @@
                         </div>
                     </div>
 
-                    <div class="flex justify-end pt-2 border-t border-slate-800">
-                        <button onclick="closeLinePassportModal()" class="tile-3d bg-slate-800 text-slate-300 font-bold text-xs px-4 py-2 rounded-xl">
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+                        <button type="button" onclick="startEditLineFromPassport()" class="tile-3d bg-amber-600 hover:bg-amber-500 text-slate-950 font-black text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-lg active:scale-95 transition cursor-pointer">
+                            <i class="fas fa-edit"></i> Edycja linii
+                        </button>
+                        <button type="button" onclick="closeLinePassportModal()" class="tile-3d bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer">
                             Zamknij Profil
                         </button>
                     </div>
@@ -1521,7 +1524,7 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260919_v9"></script>
+    <script src="/static/js/app.js?v=20260919_v10"></script>
 
 <div id="auditor-profile-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
        <div class="glass-card bg-slate-900 border border-cyan-500/30 p-6 rounded-2xl w-full max-w-md shadow-2xl relative text-left">
