@@ -50,32 +50,25 @@
 <body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto">
 
     <!-- EKRAN LOGOWANIA -->
-    <div id="view-auth" class="my-auto w-full max-w-xl mx-auto space-y-4 view-layer">
-        <div class="tile-3d relative bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-5 text-center border border-slate-700 flex items-center justify-between shadow-2xl">
-            <div class="flex items-center gap-3 text-left">
-                <div class="bg-gradient-to-br from-amber-500 to-yellow-600 p-2.5 rounded-2xl shadow-lg border border-amber-300/40">
-                    <svg class="w-7 h-7 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    <div id="view-auth" class="my-auto w-full max-w-xl mx-auto space-y-5 view-layer">
+        <!-- Pasek górny: logo i nazwa w lewym górnym rogu -->
+        <div class="flex items-center justify-between pb-2">
+            <div class="flex items-center gap-2.5 select-none">
+                <div class="bg-gradient-to-br from-amber-400 to-yellow-600 p-2 rounded-xl text-slate-950 shadow-md">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 </div>
                 <div>
-                    <h1 class="text-base font-black tracking-tight text-white"><span class="text-amber-400">QUALITY</span> AUDIT ENTERPRISE</h1>
-                    <p class="text-[9px] font-bold text-amber-200/70 tracking-wider uppercase">Food Safety & Quality System • IFS v8 / BRCGS v9</p>
+                    <h1 class="text-base font-black tracking-tight leading-none text-white"><span class="text-amber-400">FOOD</span> QUALITY</h1>
+                    <p class="text-[9px] text-slate-400 font-extrabold tracking-wider uppercase">IFS Food v8 Standard</p>
                 </div>
             </div>
-            <span class="text-[9px] bg-slate-800/90 text-slate-300 font-extrabold px-2.5 py-1 rounded-xl border border-slate-700 shadow-inner">v6.3 IFS</span>
-        </div>
-
-        <button onclick="loginWithBiometrics()" class="w-full tile-3d h-14 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 flex items-center justify-center gap-3 cursor-pointer border border-emerald-400/40 shadow-xl group">
-            <div class="p-2 bg-slate-950/40 rounded-xl">
-                <svg class="w-6 h-6 text-emerald-200 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button onclick="loginWithBiometrics()" title="Szybkie logowanie biometryczne (Face ID / Touch ID)" class="tile-3d p-2 bg-slate-900/80 hover:bg-slate-800 text-emerald-400 rounded-xl border border-slate-700/80 flex items-center justify-center transition-colors">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 11c0 2.2-1.8 4-4 4s-4-1.8-4-4 1.8-4 4-4 4 1.8 4 4Z"/>
                     <path d="M19 11c0 3.9-3.1 7-7 7s-7-3.1-7-7 3.1-7 7-7 7 3.1 7 7Z"/>
                 </svg>
-            </div>
-            <div class="text-left">
-                <span class="text-xs font-black text-white block uppercase tracking-wider">Logowanie Biometryczne</span>
-                <span class="text-[9px] font-bold text-emerald-100">Face ID • Touch ID • Windows Hello</span>
-            </div>
-        </button>
+            </button>
+        </div>
 
         <div class="grid grid-cols-2 gap-6 sm:gap-7">
             <!-- KAFEL 3D: KEY USER (MANAGER) -->
