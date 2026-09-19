@@ -668,8 +668,16 @@
                                     </svg>
                                     <span>Rejestr Linii</span>
                                 </button>
-                                <button onclick="event.stopPropagation(); showModule('lines'); toggleLineAddForm();" class="px-2 py-1.5 bg-slate-900 hover:bg-slate-800 rounded-xl text-[10px] font-black text-slate-300 border border-slate-600/40 hover:border-slate-400 transition-transform active:scale-95 flex items-center justify-center gap-1">
-                                    <span>➕ Nowa Linia</span>
+                                <button onclick="event.stopPropagation(); showModule('lines'); toggleLineAddForm();" class="px-2 py-1.5 bg-slate-900 hover:bg-slate-800 rounded-xl text-[10px] font-black text-slate-300 border border-slate-600/40 hover:border-slate-400 transition-transform active:scale-95 flex items-center justify-center gap-1.5">
+                                    <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="1.5" y="4" width="13" height="9" rx="4.5" stroke="currentColor" stroke-width="2" class="text-cyan-300"/>
+                                        <circle cx="5.5" cy="8.5" r="1.6" fill="currentColor" stroke="none" class="text-cyan-300"/>
+                                        <circle cx="10.5" cy="8.5" r="1.6" fill="currentColor" stroke="none" class="text-cyan-300"/>
+                                        <path d="M4.5 13 L2.5 19.5" stroke="currentColor" stroke-width="2" class="text-cyan-300"/>
+                                        <path d="M11.5 13 L13.5 19.5" stroke="currentColor" stroke-width="2" class="text-cyan-300"/>
+                                        <path d="M19 6.5v9M14.5 11h9" stroke="#34d399" stroke-width="2.6"/>
+                                    </svg>
+                                    <span>Nowa Linia</span>
                                 </button>
                             </div>
                             <button onclick="event.stopPropagation(); showModule('lines');" class="w-full py-1 px-2 bg-slate-900/90 hover:bg-slate-800 rounded-lg text-[9px] font-black text-slate-300 border border-slate-600/40 hover:border-slate-400 transition-colors flex items-center justify-center gap-1.5">
@@ -862,7 +870,15 @@
                         </div>
                         <div class="flex items-center gap-2">
                             <button onclick="toggleLineAddForm()" id="btn-toggle-add-line" class="tile-3d bg-gradient-to-r from-amber-600 to-yellow-600 text-slate-950 font-black text-[11px] px-3 py-1.5 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer">
-                                <i class="fas fa-plus"></i> Nowa Linia
+                                <svg class="w-4 h-4 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="1.5" y="4" width="13" height="9" rx="4.5" stroke="currentColor" stroke-width="2"/>
+                                    <circle cx="5.5" cy="8.5" r="1.6" fill="currentColor" stroke="none"/>
+                                    <circle cx="10.5" cy="8.5" r="1.6" fill="currentColor" stroke="none"/>
+                                    <path d="M4.5 13 L2.5 19.5" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M11.5 13 L13.5 19.5" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M19 6.5v9M14.5 11h9" stroke="#022c22" stroke-width="2.6"/>
+                                </svg>
+                                <span>Nowa Linia</span>
                             </button>
                             <button onclick="showModule('hub')" class="tile-3d bg-slate-800 text-[11px] px-3 py-1.5 text-slate-300 font-bold rounded-xl border border-slate-700">Wróć</button>
                         </div>
