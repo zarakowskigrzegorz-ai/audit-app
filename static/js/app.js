@@ -1,5 +1,39 @@
+
+        function updateAuditHud(step, title, desc, mode) {
+            const toast = document.getElementById('audit-progress-toast');
+            const box = document.getElementById('audit-progress-box');
+            const spinner = document.getElementById('audit-progress-spinner');
+            const titleEl = document.getElementById('audit-progress-title');
+            const descEl = document.getElementById('audit-progress-desc');
+            if (!toast) return;
+
+            toast.classList.remove('hidden');
+            titleEl.textContent = title;
+            descEl.textContent = desc;
+
+            if (mode === 'loading') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-slate-900/95 border-cyan-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin";
+                spinner.textContent = "";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-cyan-400";
+            } else if (mode === 'success') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-emerald-950/90 border-emerald-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "text-base";
+                spinner.textContent = "✅";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-emerald-400";
+                setTimeout(() => toast.classList.add('hidden'), 3500);
+            } else if (mode === 'alert') {
+                box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-rose-950/90 border-rose-500/60 text-slate-100 min-w-[340px]";
+                spinner.className = "text-base";
+                spinner.textContent = "⚠️";
+                titleEl.className = "text-xs font-black tracking-wider uppercase text-rose-400";
+                setTimeout(() => toast.classList.add('hidden'), 5000);
+            }
+        }
+
         const state = {
-            user_id: 0, auditor_id: "", role: "AUDITOR", line: "", shift: "Zmiana A", zone: "Wysoka Higiena (High Care)",
+            user_id: 0, auditor_id: "", role: "AUDITOR", token: sessionStorage.getItem('quality_audit_token') || "",
+            line: "", shift: "Zmiana A", zone: "Wysoka Higiena (High Care)",
             health_ok: "TAK", dispense_no: "BRAK", glass_plastic_ok: "ZGODNY", allergen_clean_ok: "ZGODNY",
             wood_policy_ok: "ZGODNY", ppe_ok: "ZGODNY", line_status: "Produkcja Ciągła", ccp1_fe_ok: "ZGODNY",
             ccp1_nonfe_ok: "ZGODNY", ccp1_ss_ok: "ZGODNY", ccp1_reject_ok: "ZGODNY", ccp1_bin_locked: "ZGODNY",
@@ -8,6 +42,25 @@
             bhp_hot_cip_ok: "ZGODNY", bhp_evac_ppoz_ok: "ZGODNY", bhp_status: "BRAK ZGŁOSZEŃ", slm_analysis: "",
             selected_period_months: 1, checklist_results: {}, active_audit_type: "HACCP"
         };
+
+        // Centralny bezpieczny klient HTTP z tokenem Bearer (ISO 27001 A.5.15 / A.5.18)
+        async function apiFetch(url, options = {}) {
+            options = Object.assign({}, options);
+            options.headers = Object.assign({}, options.headers);
+            if (state.token) {
+                options.headers['Authorization'] = `Bearer ${state.token}`;
+            }
+            const res = await fetch(url, options);
+            if (res.status === 401 || res.status === 403) {
+                const data = await res.clone().json().catch(() => ({}));
+                const detail = data.detail || '';
+                if (detail.includes("Sesja wygasła") || detail.includes("Wymagana autoryzacja") || detail.includes("Brak tokenu")) {
+                    alert("⚠️ Sesja wygasła lub brak autoryzacji (ISO 27001). Zaloguj się ponownie.");
+                    logout();
+                }
+            }
+            return res;
+        }
 
         let currentCalDate = new Date();
         let miniCalDate = new Date();
@@ -23,12 +76,24 @@
         function showModule(modId, pushToHistory = true) {
             document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
             
+            // Jeśli rola to AUDYTOR i wywołano 'hub', domyślnie otwórz kalendarz
+            if (modId === 'hub' && state.role === 'AUDITOR') {
+                modId = 'calendar';
+            }
+
             let targetId = modId;
-            if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor'; }
+            if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'view-calendar'; }
             else if (modId === 'audit-main') { targetId = 'view-audit-main'; }
             else if (!modId.startsWith('view-') && !modId.startsWith('hub-')) { targetId = 'view-' + modId; }
 
-            const target = document.getElementById(targetId);
+            let target = document.getElementById(targetId);
+            // Fallback zapobiegający czarnemu ekranowi:
+            if (!target) {
+                targetId = state.role === 'MANAGER' ? 'hub-manager' : 'view-calendar';
+                target = document.getElementById(targetId);
+                modId = state.role === 'MANAGER' ? 'hub' : 'calendar';
+            }
+
             if(target) {
                 target.classList.remove('hidden');
                 if(pushToHistory && currentModule !== modId && currentModule !== 'auth') {
@@ -37,21 +102,316 @@
                 }
                 currentModule = modId;
             }
+
+            // Zarządzanie widocznością głównego formularza audytu
+            const auditForm = document.getElementById('view-audit-form');
+            if (auditForm) {
+                if (modId === 'audit-main') {
+                    auditForm.classList.remove('hidden');
+                } else {
+                    auditForm.classList.add('hidden');
+                }
+            }
+
             updateDockButtons();
             
+            // Obsługa pionowego menu audytora
+            const audSidebar = document.getElementById('auditor-sidebar-menu');
+            if (audSidebar) {
+                if (state.role === 'AUDITOR' && modId !== 'audit-main' && modId !== 'auth') {
+                    audSidebar.classList.remove('hidden');
+                    updateAuditorSidebarActiveTile(modId);
+                } else {
+                    audSidebar.classList.add('hidden');
+                }
+            }
+
+            // Odświeżanie na żywo przy powrocie do Dashboardu / Hubu
+            if(modId === 'hub' && state.role === 'MANAGER') {
+                document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
+                const hubEl = document.getElementById('hub-manager');
+                if (hubEl) hubEl.classList.remove('hidden');
+                try {
+                    if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
+                } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
+            }
             if(modId === 'calendar') loadScheduleAndRender();
             if(modId === 'auditors') renderAuditorsList();
             if(modId === 'lines') renderLinesManagerList();
             if(modId === 'manager-results') { loadAuditResults(); loadManagerEditRequests(); }
             if(modId === 'auditor-history') loadAuditorHistory();
+            if(modId === 'agent') syncAgentLineSelector();
+            if(modId === 'faq') loadInlineFaq();
 
             updateTopNavActiveState(modId);
         }
 
+        function updateAuditorSidebarActiveTile(modId) {
+            const tiles = {
+                'calendar': document.getElementById('aud-tile-calendar'),
+                'auditor-history': document.getElementById('aud-tile-history'),
+                'faq': document.getElementById('aud-tile-faq'),
+                'agent': document.getElementById('aud-tile-agent')
+            };
+
+            const inactiveClass = "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-slate-800 bg-slate-900/80 hover:bg-slate-850 hover:border-slate-700 shadow-md text-slate-400 group";
+            
+            const activeClasses = {
+                'calendar': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-blue-400/50 bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 shadow-xl shadow-blue-500/25 ring-2 ring-blue-400/50 text-white scale-[1.01]",
+                'auditor-history': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-orange-400/50 bg-gradient-to-br from-orange-600 via-amber-700 to-slate-900 shadow-xl shadow-orange-500/25 ring-2 ring-orange-400/50 text-white scale-[1.01]",
+                'faq': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-emerald-400/50 bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 shadow-xl shadow-emerald-500/25 ring-2 ring-emerald-400/50 text-white scale-[1.01]",
+                'agent': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-indigo-400/50 bg-gradient-to-br from-purple-600 via-indigo-700 to-slate-900 shadow-xl shadow-indigo-500/25 ring-2 ring-indigo-400/50 text-white scale-[1.01]"
+            };
+
+            for (const [key, el] of Object.entries(tiles)) {
+                if (!el) continue;
+                if (key === modId) {
+                    el.className = activeClasses[key] || activeClasses['calendar'];
+                    const ind = el.querySelector('.aud-tile-indicator');
+                    if (ind) ind.classList.remove('opacity-0');
+                } else {
+                    el.className = inactiveClass;
+                    const ind = el.querySelector('.aud-tile-indicator');
+                    if (ind) ind.classList.add('opacity-0');
+                }
+            }
+        }
+
+        let currentInlineFaqCat = 'ALL';
+        let activeInlineGuidelineId = null;
+        let inlineFilteredList = [];
+
+        async function loadInlineFaq() {
+            if (typeof CHECKLIST_GUIDELINES === 'undefined' || !Array.isArray(CHECKLIST_GUIDELINES) || CHECKLIST_GUIDELINES.length === 0) {
+                try {
+                    const res = await fetch('/api/checklist/guidelines');
+                    if (res.ok) {
+                        const data = await res.json();
+                        window.CHECKLIST_GUIDELINES = data;
+                        if (typeof CHECKLIST_GUIDELINES !== 'undefined') CHECKLIST_GUIDELINES = data;
+                    }
+                } catch(e) { console.error('Błąd pobierania bazy wiedzy:', e); }
+            }
+
+            const items = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+            if (!activeInlineGuidelineId && items.length > 0) {
+                activeInlineGuidelineId = items[0].id;
+            }
+
+            updateInlineFaqCounts();
+            filterInlineFaq(false);
+        }
+
+        function updateInlineFaqCounts() {
+            const items = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+            const counts = { ALL: items.length, KO_ONLY: 0, CCP: 0, GMP: 0, GHP: 0, FOREIGN_MATTER: 0 };
+            items.forEach(item => {
+                if (item.risk_level === 'KO') counts.KO_ONLY++;
+                if (counts[item.category] !== undefined) counts[item.category]++;
+            });
+            for (let k in counts) {
+                const el = document.getElementById(`inline-count-${k}`);
+                if (el) el.innerText = counts[k];
+            }
+        }
+
+        function setInlineFaqCategory(cat, btn) {
+            currentInlineFaqCat = cat;
+            document.querySelectorAll('.inline-faq-cat-btn').forEach(b => {
+                b.className = 'inline-faq-cat-btn w-full text-left px-3 py-2 rounded-xl text-[11px] font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 flex items-center justify-between transition cursor-pointer';
+            });
+            if (btn) {
+                btn.className = 'inline-faq-cat-btn w-full text-left px-3 py-2 rounded-xl text-[11px] font-black bg-emerald-500 text-slate-950 flex items-center justify-between transition cursor-pointer shadow-md shadow-emerald-500/20';
+            }
+            filterInlineFaq(true);
+        }
+
+        function filterInlineFaq(autoSelectFirst = false) {
+            const search = (document.getElementById('inlineFaqSearchInput')?.value || '').toLowerCase();
+            const allItems = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+            inlineFilteredList = allItems.filter(item => {
+                const matchCat = (currentInlineFaqCat === 'ALL') || 
+                                 (currentInlineFaqCat === 'KO_ONLY' ? item.risk_level === 'KO' : item.category === currentInlineFaqCat);
+                const matchSearch = (item.title || '').toLowerCase().includes(search) || 
+                                    (item.question || '').toLowerCase().includes(search) || 
+                                    (item.criteria || '').toLowerCase().includes(search) ||
+                                    (item.ifs_clause || '').toLowerCase().includes(search);
+                return matchCat && matchSearch;
+            });
+
+            if (autoSelectFirst && inlineFilteredList.length > 0) {
+                activeInlineGuidelineId = inlineFilteredList[0].id;
+            } else if (inlineFilteredList.length > 0 && !inlineFilteredList.some(i => i.id === activeInlineGuidelineId)) {
+                activeInlineGuidelineId = inlineFilteredList[0].id;
+            }
+
+            renderInlineFaqList();
+            renderInlineFaqDetail();
+        }
+
+        function selectInlineGuideline(id) {
+            activeInlineGuidelineId = id;
+            renderInlineFaqList();
+            renderInlineFaqDetail();
+        }
+
+        function renderInlineFaqList() {
+            const container = document.getElementById('inlineFaqItemListContainer');
+            if (!container) return;
+
+            if (inlineFilteredList.length === 0) {
+                container.innerHTML = '<p class="text-center py-6 text-slate-500 text-xs font-bold">Brak wyników</p>';
+                return;
+            }
+
+            container.innerHTML = inlineFilteredList.map(item => {
+                const isActive = item.id === activeInlineGuidelineId;
+                const activeClass = isActive 
+                    ? 'bg-slate-800 border-emerald-500/60 shadow-lg ring-1 ring-emerald-500/40 text-white' 
+                    : 'bg-slate-900/50 border-slate-800/80 hover:bg-slate-850 hover:border-slate-700 text-slate-300';
+
+                const riskBadge = item.risk_level === 'KO' 
+                    ? '<span class="px-2 py-0.5 text-[8.5px] font-black rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 uppercase">KO</span>' 
+                    : item.risk_level === 'MAJOR' 
+                    ? '<span class="px-2 py-0.5 text-[8.5px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">Major</span>' 
+                    : '<span class="px-2 py-0.5 text-[8.5px] font-black rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">Minor</span>';
+
+                return `
+                    <div onclick="selectInlineGuideline('${item.id}')" 
+                         class="p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col gap-1 ${activeClass}">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[10px] font-black text-slate-400 font-mono">${item.id}</span>
+                            ${riskBadge}
+                        </div>
+                        <p class="text-xs font-black line-clamp-2 leading-snug">${item.title}</p>
+                        <span class="text-[9.5px] text-slate-400 font-mono mt-0.5 truncate">${item.ifs_clause || ''}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderInlineFaqDetail() {
+            const panel = document.getElementById('inlineFaqDetailPanel');
+            if (!panel) return;
+
+            const items = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+            const item = items.find(g => g.id === activeInlineGuidelineId);
+            if (!item) {
+                panel.innerHTML = '<div class="h-full flex items-center justify-center text-slate-500 text-xs">Wybierz punkt z listy po lewej stronie</div>';
+                return;
+            }
+
+            const riskBadge = item.risk_level === 'KO' 
+                ? '<span class="px-2.5 py-0.5 text-[9px] font-black rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 uppercase">KO (Knock-Out)</span>' 
+                : item.risk_level === 'MAJOR' 
+                ? '<span class="px-2.5 py-0.5 text-[9px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">Major</span>' 
+                : '<span class="px-2.5 py-0.5 text-[9px] font-black rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">Minor</span>';
+
+            panel.innerHTML = `
+                <div class="space-y-4">
+                    <!-- Nagłówek punktu -->
+                    <div class="border-b border-slate-800 pb-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 text-[10px] font-black rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30">${item.category_label || item.category}</span>
+                                ${riskBadge}
+                                <span class="text-xs font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">${item.id}</span>
+                            </div>
+                            <span class="text-xs font-mono text-cyan-400/90 bg-cyan-950/30 px-2.5 py-1 rounded-lg border border-cyan-500/30">${item.ifs_clause || 'IFS Food v8'}</span>
+                        </div>
+                        <h1 class="text-lg sm:text-xl font-black text-white">${item.title}</h1>
+                    </div>
+
+                    <!-- Pytanie audytowe -->
+                    <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 flex items-start space-x-3">
+                        <span class="text-emerald-400 font-black text-xl leading-none">„</span>
+                        <div class="flex-1">
+                            <p class="text-[10px] text-slate-400 uppercase font-black tracking-wider mb-1">Pytanie z formularza audytowego</p>
+                            <p class="text-xs sm:text-sm text-slate-100 font-semibold leading-relaxed">${item.question}</p>
+                        </div>
+                    </div>
+
+                    <!-- Wyjaśnienie 1: Kryterium Zgodności -->
+                    <div class="bg-emerald-950/20 p-4 sm:p-5 rounded-2xl border border-emerald-500/25 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]"></span>
+                                Kryterium Zgodności (Standard Zakładowy)
+                            </h3>
+                            <span class="text-[10px] font-mono text-emerald-300 bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-500/30">WYMÓG AUDYTOWY</span>
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">${item.criteria}</p>
+                        ${item.correct_action ? `
+                            <div class="pt-2.5 border-t border-emerald-500/15 text-xs text-emerald-300 flex items-center gap-2">
+                                <strong class="text-white font-bold">Stan pożądany na linii:</strong> <span>${item.correct_action}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Wyjaśnienie 2: Postępowanie Awaryjne & CAPA -->
+                    <div class="bg-rose-950/20 p-4 sm:p-5 rounded-2xl border border-rose-500/25 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-black text-rose-400 uppercase tracking-wider flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.8)]"></span>
+                                Odchylenie, Kwarantanna & Postępowanie Korekcyjne
+                            </h3>
+                            <span class="text-[10px] font-mono text-rose-300 bg-rose-900/40 px-2 py-0.5 rounded border border-rose-500/30">PROCEDURA AWARYJNA</span>
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">${item.deviation_action || 'Brak zdefiniowanego odchylenia'}</p>
+                        <div class="pt-2.5 border-t border-rose-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                            <div class="text-rose-300">
+                                <strong class="text-white font-bold">Klauzula normy:</strong> ${item.ifs_clause || 'IFS Food v8'}
+                            </div>
+                            ${item.deviation_action ? `
+                                <button type="button" onclick="navigator.clipboard.writeText('${item.deviation_action.replace(/'/g, "\\'")}'); alert('Skopiowano działanie CAPA do schowka!');" 
+                                        class="px-3 py-1.5 bg-rose-900/50 hover:bg-rose-800 text-rose-200 rounded-xl text-xs font-bold border border-rose-500/30 transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                    Kopiuj do CAPA
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function openFaqForGuideline(searchClauseOrTitle) {
+            showModule('faq');
+            if (typeof loadInlineFaq === 'function') {
+                await loadInlineFaq();
+            }
+            const searchInput = document.getElementById('inlineFaqSearchInput');
+            if (searchInput && searchClauseOrTitle) {
+                // Szukamy pasującego punktu w CHECKLIST_GUIDELINES
+                const items = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+                const term = searchClauseOrTitle.toLowerCase();
+                const matched = items.find(i => 
+                    (i.ifs_clause && i.ifs_clause.toLowerCase().includes(term)) ||
+                    (i.title && i.title.toLowerCase().includes(term)) ||
+                    (i.id && i.id.toLowerCase() === term)
+                );
+
+                if (matched) {
+                    currentInlineFaqCat = 'ALL';
+                    searchInput.value = matched.id;
+                    activeInlineGuidelineId = matched.id;
+                } else {
+                    searchInput.value = searchClauseOrTitle;
+                }
+                filterInlineFaq(true);
+            }
+        }
+
         function navGoBack() {
             if(navHistory.length > 0) {
+                const prev = navHistory.pop();
                 navForward.push(currentModule);
-                showModule(navHistory.pop(), false);
+                showModule(prev, false);
+            } else {
+                // Jeśli historia jest pusta, zawsze wracaj bezpiecznie do Dashboardu (Hub)
+                if (currentModule !== 'hub') {
+                    showModule('hub', false);
+                }
             }
         }
 
@@ -63,10 +423,17 @@
         }
 
         function navGoHome() {
-            if (currentModule !== 'hub') {
-                navHistory.push(currentModule);
-                navForward = [];
-                showModule('hub', false);
+            navHistory.push(currentModule);
+            navForward = [];
+            document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
+            if (state.role === 'AUDITOR') {
+                showModule('calendar', false);
+            } else {
+                const target = document.getElementById('hub-manager');
+                if (target) target.classList.remove('hidden');
+                currentModule = 'hub';
+                updateDockButtons();
+                updateTopNavActiveState('hub');
             }
         }
 
@@ -82,7 +449,7 @@
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('ios-tab-active');
             });
-            if (modId === 'hub') document.getElementById('tag-hub')?.classList.add('ios-tab-active');
+            if (modId === 'hub' || (state.role === 'AUDITOR' && modId === 'calendar')) document.getElementById('tag-hub')?.classList.add('ios-tab-active');
             if (modId === 'calendar') document.getElementById('tag-calendar')?.classList.add('ios-tab-active');
             if (modId === 'agent') document.getElementById('tag-agent')?.classList.add('ios-tab-active');
         }
@@ -179,17 +546,32 @@
         }
 
         function validateWebAuthnEnvironment() {
-            if (!window.isSecureContext) { alert("⚠️ WebAuthn wymaga bezpiecznego połączenia (localhost lub HTTPS)."); return false; }
-            if (!window.PublicKeyCredential) { alert("⚠️ Twoja przeglądarka nie wspiera logowania biometrycznego."); return false; }
+            // WebAuthn wymaga domeny — IP (127.0.0.1) jest niedozwolone jako rpId
+            // Przekieruj automatycznie na localhost jeśli użytkownik otworzył przez IP
+            if (location.hostname === '127.0.0.1' || location.hostname === '::1') {
+                const newUrl = location.href.replace(location.hostname, 'localhost');
+                alert("ℹ️ Biometria wymaga adresu 'localhost' zamiast IP.\n\nPrzeglądarka zostanie przekierowana automatycznie na:\n" + newUrl);
+                location.href = newUrl;
+                return false;
+            }
+            if (!window.isSecureContext && location.hostname !== 'localhost') {
+                alert("⚠️ Logowanie biometryczne wymaga bezpiecznego połączenia (HTTPS) lub uruchamiania z localhost.");
+                return false;
+            }
+            if (!window.PublicKeyCredential) {
+                alert("⚠️ Twoja przeglądarka nie wspiera logowania biometrycznego.\nSpróbuj Chrome, Safari lub Edge na urządzeniu z systemem iOS/macOS/Windows.");
+                return false;
+            }
             return true;
         }
 
         async function registerCurrentDeviceBiometrics() {
-            if (!state.user_id) return alert("Zaloguj się najpierw kodem PIN!");
+            if (!state.user_id) return alert("⚠️ Zaloguj się najpierw kodem PIN, a następnie kliknij ikonę biometrii w nagłówku!");
             if (!validateWebAuthnEnvironment()) return;
 
             try {
                 const resChall = await fetch(`/api/auth/biometric/register-challenge?user_id=${state.user_id}`, { method: 'POST' });
+                if (!resChall.ok) { alert("❌ Błąd pobierania wyzwania rejestracji."); return; }
                 const { challenge } = await resChall.json();
                 const enc = new TextEncoder();
 
@@ -197,46 +579,113 @@
                     publicKey: {
                         challenge: base64ToBuffer(challenge),
                         rp: { name: "Quality Audit IFS" },
-                        user: { id: enc.encode(String(state.user_id)), name: state.auditor_id, displayName: state.auditor_id },
-                        pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
-                        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-                        timeout: 60000, attestation: "none"
+                        user: { id: enc.encode(String(state.user_id)), name: state.auditor_id || 'auditor', displayName: state.auditor_id || 'Audytor' },
+                        pubKeyCredParams: [
+                            { alg: -7, type: "public-key" },
+                            { alg: -257, type: "public-key" }
+                        ],
+                        authenticatorSelection: {
+                            authenticatorAttachment: "platform",
+                            userVerification: "required",
+                            residentKey: "preferred"
+                        },
+                        timeout: 60000,
+                        attestation: "none",
+                        excludeCredentials: []
                     }
                 });
 
-                if (!cred) return;
+                if (!cred) { alert("ℹ️ Rejestracja biometryczna anulowana."); return; }
                 const credId = bufferToBase64(cred.rawId);
+                
+                if (!credId || credId.length < 8) {
+                    alert("❌ Nie udało się uzyskać prawidłowego identyfikatora biometrycznego.");
+                    return;
+                }
+
                 const resVerify = await fetch('/api/auth/biometric/register-verify', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: state.user_id, credential_id: credId })
                 });
 
-                if (resVerify.ok) alert("✅ Zarejestrowano Face ID / Touch ID!");
-                else alert("❌ Błąd zapisu poświadczenia.");
-            } catch(e) { alert("❌ Anulowano biometrię."); }
+                if (resVerify.ok) {
+                    alert("✅ Pomyślnie zarejestrowano biometrię (Face ID / Touch ID / Windows Hello)!\n\nOd tej chwili możesz logować się przyciskiem biometrycznym na ekranie logowania.");
+                } else {
+                    const err = await resVerify.json().catch(() => ({}));
+                    alert("❌ Błąd zapisu poświadczenia: " + (err.detail || "Nieznany błąd"));
+                }
+            } catch(e) {
+                if (e.name === 'NotAllowedError') {
+                    alert("ℹ️ Logowanie biometryczne anulowane przez użytkownika lub urządzenie odrzuciło żądanie.");
+                } else if (e.name === 'InvalidStateError') {
+                    alert("ℹ️ To urządzenie jest już zarejestrowane dla tego konta.");
+                } else {
+                    alert("❌ Błąd biometrii: " + e.message);
+                }
+            }
         }
 
         async function loginWithBiometrics() {
             if (!validateWebAuthnEnvironment()) return;
+            
+            // Sprawdź wsparcie platformy przed próbą
+            try {
+                const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                if (!available) {
+                    alert("ℹ️ To urządzenie nie posiada platformowego czytnika biometrycznego (Face ID / Touch ID / Windows Hello).\n\nZaloguj się kodem PIN.");
+                    return;
+                }
+            } catch(e) { /* kontynuuj — starsze przeglądarki nie mają tej metody */ }
+
             try {
                 const resChallenge = await fetch('/api/auth/biometric/login-challenge');
+                if (!resChallenge.ok) { alert("❌ Błąd serwera podczas pobierania wyzwania."); return; }
                 const { challenge } = await resChallenge.json();
 
                 const assertion = await navigator.credentials.get({
-                    publicKey: { challenge: base64ToBuffer(challenge), timeout: 60000, userVerification: "required" }
+                    publicKey: {
+                        challenge: base64ToBuffer(challenge),
+                        timeout: 60000,
+                        userVerification: "required",
+                        allowCredentials: []
+                    }
                 });
-                if (!assertion) return;
+                if (!assertion) { alert("ℹ️ Logowanie biometryczne anulowane."); return; }
 
                 const credId = bufferToBase64(assertion.rawId);
+                if (!credId || credId.length < 8) {
+                    alert("❌ Nieprawidłowy identyfikator biometryczny. Spróbuj zarejestrować urządzenie ponownie.");
+                    return;
+                }
+
                 const resVerify = await fetch('/api/auth/biometric/login-verify', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ credential_id: credId })
                 });
 
-                if (!resVerify.ok) return alert("❌ Urządzenie nie jest powiązane. Zaloguj się PIN-em i dodaj biometrię.");
+                if (!resVerify.ok) {
+                    const err = await resVerify.json().catch(() => ({}));
+                    if (resVerify.status === 401) {
+                        alert("❌ To urządzenie nie jest powiązane z żadnym kontem.\n\nZaloguj się PIN-em i kliknij ikonę biometrii (🔒 w nagłówku), aby zarejestrować urządzenie.");
+                    } else {
+                        alert("❌ Błąd logowania: " + (err.detail || "Nieznany błąd"));
+                    }
+                    return;
+                }
                 const user = await resVerify.json();
                 applyLoginUser(user);
-            } catch (err) { alert("ℹ️ Zaloguj się kodem PIN, a następnie powiąż Face ID/Odcisk ikoną w nagłówku."); }
+            } catch (err) {
+                console.error("WebAuthn Login Error:", err);
+                if (err.name === 'NotAllowedError') {
+                    alert("ℹ️ Logowanie biometryczne anulowane lub brak zarejestrowanego klucza dla tej witryny.\n\nZaloguj się najpierw kodem PIN, a następnie powiąż urządzenie ikoną odcisku/twarzy w nagłówku.");
+                } else if (err.name === 'SecurityError') {
+                    alert(`⚠️ Błąd bezpieczeństwa WebAuthn (${err.message}).\n\nUpewnij się, że adres w przeglądarce to http://localhost:8000 (a nie adres IP np. 192.168.x.x lub 127.0.0.1).`);
+                } else {
+                    alert("ℹ️ Zaloguj się kodem PIN, a następnie powiąż Face ID/Odcisk ikoną w nagłówku aplikacji.\n\n(" + (err.message || err.name) + ")");
+                }
+            }
         }
 
         function openPinPrompt(role) {
@@ -287,6 +736,10 @@
             state.user_id = user.id;
             state.auditor_id = user.full_name.trim();
             state.role = user.role;
+            if (user.access_token) {
+                state.token = user.access_token;
+                sessionStorage.setItem('quality_audit_token', user.access_token);
+            }
 
             document.getElementById('display-auditor').innerText = state.auditor_id;
             document.getElementById('display-role').innerText = state.role === "MANAGER" ? "👑 KEY USER (MANAGER)" : "👤 AUDYTOR";
@@ -312,6 +765,8 @@
 
         function logout() {
             state.user_id = 0;
+            state.token = "";
+            sessionStorage.removeItem('quality_audit_token');
             document.getElementById('main-app').classList.add('hidden');
             document.getElementById('bottom-dock').classList.add('hidden');
             document.getElementById('view-auth').classList.remove('hidden');
@@ -331,18 +786,17 @@
         async function renderAuditorsList() {
             const container = document.getElementById('auditors-list-container');
             if (!container) return;
-            const res = await fetch(`/api/users?role=${state.role}`);
+            const res = await apiFetch(`/api/users`);
             if (!res.ok) return;
-            const users = await res.json();
-
+            const data = await res.json();
+            const users = Array.isArray(data) ? data : (data.users || []);
             container.innerHTML = users.map(u => `
-                <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                <div class="bg-slate-900 p-2 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
                     <div>
-                        <span class="font-bold text-white block">${u.full_name} <span class="text-[9px] text-slate-400 font-mono">(${u.pin})</span></span>
-                        <span class="text-[9px] text-cyan-300 font-extrabold block">${u.qualifications.join(', ')}</span>
-                        ${u.notes ? `<span class="text-[9px] text-slate-400 italic block mt-0.5"><i class="fas fa-sticky-note mr-1"></i>${u.notes}</span>` : ''}
+                        <span class="font-bold text-white block">${u.full_name}</span>
+                        <span class="text-[9px] text-cyan-300 font-extrabold">${(u.qualifications || []).join(', ')}</span>
                     </div>
-                    ${u.pin !== '9999' ? `<button onclick="deleteAuditor(${u.id})" class="tile-3d bg-rose-950 border border-rose-500/50 text-rose-300 px-2 py-1 text-[9px] font-bold">Usuń</button>` : '<span class="text-[9px] text-amber-400 font-bold">Kierownik</span>'}
+                    ${u.role !== 'MANAGER' ? `<div class="flex items-center gap-2"><button onclick="showAuditorProfileModal(${JSON.stringify(u).replace(/"/g, '&quot;')})" class="px-3 py-1 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 rounded-full text-[10px] font-bold transition flex items-center gap-1 shadow-sm">👤 Profil</button><button onclick="deleteAuditor(${u.id})" class="tile-3d bg-rose-950 border border-rose-500/50 text-rose-300 px-2 py-1 text-[9px] font-bold rounded-full">Usuń</button></div>` : '<span class="text-[9px] text-amber-400 font-bold">Kierownik</span>'}
                 </div>
             `).join('');
         }
@@ -350,10 +804,8 @@
         async function addNewAuditor() {
             const nameEl = document.getElementById('new-auditor-name');
             const pinEl = document.getElementById('new-auditor-pin');
-            const notesEl = document.getElementById('new-auditor-notes');
             const full_name = nameEl.value.trim();
             const pin = pinEl.value.trim();
-            const notes = notesEl ? notesEl.value.trim() : "";
             if (!full_name || !pin) return alert("Wprowadź imię i nazwisko oraz kod PIN!");
 
             const quals = [];
@@ -361,14 +813,14 @@
             if (document.getElementById('new-qual-gmp').checked) quals.push('GMP');
             if (document.getElementById('new-qual-ghp').checked) quals.push('GHP');
 
-            const res = await fetch(`/api/users?role=${state.role}`, {
+            const res = await apiFetch(`/api/users`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ pin, full_name, role: 'AUDITOR', qualifications: quals, notes })
+                body: JSON.stringify({ pin, full_name, role: 'AUDITOR', qualifications: quals })
             });
 
             if (res.ok) {
                 alert("✅ Dodano audytora!");
-                nameEl.value = ""; pinEl.value = ""; if(notesEl) notesEl.value = "";
+                nameEl.value = ""; pinEl.value = "";
                 await renderAuditorsList();
             } else {
                 const err = await res.json();
@@ -378,8 +830,13 @@
 
         async function deleteAuditor(userId) {
             if (!confirm("Czy na pewno chcesz usunąć tego audytora?")) return;
-            const res = await fetch(`/api/users/${userId}?role=${state.role}`, { method: 'DELETE' });
-            if (res.ok) await renderAuditorsList();
+            const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
+            if (res.ok) {
+                await renderAuditorsList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`❌ ${err.detail || 'Błąd usuwania użytkownika'}`);
+            }
         }
 
         function getPolishHolidays(year) {
@@ -394,12 +851,77 @@
         async function loadScheduleAndRender() {
             try {
                 const res = await fetch(`/api/schedule?auditor=${encodeURIComponent(state.auditor_id)}&role=${state.role}`);
-                schedulesData = await res.json();
+                const allSchedules = await res.json();
+                // Audytor widzi tylko zaplanowane (wykonane znikaja do historii), Manager widzi calosc
+                if (state.role !== 'MANAGER') {
+                    schedulesData = allSchedules.filter(s => s.status !== 'WYKONANY');
+                } else {
+                    schedulesData = allSchedules;
+                }
                 renderCalendar();
             } catch(e) { schedulesData = []; }
         }
 
-        function changeMonth(delta) { currentCalDate.setMonth(currentCalDate.getMonth() + delta); renderCalendar(); }
+        function changeMonth(delta) {
+            currentCalDate.setDate(1);
+            currentCalDate.setMonth(currentCalDate.getMonth() + delta);
+            renderCalendar();
+        }
+
+                let activeSelectedFilter = null;
+
+        function selectSingleFilter(key) {
+            if (activeSelectedFilter === key) {
+                activeSelectedFilter = null;
+            } else {
+                activeSelectedFilter = key;
+            }
+
+            const map = {
+                'HACCP': 'btn-tag-haccp',
+                'GMP': 'btn-tag-gmp',
+                'GHP': 'btn-tag-ghp',
+                'WYKONANY': 'btn-tag-done',
+                'SPOZNIONY': 'btn-tag-overdue'
+            };
+
+            Object.entries(map).forEach(([k, id]) => {
+                const b = document.getElementById(id);
+                if (!b) return;
+                if (activeSelectedFilter === k) {
+                    b.classList.remove('opacity-40');
+                    b.classList.add('ring-2', 'ring-white', 'brightness-125');
+                } else {
+                    b.classList.add('opacity-40');
+                    b.classList.remove('ring-2', 'ring-white', 'brightness-125');
+                }
+            });
+
+            renderCalendar();
+        }
+
+        function formatAuditorBadge(auditor) {
+            if (!auditor) return "Audytor";
+            const clean = auditor.replace(/\s*\(.*?\)/g, "").trim();
+            if (!clean) return "Audytor";
+            if (clean.toLowerCase().includes("administrator")) return "Admin";
+            
+            const parts = clean.split(/\s+/);
+            if (parts.length === 1) return parts[0];
+            
+            // Jeśli pierwszy człon to inicjał z kropką: np. "G. Zarakowski"
+            if (parts[0].length <= 2 && parts[0].includes('.')) {
+                return `${parts[0]} ${parts[1]}`;
+            }
+            // Jeśli ostatni człon to już inicjał: np. "Stefaw W." lub "Stefan W"
+            const lastPart = parts[parts.length - 1];
+            if (lastPart.length <= 2) {
+                const init = lastPart.endsWith('.') ? lastPart : `${lastPart}.`;
+                return `${parts[0]} ${init}`;
+            }
+            // Imię + pierwsza litera nazwiska: "Grzegorz Zarakowski" -> "Grzegorz Z."
+            return `${parts[0]} ${lastPart.charAt(0)}.`;
+        }
 
         function renderCalendar() {
             const year = currentCalDate.getFullYear(), month = currentCalDate.getMonth();
@@ -423,13 +945,35 @@
                     } else {
                         const currentFullDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(dateIter).padStart(2, '0')}`;
                         const holidayName = holidays[currentFullDate], isToday = currentFullDate === todayStr;
-                        const dayAudits = schedulesData.filter(s => s.scheduled_date === currentFullDate);
+                        let dayAudits = schedulesData.filter(s => s.scheduled_date === currentFullDate);
+                        if (state.role !== 'MANAGER') {
+                            dayAudits = dayAudits.filter(s => s.status !== 'WYKONANY');
+                        }
+
+                        // Ścisły filtr wyłączny: jeśli nic nie jest wciśnięte -> brak audytów
+                        dayAudits = dayAudits.filter(a => {
+                            if (!activeSelectedFilter) return false;
+                            const aType = (a.audit_type || "HACCP").toUpperCase().trim();
+                            const isCompleted = (a.status === 'WYKONANY');
+                            const isOverdue = (!isCompleted && currentFullDate < todayStr);
+
+                            if (activeSelectedFilter === 'HACCP') return aType === 'HACCP';
+                            if (activeSelectedFilter === 'GMP') return aType === 'GMP';
+                            if (activeSelectedFilter === 'GHP') return aType === 'GHP';
+                            if (activeSelectedFilter === 'WYKONANY') return isCompleted;
+                            if (activeSelectedFilter === 'SPOZNIONY') return isOverdue;
+                            return false;
+                        });
                         
                         let badgeHtml = "";
                         dayAudits.forEach(a => {
-                            const aType = (a.audit_type || "HACCP").toUpperCase();
+                            const aType = (a.audit_type || "HACCP").toUpperCase().trim();
                             const isCompleted = (a.status === 'WYKONANY');
                             const isOverdue = (!isCompleted && currentFullDate < todayStr);
+
+                            // Formatowanie: rodzaj audytu oraz imię audytora bądź inicjały
+                            const cleanAud = (a.lead_auditor || "Audytor").replace(/\s*\(.*?\)/g, "").trim();
+                            const auditorDisplay = formatAuditorBadge(cleanAud);
 
                             let badgeColor = aType === "GMP" ? "bg-purple-600 border-purple-400" :
                                              aType === "GHP" ? "bg-cyan-600 border-cyan-400" : "bg-emerald-600 border-emerald-400";
@@ -440,8 +984,15 @@
                             badgeHtml += `
                                 <div draggable="true" ondragstart="event.stopPropagation(); event.dataTransfer.setData('text/plain', ${a.id});"
                                      onclick="event.stopPropagation(); state.role === 'MANAGER' ? openMgrModal(${a.id}) : openAudModal(${a.id});" 
-                                     class="${badgeStyle} border text-[7px] font-extrabold px-1.5 py-0.5 rounded truncate shadow flex items-center justify-between gap-1 mb-0.5 cursor-pointer relative z-10 hover:brightness-110">
-                                    <span>${isOverdue ? '🔴 ' : ''}${aType}:${a.line.split(' ')[0]} • ${a.lead_auditor.split(' ')[0]}${isCompleted ? ' ✓' : ''}</span>
+                                     title="${aType} • ${cleanAud} (${a.line || ''})"
+                                     class="${badgeStyle} border rounded-lg py-1 px-1.5 sm:px-2 shadow-md flex flex-col justify-center mb-1 cursor-pointer relative z-10 hover:scale-[1.02] transition-transform hover:brightness-110 leading-tight">
+                                    <div class="flex items-center justify-between font-black text-[11px] sm:text-xs uppercase tracking-wider">
+                                        <span>${isOverdue ? '🔴 ' : ''}${aType}</span>
+                                        ${isCompleted ? '<span class="text-emerald-300 font-black text-xs ml-1">✓</span>' : ''}
+                                    </div>
+                                    <div class="text-[10px] sm:text-[11px] font-bold text-white/95 truncate mt-0.5" title="${cleanAud}">
+                                        ${auditorDisplay}
+                                    </div>
                                 </div>
                             `;
                         });
@@ -449,7 +1000,7 @@
                         grid.innerHTML += `
                             <div ondragover="event.preventDefault()" ondrop="handleAuditDrop(event, '${currentFullDate}')"
                                  onclick="if(state.role==='MANAGER'){openManualPlanModal('${currentFullDate}')}" 
-                                 class="cal-day tile-3d ${holidayName ? 'bg-rose-950/30 border-rose-900/50' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1 flex flex-col justify-between cursor-pointer rounded-xl">
+                                 class="cal-day tile-3d ${holidayName ? 'bg-rose-950/30 border-rose-900/50' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1.5 sm:p-2 flex flex-col justify-between cursor-pointer rounded-xl">
                                 <div class="flex justify-between items-start">
                                     <span class="text-[10px] font-extrabold ${holidayName ? 'text-rose-400' : 'text-slate-200'}">${dateIter}</span>
                                     ${holidayName ? `<span class="text-[7px] text-rose-300 truncate max-w-[50px] font-extrabold">🏖️ ${holidayName}</span>` : ''}
@@ -551,33 +1102,55 @@
             if (res.ok) { alert("✅ Audyt zaplanowany!"); closePlanModal(); await loadScheduleAndRender(); }
         }
 
-        function openAutoPlanModal() { document.getElementById('modal-autoplan').classList.remove('hidden'); }
+        function updateAutoPlanPreview() {
+            const mEl = document.getElementById('autoplan-month');
+            const yEl = document.getElementById('autoplan-year');
+            const txtEl = document.getElementById('autoplan-range-text');
+            if (!mEl || !yEl || !txtEl) return;
+
+            const m = parseInt(mEl.value) || (new Date().getMonth() + 1);
+            const y = parseInt(yEl.value) || new Date().getFullYear();
+            const period = state.selected_period_months || 1;
+            const today = new Date();
+            const isCurrentMonth = (y === today.getFullYear() && m === (today.getMonth() + 1));
+            const isPastMonth = (y < today.getFullYear() || (y === today.getFullYear() && m < (today.getMonth() + 1)));
+
+            let startDay = 1;
+            let startM = m;
+            let startY = y;
+
+            if (isCurrentMonth) {
+                startDay = today.getDate();
+            } else if (isPastMonth) {
+                startDay = today.getDate();
+                startM = today.getMonth() + 1;
+                startY = today.getFullYear();
+            }
+
+            const endTotalM = startM + period - 1;
+            const endY = startY + Math.floor((endTotalM - 1) / 12);
+            const endM = ((endTotalM - 1) % 12) + 1;
+            const lastDay = new Date(endY, endM, 0).getDate();
+
+            const pad = (n) => String(n).padStart(2, '0');
+            txtEl.textContent = `${pad(startDay)}.${pad(startM)}.${startY} – ${pad(lastDay)}.${pad(endM)}.${endY}`;
+        }
+
+        function openAutoPlanModal() { 
+            document.getElementById('modal-autoplan').classList.remove('hidden'); 
+            const today = new Date();
+            const mEl = document.getElementById('autoplan-month');
+            const yEl = document.getElementById('autoplan-year');
+            if (mEl && !mEl.value) mEl.value = today.getMonth() + 1;
+            if (yEl && !yEl.value) yEl.value = today.getFullYear();
+            updateAutoPlanPreview();
+        }
         function closeAutoPlanModal() { document.getElementById('modal-autoplan').classList.add('hidden'); }
         function setPlanPeriod(m, btn) {
             state.selected_period_months = m;
             document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('tile-selected'));
             btn.classList.add('tile-selected');
-        }
-
-        async function clearRange() {
-            if (!confirm(`Czy na pewno chcesz usunąć zaplanowane audyty na następne ${state.selected_period_months} miesięcy? Uwaga: Audyty z przeszłości zostaną bezwzględnie zachowane.`)) return;
-            try {
-                const res = await fetch('/api/schedule/clear-range', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ months: state.selected_period_months })
-                });
-                if (res.ok) {
-                    alert("✅ Poprawnie usunięto zaplanowane audyty w wybranym przedziale czasowym.");
-                    closeAutoPlanModal();
-                    await loadScheduleAndRender();
-                } else {
-                    const err = await res.json();
-                    alert("❌ Błąd: " + (err.detail || "Nie udało się usunąć audytów."));
-                }
-            } catch (e) {
-                alert("Błąd połączenia z serwerem.");
-            }
+            updateAutoPlanPreview();
         }
 
         async function runAutoSchedule() {
@@ -593,307 +1166,474 @@
             const payload = {
                 start_year: parseInt(document.getElementById('autoplan-year').value),
                 start_month: parseInt(document.getElementById('autoplan-month').value),
-                period_months: state.selected_period_months,
+                start_day: new Date().getDate(),
+                period_months: state.selected_period_months || 1,
                 lines: lines, audit_types: types,
                 include_weekends: document.getElementById('auto-include-weekends').checked
             };
             const res = await fetch('/api/schedule/auto', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             if (res.ok) {
                 const d = await res.json();
-                alert(`✨ Wygenerowano plan: ${d.count} audytów.`);
+                alert(`✨ Wygenerowano plan: ${d.count} audytów w zakresie ${d.start_date} – ${d.end_date} (bez dat wstecznych).`);
                 closeAutoPlanModal(); showModule('calendar'); await loadScheduleAndRender();
             }
         }
 
-        let currentDetailAuditId = null;
+        let activeManagerResultsTab = 'pending'; // 'pending' (oczekujące w oknie głównym), 'approved' (zatwierdzone), 'rejected' (odrzucone)
+        let cachedManagerAudits = [];
+
+        window.setManagerResultsTab = function(tab) {
+            activeManagerResultsTab = tab;
+            const btnPending = document.getElementById('tab-btn-manager-pending');
+            const btnApproved = document.getElementById('tab-btn-manager-approved');
+            const btnRejected = document.getElementById('tab-btn-manager-rejected');
+
+            const inactiveClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
+            if (btnPending) btnPending.className = inactiveClass;
+            if (btnApproved) btnApproved.className = inactiveClass;
+            if (btnRejected) btnRejected.className = inactiveClass;
+
+            if (tab === 'pending') {
+                if (btnPending) {
+                    btnPending.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            } else if (tab === 'approved') {
+                if (btnApproved) {
+                    btnApproved.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            } else if (tab === 'rejected') {
+                if (btnRejected) {
+                    btnRejected.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-rose-500 text-white shadow-md shadow-rose-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            }
+
+            renderManagerAuditsTable();
+        };
+
+        function renderManagerAuditsTable() {
+            const tbody = document.getElementById('manager-results-table');
+            const heading = document.getElementById('manager-audits-heading');
+            const badgeCount = document.getElementById('manager-audits-counter-badge');
+            if (!tbody) return;
+
+            const pendingAudits = [];
+            const approvedAudits = [];
+            const rejectedAudits = [];
+
+            cachedManagerAudits.forEach(a => {
+                const cv = String(a.compliance_verdict || '').trim().toUpperCase();
+                const ps = String(a.process_status || '').trim().toUpperCase();
+                const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
+                const isRejected = (cv === 'ODRZUCONY' || ps === 'ODRZUCONY');
+
+                if (isApproved) {
+                    approvedAudits.push(a);
+                } else if (isRejected) {
+                    rejectedAudits.push(a);
+                } else {
+                    pendingAudits.push(a);
+                }
+            });
+
+            // Aktualizacja łącznych liczników zakładek
+            const badgePending = document.getElementById('badge-count-manager-pending');
+            const badgeApproved = document.getElementById('badge-count-manager-approved');
+            const badgeRejected = document.getElementById('badge-count-manager-rejected');
+            if (badgePending) badgePending.textContent = pendingAudits.length;
+            if (badgeApproved) badgeApproved.textContent = approvedAudits.length;
+            if (badgeRejected) badgeRejected.textContent = rejectedAudits.length;
+
+            let displayAudits = pendingAudits;
+            if (activeManagerResultsTab === 'approved') {
+                displayAudits = approvedAudits;
+            } else if (activeManagerResultsTab === 'rejected') {
+                displayAudits = rejectedAudits;
+            }
+
+            if (heading) {
+                if (activeManagerResultsTab === 'approved') {
+                    heading.textContent = 'Zatwierdzone audyty jakości:';
+                    heading.className = 'text-[10px] font-black text-emerald-400 uppercase tracking-wider';
+                } else if (activeManagerResultsTab === 'rejected') {
+                    heading.textContent = 'Odrzucone audyty jakości:';
+                    heading.className = 'text-[10px] font-black text-rose-400 uppercase tracking-wider';
+                } else {
+                    heading.textContent = 'Oczekujące audyty (wymagające decyzji):';
+                    heading.className = 'text-[10px] font-black text-amber-400 uppercase tracking-wider';
+                }
+            }
+
+            if (badgeCount) {
+                badgeCount.textContent = `${displayAudits.length} audytów`;
+            }
+
+            tbody.innerHTML = '';
+            if (displayAudits.length === 0) {
+                if (activeManagerResultsTab === 'approved') {
+                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-500 italic">Brak zatwierdzonych audytów. Gdy zatwierdzisz audyt w oknie głównym, pojawi się tutaj.</td></tr>';
+                } else if (activeManagerResultsTab === 'rejected') {
+                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-500 italic">Brak odrzuconych audytów. Wszystkie niezaakceptowane audyty pojawią się tutaj.</td></tr>';
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-emerald-400 font-bold">✨ Brak oczekujących audytów! Wszystkie bieżące wpisy zostały sprawdzone.</td></tr>';
+                }
+                return;
+            }
+
+            displayAudits.forEach(a => {
+                const slmColor = a.slm_verdict === 'OK' ? 'text-emerald-400' : 'text-red-400 font-bold';
+                const statusColor = a.record_status === 'ZABLOKOWANY' ? 'text-amber-400' : 'text-emerald-400';
+                const cv = String(a.compliance_verdict || '').trim().toUpperCase();
+                const ps = String(a.process_status || '').trim().toUpperCase();
+                const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
+                const isRejected = (cv === 'ODRZUCONY' || ps === 'ODRZUCONY');
+                const isFinished = (isApproved || isRejected);
+
+                const actionsHtml = isFinished 
+                    ? (isApproved 
+                        ? `<span class="text-emerald-400 font-bold mr-1.5 text-[9px] bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                             <i class="fas fa-check-circle text-[8px]"></i> Zatwierdzony
+                           </span>` 
+                        : `<span class="text-rose-400 font-bold mr-1.5 text-[9px] bg-rose-950/80 border border-rose-500/50 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                             <i class="fas fa-times-circle text-[8px]"></i> Odrzucony
+                           </span>`)
+                    : `
+                        <button onclick="handleAuditAction('approve', ${a.id})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-black cursor-pointer shadow-sm transition active:scale-95">Zatwierdź</button>
+                        <button onclick="handleAuditAction('reject', ${a.id})" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[9px] font-black cursor-pointer shadow-sm transition active:scale-95">Odrzuć</button>
+                      `;
+
+                const audName = (a.auditor_id || 'Audytor').split(' ')[0];
+                const dateShort = a.timestamp ? a.timestamp.substring(5, 16) : 'Brak daty';
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/60 transition">
+                        <td class="py-2 px-2 border-b border-white/5 font-mono text-[10px] text-slate-300">#${a.id}</td>
+                        <td class="py-2 px-2 border-b border-white/5 text-[9px] text-slate-400 whitespace-nowrap">${dateShort}</td>
+                        <td class="py-2 px-2 border-b border-white/5 font-bold text-[10px] text-white truncate max-w-[130px]" title="${a.line}">${a.line}</td>
+                        <td class="py-2 px-2 border-b border-white/5 text-[10px] text-slate-300">${a.shift}</td>
+                        <td class="py-2 px-2 border-b border-white/5 text-[9px] text-slate-400">${audName}</td>
+                        <td id="status-${a.id}" class="py-2 px-2 border-b border-white/5 text-[8px] font-black ${statusColor}">
+                            ${a.record_status}${isApproved ? ' <span class="text-emerald-400">(✓)</span>' : isRejected ? ' <span class="text-rose-500">(✕)</span>' : ''}
+                        </td>
+                        <td class="py-2 px-2 border-b border-white/5 ${slmColor} text-[9px] whitespace-nowrap">${a.slm_verdict} <span class="text-[8px] text-slate-400">(${a.risk_level})</span></td>
+                        <td class="py-2 px-2 border-b border-white/5 text-right whitespace-nowrap">
+                            <div id="actions-${a.id}" class="flex items-center justify-end gap-1">
+                                ${actionsHtml}
+                                <button onclick="handleAuditAction('details', ${a.id})" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-[8px] font-semibold cursor-pointer">Szczegóły</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
 
         async function loadAuditResults() {
             const tbody = document.getElementById('manager-results-table');
-            if (!tbody) return;
-            tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-slate-400">Ładowanie danych...</td></tr>';
+            if (tbody && cachedManagerAudits.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-xs text-slate-400 animate-pulse">Ładowanie audytów...</td></tr>';
+            }
             try {
-                const res = await fetch(`/api/audits`);
-                if (!res.ok) {
-                    throw new Error(`Błąd HTTP: ${res.status}`);
-                }
+                const res = await apiFetch(`/api/audits?limit=300`);
+                if (!res.ok) return;
                 const data = await res.json();
-                tbody.innerHTML = '';
-                if (!Array.isArray(data) || data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-slate-400">Brak zapisanych audytów w bazie.</td></tr>';
-                    return;
-                }
-                data.forEach(a => {
-                    const slmVerdict = a?.slm_verdict || 'OK';
-                    const slmColor = slmVerdict === 'OK' ? 'text-emerald-400' : 'text-red-400 font-bold';
-                    const processStatus = a?.process_status || 'IN_PROGRESS';
-                    const statusColor = processStatus === 'APPROVED' ? 'text-emerald-400' : 'text-amber-400';
-                    const auditId = a?.id ?? '';
-                    const code = a?.audit_code || (auditId ? `AUD-${auditId}` : 'Brak kodu');
-                    const timestamp = (a?.timestamp || '').substring(0, 16) || 'Brak daty';
-                    const line = a?.line || 'Brak linii';
-                    const shift = a?.shift || 'Brak';
-                    const auditorFull = a?.auditor_id || 'Nieznany';
-                    const auditorName = auditorFull.split(' ')[0] || 'Brak';
-                    const riskLevel = a?.risk_level || 'NISKIE';
-
-                    tbody.innerHTML += `
-                        <tr class="hover:bg-slate-800 transition">
-                            <td onclick="openAuditDetails(${auditId})" class="py-2 pr-2 border-b border-white/5 font-mono text-[10px] text-cyan-400 font-black cursor-pointer">${code}</td>
-                            <td class="py-2 pr-2 border-b border-white/5 text-[9px]">${timestamp}</td>
-                            <td class="py-2 pr-2 border-b border-white/5 font-bold text-[10px] text-white">${line}</td>
-                            <td class="py-2 pr-2 border-b border-white/5 text-[10px]">${shift}</td>
-                            <td class="py-2 pr-2 border-b border-white/5 text-[9px]">${auditorName}</td>
-                            <td class="py-2 pr-2 border-b border-white/5 text-[8px] font-black ${statusColor}">${processStatus}</td>
-                            <td class="py-2 pr-2 border-b border-white/5 ${slmColor} text-[9px]">${slmVerdict} (${riskLevel})</td>
-                            <td class="py-2 border-b border-white/5 flex gap-1">
-                                <button onclick="updateAuditStatus(${auditId}, 'APPROVED')" class="bg-emerald-600 text-white px-2 py-0.5 rounded text-[8px] font-bold">Zatwierdź</button>
-                                <button onclick="updateAuditStatus(${auditId}, 'REJECTED')" class="bg-red-600 text-white px-2 py-0.5 rounded text-[8px] font-bold">Odrzuć</button>
-                                <button onclick="alert('Szczegóły audytu:\\nID: ${code}\\nData: ${timestamp}\\nLinia: ${line}\\nAudytor: ${auditorFull}\\nWerdykt: ${slmVerdict}')" class="bg-slate-600 text-white px-2 py-0.5 rounded text-[8px] font-bold">Szczegóły</button>
-                            </td>
-                        </tr>
-                    `;
-                });
-            } catch(e) {
-                console.error(e);
-                tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-red-400 text-xs">Błąd ładowania danych: ${e.message || 'Nieznany błąd'}</td></tr>`;
+                cachedManagerAudits = Array.isArray(data) ? data : [];
+                renderManagerAuditsTable();
+            } catch(e) { 
+                console.error(e); 
+                if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-xs text-rose-400">Błąd ładowania danych audytów.</td></tr>';
             }
         }
-
-        async function openAuditDetails(id) {
-            if (!id) {
-                console.error("openAuditDetails: Przekazano puste ID audytu.");
-                alert("Błąd: Nie wybrano poprawnego identyfikatora audytu.");
-                return;
-            }
-            currentDetailAuditId = id;
-            try {
-                const res = await fetch(`/api/audits/${id}`);
-                if (!res.ok) {
-                    const errText = await res.text();
-                    console.error(`Błąd pobierania szczegółów audytu [HTTP ${res.status}]:`, errText);
-                    alert(`Błąd pobierania szczegółów audytu (Status ${res.status}).`);
-                    return;
-                }
-                const a = await res.json();
-                
-                document.getElementById('det-audit-code').innerText = a?.audit_code || `AUD-${id}`;
-                document.getElementById('det-line').innerText = a?.line || 'Brak linii';
-                document.getElementById('det-status').innerText = a?.status || 'IN_PROGRESS';
-                document.getElementById('det-date').innerText = (a?.start_time || '').substring(0, 16) || 'Brak daty';
-                document.getElementById('det-auditor').innerText = a?.auditor || 'Nieznany';
-
-                const capaList = document.getElementById('det-capa-list');
-                capaList.innerHTML = '';
-                if(!a?.capa_items || a.capa_items.length === 0) {
-                    capaList.innerHTML = '<p class="text-emerald-400">✅ Brak niezgodności CAPA dla tego audytu.</p>';
-                } else {
-                    a.capa_items.forEach(c => {
-                        const isCritical = c?.category === 'Critical' ? 'text-red-500 font-bold' : 'text-amber-400';
-                        capaList.innerHTML += `
-                            <div class="bg-slate-950 p-2 rounded border border-slate-800 my-1">
-                                <p class="font-bold text-[10px] text-white">${c?.clause || ''} - ${c?.question || ''}</p>
-                                <p class="text-[9px] ${isCritical}">Kategoria: ${c?.category || 'Minor'} | Odpowiedzialny: ${c?.responsible || 'Brak'}</p>
-                                <p class="text-[9px] text-slate-400">Termin: ${c?.due_date || 'Brak'} | Uwaga: ${c?.comment || 'Brak uwagi'}</p>
-                            </div>
-                        `;
-                    });
-                }
-
-                const trail = document.getElementById('det-audit-trail');
-                trail.innerHTML = '';
-                if (a?.audit_trail && Array.isArray(a.audit_trail)) {
-                    a.audit_trail.forEach(t => {
-                        const timeStr = t?.timestamp || '';
-                        const formattedTime = timeStr.length >= 16 ? timeStr.substring(11, 16) : timeStr;
-                        trail.innerHTML += `
-                            <div class="flex justify-between border-b border-slate-800 py-1 text-[9px]">
-                                <span class="text-cyan-400">${formattedTime}</span>
-                                <span class="text-slate-300 font-bold">${t?.modified_by || 'System'}: ${t?.field_name || ''}</span>
-                                <span class="text-slate-400 italic">${t?.change_reason || ''}</span>
-                            </div>
-                        `;
-                    });
-                }
-
-                const pinEl = document.getElementById('det-pin');
-                if (pinEl) pinEl.value = '';
-                const modal = document.getElementById('modal-audit-details');
-                if (modal) modal.classList.remove('hidden');
-            } catch(e) {
-                console.error("Błąd sieciowy lub parsowania podczas pobierania szczegółów audytu:", e);
-                alert("Błąd pobierania szczegółów audytu.");
-            }
-        }
-
-        async function signOffAudit(roleType) {
-            const pin = document.getElementById('det-pin').value.trim();
-            if(!pin) return alert("Wprowadź swój PIN do zatwierdzenia!");
-
-            try {
-                const res = await fetch(`/api/audits/${currentDetailAuditId}/sign-off`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        role_type: roleType,
-                        signer_name: state.auditor_id,
-                        pin: pin
-                    })
-                });
-
-                if(res.ok) {
-                    alert("✅ Zatwierdzenie zarejestrowane pomyślnie.");
-                    document.getElementById('modal-audit-details').classList.add('hidden');
-                    loadAuditResults();
-                } else {
-                    const err = await res.json();
-                    alert(`❌ Błąd: ${err.detail}`);
-                }
-            } catch(e) { alert("Błąd połączenia."); }
-        }
-
 
         async function loadManagerEditRequests() {
-            try {
-                const res = await fetch(`/api/audits/edit-requests?role=${state.role}`);
-                if (!res.ok) return;
-                const requests = await res.json();
-                const container = document.getElementById('manager-requests-container');
-                if (!container) return;
-
-                if (requests.length === 0) {
-                    container.innerHTML = '<p class="text-[10px] text-slate-500 italic">Brak oczekujących wniosków o odblokowanie.</p>';
-                    return;
-                }
-
-                container.innerHTML = requests.map(r => `
-                    <div class="bg-slate-950/90 border ${r.status === 'ZATWIERDZONY' ? 'border-emerald-500/40' : r.status === 'ODRZUCONY' ? 'border-rose-500/40' : 'border-amber-500/40'} p-2.5 rounded-xl space-y-1.5 text-xs">
-                        <div class="flex justify-between items-center">
-                            <span class="text-cyan-400 font-bold">${r.line} (Audyt #${r.audit_id})</span>
-                            <span class="text-[9px] text-slate-400">${r.created_at.substring(0, 16)}</span>
-                        </div>
-                        <p class="text-[10px] text-slate-300"><b>Wnioskuje:</b> ${r.requested_by}</p>
-                        <p class="text-[10px] text-amber-200 bg-amber-950/40 p-1.5 rounded border border-amber-500/20"><b>Powód:</b> ${r.reason}</p>
-                        <div class="flex gap-2 pt-1">
-                            ${r.status === 'PENDING' ? `
-                                <button onclick="decideEditRequest(${r.id}, 'ZATWIERDZONY')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] py-1.5 rounded-lg transition">Zatwierdź</button>
-                                <button onclick="decideEditRequest(${r.id}, 'ODRZUCONY')" class="flex-1 bg-rose-900 hover:bg-rose-800 text-rose-200 font-black text-[10px] py-1.5 rounded-lg transition">Odrzuć</button>
-                            ` : `<span class="flex-1 text-center font-bold text-[10px] py-1.5 rounded-lg ${r.status === 'ZATWIERDZONY' ? 'text-emerald-400' : 'text-rose-400'}">Status: ${r.status}</span>`}
-                            <button onclick="alert('Szczegóły wniosku:\\nID Wniosku: ${r.id}\\nAudyt: #${r.audit_id}\\nZgłaszający: ${r.requested_by}\\nData: ${r.created_at}\\nPowód: ${r.reason}')" class="bg-slate-700 hover:bg-slate-600 text-white px-3 font-bold text-[10px] rounded-lg transition">Szczegóły</button>
-                        </div>
-                    </div>
-                `).join('');
-            } catch(e) {}
+            // Wycofano kontener wniosków zgodnie z prośbą użytkownika
         }
 
         async function decideEditRequest(requestId, decision) {
             const comment = prompt(`Komentarz do decyzji (${decision}):`) || "";
-            const res = await fetch(`/api/audits/decide-edit?role=${state.role}`, {
+            const res = await apiFetch(`/api/audits/decide-edit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ request_id: requestId, decision, manager_comment: comment })
             });
             if (res.ok) {
                 alert(`Decyzja zapisana: ${decision}`);
-                loadManagerEditRequests();
-                loadAuditResults();
+                await loadManagerEditRequests();
+                await loadAuditResults();
             } else {
-
-        async function updateAuditStatus(id, status) {
-            let comment = "";
-            if (status === 'REJECTED') {
-                comment = prompt("Podaj powód odrzucenia:") || "Brak powodu";
-            }
-            
-            try {
-                const res = await fetch(`/api/audits/${id}/status`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ status: status, reason: comment })
-                });
-                
-                if (res.ok) {
-
-        function handleAuditAction(action, auditId) {
-          if (action === 'approve') {
-            alert('Zatwierdzono audyt #' + auditId);
-          } else if (action === 'reject') {
-            const reason = prompt('Podaj powód odrzucenia (wymóg IFS Food v8):');
-            if (reason) alert('Odrzucono audyt #' + auditId + '. Powód: ' + reason);
-          } else if (action === 'details') {
-            alert('Szczegóły audytu #' + auditId + ' - Linia, audytor oraz werdykt SLM.');
-          }
-        }
-
-                    alert(`Status audytu zmieniony na: ${status}`);
-                    loadAuditResults();
-                } else {
-                    alert("Błąd podczas aktualizacji statusu.");
-                }
-            } catch(e) {
-                console.error(e);
-                alert("Błąd połączenia z serwerem.");
-            }
-        }
-
                 alert("Błąd podczas zapisywania decyzji.");
             }
         }
 
+        let activeAuditorHistoryTab = 'recent'; // 'recent' (<= 7 dni) lub 'archive' (> 7 dni)
+
+        window.setAuditorHistoryTab = function(tab) {
+            activeAuditorHistoryTab = tab;
+            const btnRecent = document.getElementById('tab-btn-auditor-recent');
+            const btnArchive = document.getElementById('tab-btn-auditor-archive');
+
+            if (tab === 'recent') {
+                if (btnRecent) {
+                    btnRecent.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+                if (btnArchive) {
+                    btnArchive.className = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            } else {
+                if (btnArchive) {
+                    btnArchive.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-cyan-600 text-white shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+                if (btnRecent) {
+                    btnRecent.className = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            }
+            loadAuditorHistory();
+        };
+
         async function loadAuditorHistory() {
             const list = document.getElementById('auditor-history-list');
             if (!list) return;
-            list.innerHTML = '<p class="text-xs text-slate-400">Ładowanie historii z bazy SQLite...</p>';
+            list.innerHTML = '<p class="text-xs text-slate-400 animate-pulse">Pobieranie historii z bazy SQLite...</p>';
             try {
                 const res = await fetch('/api/audits');
                 if (!res.ok) {
-                    throw new Error(`Błąd HTTP: ${res.status}`);
+                    list.innerHTML = '<p class="text-xs text-amber-400">Brak możliwości pobrania historii (błąd serwera).</p>';
+                    return;
                 }
                 const data = await res.json();
-                if (!Array.isArray(data) || data.length === 0) {
-                    list.innerHTML = '<p class="text-xs text-slate-400">Brak zapisanych audytów w bazie.</p>';
-                    return;
-                }
-                const myAudits = data.filter(a => !state.auditor_id || a?.auditor_id === state.auditor_id || true);
+                const auditsList = Array.isArray(data) ? data : [];
                 
+                const myAudits = auditsList.filter(a => {
+                    if (!a) return false;
+                    if (state.role === 'MANAGER') return true;
+                    if (!state.auditor_id) return true;
+                    return String(a.auditor_id).trim() === String(state.auditor_id).trim() || true;
+                });
+
+                // REGUŁA 7 DNI DLA ZATWIERDZONYCH AUDYTÓW:
+                // Audyt trafia do Archiwum tylko wtedy, gdy jest ZATWIERDZONY przez Managera i minęło więcej niż 7 dni.
+                // Audyty niezatwierdzone, w trakcie korekty lub HOLD LOT zawsze pozostają w sekcji Bieżące!
+                const now = new Date();
+                const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+
+                const recentAudits = [];
+                const archiveAudits = [];
+
+                myAudits.forEach(a => {
+                    const isApproved = (a.compliance_verdict === 'ZATWIERDZONY' || a.process_status === 'ZATWIERDZONY');
+                    const auditDate = a.timestamp ? new Date(a.timestamp.replace(' ', 'T')) : new Date();
+                    const isOlderThan7Days = !isNaN(auditDate.getTime()) && (auditDate < sevenDaysAgo);
+
+                    if (isApproved && isOlderThan7Days) {
+                        archiveAudits.push(a);
+                    } else {
+                        recentAudits.push(a);
+                    }
+                });
+
+                // Aktualizacja liczników na zakładkach
+                const badgeRecent = document.getElementById('badge-count-auditor-recent');
+                const badgeArchive = document.getElementById('badge-count-auditor-archive');
+                if (badgeRecent) badgeRecent.textContent = recentAudits.length;
+                if (badgeArchive) badgeArchive.textContent = archiveAudits.length;
+
+                const displayAudits = (activeAuditorHistoryTab === 'archive') ? archiveAudits : recentAudits;
+
                 list.innerHTML = '';
-                if (myAudits.length === 0) {
-                    list.innerHTML = '<p class="text-xs text-slate-400">Brak zarejestrowanych audytów. Masz czyste konto!</p>';
+                if (displayAudits.length === 0) {
+                    if (activeAuditorHistoryTab === 'archive') {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-center"><p class="text-xs text-slate-400">Brak starszych zatwierdzonych audytów w Archiwum (>7 dni).</p></div>';
+                    } else {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-center"><p class="text-xs text-slate-400">Brak bieżących audytów w ostatnich 7 dniach. Masz czyste konto!</p></div>';
+                    }
                     return;
                 }
-                
-                myAudits.slice(0, 8).forEach(a => {
-                    const recordStatus = a?.record_status || 'ZABLOKOWANY';
-                    const isLocked = recordStatus !== 'ODBLOKOWANY_DO_KOREKTY';
-                    const auditId = a?.id;
-                    const line = a?.line || 'Brak linii';
-                    const timestampStr = a?.timestamp || '';
-                    const timestamp = timestampStr.length >= 16 ? timestampStr.substring(0, 16) : (timestampStr || 'Brak daty');
-                    const slmVerdict = a?.slm_verdict || 'OK';
-                    const borderClass = slmVerdict === 'OK' ? 'border-emerald-500' : 'border-red-500';
+
+                displayAudits.slice(0, 30).forEach((a, idx) => {
+                    const auditId = a.id || 0;
+                    const lineName = a.line || 'Brak nazwy linii';
+                    const dateStr = a.timestamp ? String(a.timestamp).substring(0, 16).replace('T', ' ') : 'Brak daty';
+                    const statusText = a.record_status || 'ZABLOKOWANY';
+                    const isLocked = statusText !== 'ODBLOKOWANY_DO_KOREKTY';
+                    const isOk = String(a.slm_verdict).toUpperCase() === 'OK';
+                    const isApproved = (a.compliance_verdict === 'ZATWIERDZONY' || a.process_status === 'ZATWIERDZONY');
+                    const scoreRaw = a.total_score_pct != null ? `${parseFloat(a.total_score_pct).toFixed(1)}%` : (a.audit_score != null ? `${a.audit_score} pkt` : '---');
+                    const auditNotes = a.notes ? a.notes : null;
+                    const riskLevel = a.risk_level || 'NISKIE';
+                    const complianceVerdict = a.compliance_verdict || a.slm_verdict || '---';
+                    const shiftStr = a.shift || '---';
+
+                    // Parsuj checklist_results jeśli jest stringiem JSON
+                    let chSummary = '';
+                    if (a.checklist_results) {
+                        try {
+                            const ch = typeof a.checklist_results === 'string' ? JSON.parse(a.checklist_results) : a.checklist_results;
+                            const items = Object.values(ch);
+                            const nokItems = items.filter(q => q.status === 'NOK' || (q.score !== undefined && q.score < 5));
+                            const notesItems = items.filter(q => q.notes && q.notes.trim());
+                            chSummary = `
+                                <div class="mt-2 space-y-1">
+                                    <div class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Skrót Checklisty (${items.length} pkt)</div>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        ${items.slice(0, 8).map(q => {
+                                            const qNok = q.status === 'NOK' || (q.score !== undefined && q.score < 5);
+                                            const score = q.score !== undefined ? `${q.score}/5` : (q.status || '?');
+                                            return `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded border ${qNok ? 'bg-rose-950/80 text-rose-300 border-rose-500/30' : 'bg-slate-800/80 text-slate-400 border-slate-700/50'}" title="${q.question || q.clause || ''}">${q.clause || '?'}: ${score}</span>`;
+                                        }).join('')}
+                                        ${items.length > 8 ? `<span class="text-[9px] text-slate-500 font-medium">+${items.length - 8} więcej</span>` : ''}
+                                    </div>
+                                    ${nokItems.length > 0 ? `<div class="text-[9px] text-rose-300 font-bold mt-0.5">⚠ ${nokItems.length} niezgodności</div>` : '<div class="text-[9px] text-emerald-400 font-bold mt-0.5">✓ Wszystkie zgodne</div>'}
+                                    ${notesItems.length > 0 ? `<div class="mt-1 space-y-0.5">${notesItems.slice(0, 3).map(q => `<div class="text-[9px] text-amber-200/80 bg-amber-950/30 rounded px-1.5 py-0.5 border border-amber-700/30">💬 <b>${q.clause || ''}</b>: ${q.notes}</div>`).join('')}</div>` : ''}
+                                </div>`;
+                        } catch(e) {
+                            chSummary = '';
+                        }
+                    }
+
+                    // Powód blokady
+                    let lockReason = '';
+                    if (isLocked) {
+                        if (isApproved) {
+                            lockReason = '✅ Raport ZATWIERDZONY przez Key Usera (Manager Jakości) — oficjalny rekord IFS Food v8.';
+                        } else if (riskLevel.includes('HOLD') || riskLevel.includes('KRYTYCZNE')) {
+                            lockReason = '🚨 Zablokowany — wymagana procedura HOLD LOT (poziom ryzyka KRYTYCZNE). Oczekuje interwencji managera.';
+                        } else if (complianceVerdict === 'ODRZUCONY') {
+                            lockReason = '❌ Odrzucony przez Kierownika Jakości — wymaga złożenia wniosku o ponowne otwarcie.';
+                        } else {
+                            lockReason = '🔒 Zablokowany automatycznie po zapisie — zgodnie z normą IFS Food v8 każdy zatwierdzony zapis jest chroniony przed nieautoryzowaną edycją. Złóż wniosek o korektę do managera.';
+                        }
+                    }
+
+                    const panelId = `audit-detail-panel-${auditId}`;
+
+                    // Dynamiczne podświetlenie w zieleni, jeśli audyt został zatwierdzony przez Key Usera
+                    const cardBorderClass = isApproved 
+                        ? 'border-2 border-emerald-500 shadow-lg shadow-emerald-500/20 bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-slate-900/90 ring-1 ring-emerald-400/50' 
+                        : 'border border-slate-800/90 shadow-md bg-slate-900/80';
+
+                    const iconBoxClass = isApproved
+                        ? 'bg-emerald-500/20 border-2 border-emerald-400 text-emerald-300 shadow-md shadow-emerald-500/40'
+                        : (isOk ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border border-rose-500/30 text-rose-400');
+
+                    const resultTextClass = isApproved
+                        ? 'text-emerald-300 font-extrabold drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                        : (isOk ? 'text-emerald-400' : 'text-rose-400');
 
                     list.innerHTML += `
-                        <div class="glass-card bg-slate-900 p-3.5 rounded-xl flex justify-between items-center border-l-4 ${borderClass}">
-                            <div>
-                                <h4 class="font-bold text-xs text-white">${line}</h4>
-                                <p class="text-[9px] text-slate-400 mt-0.5">Data: ${timestamp} | Status: <b class="${isLocked ? 'text-amber-400' : 'text-emerald-400'}">${recordStatus}</b></p>
+                        <div class="rounded-2xl ${cardBorderClass} overflow-hidden transition-all">
+                            <!-- Nagłówek wiersza — klikalna linia -->
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 cursor-pointer hover:bg-slate-800/50 transition-all"
+                                 onclick="toggleAuditHistoryPanel('${panelId}', this)">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-xl ${iconBoxClass} flex items-center justify-center text-sm shrink-0">
+                                        <i class="fas ${isApproved ? 'fa-badge-check' : (isOk ? 'fa-check-circle' : 'fa-exclamation-triangle')}"></i>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <h4 class="font-black text-sm text-white">${lineName}</h4>
+                                            ${isApproved 
+                                                ? `<span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-500 text-slate-950 border border-emerald-300 shadow-md shadow-emerald-500/40 flex items-center gap-1 animate-pulse">
+                                                     <i class="fas fa-check-double text-[8px]"></i> ZATWIERDZONY PRZEZ MANAGERA
+                                                   </span>`
+                                                : `<span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${isOk ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-rose-950 text-rose-300 border border-rose-500/40'}">
+                                                     ${isOk ? 'Zgodny' : 'Zastrzeżenia'}
+                                                   </span>`
+                                            }
+                                            ${isApproved 
+                                                ? `<span class="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-500/60">👑 Zweryfikowany</span>`
+                                                : (isLocked ? '<span class="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-950 text-amber-300 border border-amber-500/40">🔒 Zablokowany</span>' : '<span class="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-950/60 text-emerald-300 border border-emerald-600/40">Edytowalny</span>')
+                                            }
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2 text-[10.5px] text-slate-400 mt-0.5">
+                                            <span class="flex items-center gap-1"><i class="far fa-clock text-slate-500 text-[10px]"></i> ${dateStr}</span>
+                                            <span class="text-slate-600">•</span>
+                                            <span>Zmiana: <b class="text-slate-300">${shiftStr}</b></span>
+                                            <span class="text-slate-600">•</span>
+                                            <span>Wynik: <b class="${resultTextClass}">${scoreRaw}</b></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                    ${isApproved 
+                                        ? `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm">
+                                             <i class="fas fa-check-circle text-emerald-400 text-xs"></i>
+                                             <span>Zatwierdzono</span>
+                                           </span>`
+                                        : (isLocked
+                                            ? `<button type="button" onclick="event.stopPropagation(); requestAuditCorrection(${auditId})" class="tile-3d px-3 py-1.5 bg-gradient-to-r from-amber-600/90 to-orange-600/90 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs rounded-xl shadow-md border border-amber-400/40 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all">
+                                                 <i class="fas fa-lock-open text-[10px]"></i>
+                                                 <span>Wnioskuj o korektę</span>
+                                               </button>`
+                                            : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                                 <i class="fas fa-check text-[10px]"></i>
+                                                 <span>Edycja dozwolona</span>
+                                               </span>`
+                                        )
+                                    }
+                                    <span class="text-slate-500 text-xs font-bold audit-chevron transition-transform duration-200">▼</span>
+                                </div>
                             </div>
-                            <div>
-                                ${auditId && isLocked 
-                                    ? `<button onclick="requestAuditCorrection(${auditId})" class="tile-3d bg-amber-950/80 border border-amber-500/50 text-amber-300 px-3 py-1.5 rounded font-bold text-[10px] transition hover:bg-amber-900">
-                                         🔓 Wnioskuj o korektę
-                                       </button>`
-                                    : (auditId ? `<span class="text-emerald-400 font-extrabold text-[10px] bg-emerald-950 px-2 py-1 rounded border border-emerald-500/40">
-                                         Edycja dozwolona
-                                       </span>` : '')
-                                }
+
+                            <!-- Panel szczegółów (wyszarzony, rozwijany) -->
+                            <div id="${panelId}" class="hidden border-t ${isApproved ? 'border-emerald-500/30' : 'border-slate-800/70'}">
+                                <div class="p-4 space-y-3 opacity-90 bg-slate-950/60">
+
+                                    <!-- Blokada info -->
+                                    ${isLocked ? `
+                                    <div class="flex items-start gap-2 ${isApproved ? 'bg-emerald-950/40 border border-emerald-500/50' : 'bg-amber-950/30 border border-amber-700/40'} rounded-xl p-3">
+                                        <i class="fas ${isApproved ? 'fa-check-circle text-emerald-400' : 'fa-lock text-amber-400'} mt-0.5 text-sm shrink-0"></i>
+                                        <p class="text-[11px] ${isApproved ? 'text-emerald-200 font-bold' : 'text-amber-200 font-medium'} leading-snug">${lockReason}</p>
+                                    </div>` : ''}
+
+                                    <!-- Główne parametry -->
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        <div class="bg-slate-900/60 rounded-xl p-2.5 border ${isApproved ? 'border-emerald-500/40' : 'border-slate-800'}">
+                                            <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Wynik ogólny</div>
+                                            <div class="text-sm font-black ${resultTextClass}">${scoreRaw}</div>
+                                        </div>
+                                        <div class="bg-slate-900/60 rounded-xl p-2.5 border ${isApproved ? 'border-emerald-500/40' : 'border-slate-800'}">
+                                            <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Werdykt / Status</div>
+                                            <div class="text-sm font-black ${isApproved ? 'text-emerald-400' : (isOk ? 'text-emerald-400' : 'text-rose-400')}">${isApproved ? 'ZATWIERDZONY' : (complianceVerdict || a.slm_verdict || '---')}</div>
+                                        </div>
+                                        <div class="bg-slate-900/60 rounded-xl p-2.5 border border-slate-800">
+                                            <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Poziom ryzyka</div>
+                                            <div class="text-xs font-black ${riskLevel.includes('KRYTYCZNE') || riskLevel.includes('HOLD') ? 'text-rose-400' : riskLevel.includes('WYSOKI') ? 'text-amber-400' : 'text-slate-300'}">${riskLevel}</div>
+                                        </div>
+                                        <div class="bg-slate-900/60 rounded-xl p-2.5 border border-slate-800">
+                                            <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Data / Czas</div>
+                                            <div class="text-xs font-bold text-slate-300">${dateStr}</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Uwagi audytora -->
+                                    ${auditNotes ? `
+                                    <div class="bg-slate-900/60 rounded-xl p-3 border border-amber-700/30">
+                                        <div class="text-[9px] font-black text-amber-400 uppercase tracking-wider mb-1">💬 Uwagi Audytora</div>
+                                        <p class="text-[11px] text-amber-200/90 leading-snug whitespace-pre-line">${auditNotes}</p>
+                                    </div>` : `
+                                    <div class="bg-slate-900/40 rounded-xl p-2.5 border border-slate-800">
+                                        <p class="text-[10px] text-slate-500 italic">Brak uwag do tego audytu.</p>
+                                    </div>`}
+
+                                    <!-- Skrót punktów checklisty -->
+                                    ${chSummary || '<div class="text-[10px] text-slate-500 italic">Szczegółowe dane pytań niedostępne w tym widoku.</div>'}
+
+                                </div>
                             </div>
                         </div>
                     `;
                 });
-            } catch(e) {
-                console.error(e);
-                list.innerHTML = `<p class="text-xs text-red-400">Błąd ładowania historii: ${e.message || 'Nieznany błąd'}</p>`;
+            } catch(e) { 
+                console.error("Błąd ładowania historii audytów:", e);
+                list.innerHTML = '<p class="text-xs text-rose-400">Błąd podczas przetwarzania historii audytów.</p>';
             }
+        }
+
+        function toggleAuditHistoryPanel(panelId, header) {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+            const isHidden = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden', !isHidden);
+            const chevron = header.querySelector('.audit-chevron');
+            if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
         }
 
         async function requestAuditCorrection(auditId) {
@@ -926,36 +1666,188 @@
         }
 
         function startDirectInspection() {
-            state.active_audit_type = "HACCP";
-            document.getElementById('badge-active-standard').innerText = "HACCP";
-            document.getElementById('badge-active-standard').className = "text-[9px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full";
-            
+            setInspectionStandard("HACCP");
             document.getElementById('view-audit-form').reset();
             formHistory.saveState('view-audit-form');
-            
-            loadChecklistForAudit("HACCP");
             showModule('audit-main');
         }
 
         function setInspectionStandard(std, btn) {
             state.active_audit_type = std;
-            document.querySelectorAll('.btn-insp-std').forEach(b => {
-                b.className = "btn-insp-std tile-3d bg-slate-800 p-1.5 text-xs font-black text-slate-300";
-            });
-            const badge = document.getElementById('badge-active-standard');
-            badge.innerText = std;
-            if (std === 'HACCP') {
-                btn.className = "btn-insp-std tile-3d tile-selected bg-emerald-600 p-1.5 text-xs font-black text-white";
-                badge.className = "text-[9px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full";
-            } else if (std === 'GMP') {
-                btn.className = "btn-insp-std tile-3d tile-selected bg-purple-600 p-1.5 text-xs font-black text-white";
-                badge.className = "text-[9px] font-black bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full";
-            } else {
-                btn.className = "btn-insp-std tile-3d tile-selected bg-cyan-600 p-1.5 text-xs font-black text-white";
-                badge.className = "text-[9px] font-black bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded-full";
+            if (!btn) {
+                btn = document.querySelector(`.btn-insp-std[data-std="${std}"]`);
             }
+            
+            const inactiveClasses = {
+                'HACCP': "btn-insp-std w-16 h-16 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-slate-400 flex flex-col items-center justify-center gap-1 shadow-md hover:border-emerald-500/60 hover:text-emerald-300 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none font-bold",
+                'GMP': "btn-insp-std w-16 h-16 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-slate-400 flex flex-col items-center justify-center gap-1 shadow-md hover:border-purple-500/60 hover:text-purple-300 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none font-bold",
+                'GHP': "btn-insp-std w-16 h-16 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-slate-400 flex flex-col items-center justify-center gap-1 shadow-md hover:border-cyan-500/60 hover:text-cyan-300 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none font-bold"
+            };
+
+            const activeClasses = {
+                'HACCP': "btn-insp-std w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 border-2 border-emerald-300 text-white flex flex-col items-center justify-center gap-1 shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/40 scale-105 transition-all duration-200 cursor-pointer select-none font-black",
+                'GMP': "btn-insp-std w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 via-fuchsia-700 to-indigo-700 border-2 border-purple-300 text-white flex flex-col items-center justify-center gap-1 shadow-lg shadow-purple-500/30 ring-2 ring-purple-400/40 scale-105 transition-all duration-200 cursor-pointer select-none font-black",
+                'GHP': "btn-insp-std w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-600 via-blue-600 to-cyan-700 border-2 border-cyan-300 text-white flex flex-col items-center justify-center gap-1 shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-400/40 scale-105 transition-all duration-200 cursor-pointer select-none font-black"
+            };
+
+            document.querySelectorAll('.btn-insp-std').forEach(b => {
+                const bStd = b.getAttribute('data-std') || (b.innerText.includes('HACCP') ? 'HACCP' : b.innerText.includes('GMP') ? 'GMP' : 'GHP');
+                b.className = inactiveClasses[bStd] || inactiveClasses['HACCP'];
+            });
+
+            const badge = document.getElementById('badge-active-standard');
+            if (badge) badge.innerText = std;
+
+            if (btn) {
+                btn.className = activeClasses[std] || activeClasses['HACCP'];
+            }
+
+            if (badge) {
+                if (std === 'HACCP') {
+                    badge.className = "text-[9px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full";
+                } else if (std === 'GMP') {
+                    badge.className = "text-[9px] font-black bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full";
+                } else {
+                    badge.className = "text-[9px] font-black bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded-full";
+                }
+            }
+
             loadChecklistForAudit(std);
             formHistory.saveState('view-audit-form');
+        }
+
+        function handleChecklistSliderInput(id, val) {
+            if (state.checklist_results && state.checklist_results[id] && state.checklist_results[id].locked) return;
+            const scoreVal = parseInt(val);
+            
+            const slider = document.getElementById(`slider-chk-${id}`);
+            if (slider) slider.value = scoreVal;
+
+            const lbl = document.getElementById(`lbl-chk-${id}`);
+            if (lbl) lbl.innerText = scoreVal;
+
+            for (let s = 1; s <= 5; s++) {
+                const b = document.getElementById(`btn-score-${id}-${s}`);
+                if (b) {
+                    if (s === scoreVal) {
+                        if (s === 5) {
+                            b.className = "w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-emerald-500 text-slate-950 font-black shadow-md border-0";
+                        } else if (s === 4) {
+                            b.className = "w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-teal-500 text-slate-950 font-black shadow-md border-0";
+                        } else if (s === 3) {
+                            b.className = "w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-amber-500 text-slate-950 font-black shadow-md border-0";
+                        } else if (s === 2) {
+                            b.className = "w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-orange-500 text-white font-black shadow-md border-0";
+                        } else {
+                            b.className = "w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-rose-600 text-white font-black shadow-md border-0";
+                        }
+                    } else {
+                        b.className = "w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer";
+                    }
+                }
+            }
+
+            if (state.checklist_results && state.checklist_results[id]) {
+                state.checklist_results[id].score = scoreVal;
+                state.checklist_results[id].status = (scoreVal >= 5 ? 'OK' : 'NOK');
+            }
+        }
+
+        function acceptChecklistScore(id) {
+            if (!state.checklist_results || !state.checklist_results[id]) return;
+            state.checklist_results[id].locked = true;
+            state.checklist_results[id].accepted = true;
+
+            // 1. WYSZARZENIE SUWAKA I PRZYCISKÓW PUNKTACJI (ZAAKCEPTOWANE)
+            const slider = document.getElementById(`slider-chk-${id}`);
+            if (slider) {
+                slider.disabled = true;
+                slider.classList.remove('cursor-pointer', 'accent-cyan-500');
+                slider.classList.add('opacity-30', 'cursor-not-allowed', 'pointer-events-none', 'grayscale');
+            }
+
+            const scoreBtns = document.getElementById(`score-btns-${id}`);
+            if (scoreBtns) {
+                scoreBtns.classList.add('opacity-30', 'cursor-not-allowed', 'pointer-events-none', 'grayscale');
+            }
+
+            const lbl = document.getElementById(`lbl-chk-${id}`);
+            if (lbl) {
+                lbl.classList.remove('text-cyan-400');
+                lbl.classList.add('text-slate-400');
+            }
+
+            // 2. KONTENER: ZAMIANA PRZYCISKU ZATWIERDŹ NA PLAKIETKĘ ZAAKCEPTOWANO
+            const container = document.getElementById(`accept-container-${id}`);
+            if (container) {
+                container.innerHTML = `
+                    <button type="button" onclick="unlockChecklistScore(${id})" title="Punkt zaakceptowany. Kliknij, aby odblokować i zmienić ocenę"
+                        class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-lg text-[9px] font-extrabold flex items-center gap-1 shadow-sm transition-all cursor-pointer">
+                        <i class="fas fa-lock text-[8px] text-emerald-400"></i> Zaakceptowano
+                    </button>
+                `;
+            }
+
+            const it = state.checklist_results[id];
+            const card = document.getElementById(`chk-card-${id}`);
+            if (card) {
+                card.classList.remove('border-rose-500', 'border-amber-500', 'border-emerald-500/50', 'border-slate-800');
+                if (it.score < 5 && it.is_ko) {
+                    card.classList.add('border-rose-500');
+                } else if (it.score < 5) {
+                    card.classList.add('border-amber-500');
+                } else {
+                    card.classList.add('border-emerald-500/50');
+                }
+            }
+
+            calculateChecklistScore();
+        }
+
+        function unlockChecklistScore(id) {
+            if (!state.checklist_results || !state.checklist_results[id]) return;
+            state.checklist_results[id].locked = false;
+            state.checklist_results[id].accepted = false;
+
+            // Odblokowanie i przywrócenie kolorów
+            const slider = document.getElementById(`slider-chk-${id}`);
+            if (slider) {
+                slider.disabled = false;
+                slider.classList.remove('opacity-30', 'cursor-not-allowed', 'pointer-events-none', 'grayscale');
+                slider.classList.add('cursor-pointer', 'accent-cyan-500');
+            }
+
+            const scoreBtns = document.getElementById(`score-btns-${id}`);
+            if (scoreBtns) {
+                scoreBtns.classList.remove('opacity-30', 'cursor-not-allowed', 'pointer-events-none', 'grayscale');
+            }
+
+            const lbl = document.getElementById(`lbl-chk-${id}`);
+            if (lbl) {
+                lbl.classList.remove('text-slate-400');
+                lbl.classList.add('text-cyan-400');
+            }
+
+            // Przywrócenie przycisku Zatwierdź
+            const container = document.getElementById(`accept-container-${id}`);
+            if (container) {
+                container.innerHTML = `
+                    <button type="button" id="btn-accept-${id}" onclick="acceptChecklistScore(${id})" 
+                        class="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-[9.5px] font-black rounded-lg shadow-md transition-all flex items-center gap-1 active:scale-95 cursor-pointer animate-pulse">
+                        <i class="fas fa-check text-[9px]"></i> Zatwierdź
+                    </button>
+                `;
+            }
+
+            calculateChecklistScore();
+        }
+
+        // Kompatybilność
+        function setChecklistScore(id, score) {
+            handleChecklistSliderInput(id, score);
+        }
+        function setChecklistAnswer(id, ans) {
+            handleChecklistSliderInput(id, ans === 'OK' ? 5 : 3);
         }
 
         async function loadChecklistForAudit(auditType) {
@@ -968,28 +1860,74 @@
                 container.innerHTML = "";
 
                 items.forEach(item => {
-                    state.checklist_results[item.id] = { status: "OK", is_ko: item.is_ko, clause: item.clause, question: item.question, score: 5, notes: "" };
+                    // Początkowy stan każdego pytania
+                    state.checklist_results[item.id] = { 
+                        id: item.id,
+                        status: "OK", 
+                        is_ko: item.is_ko, 
+                        clause: item.clause, 
+                        question: item.question, 
+                        score: 5, 
+                        notes: "", 
+                        locked: false,
+                        accepted: false 
+                    };
                     const koTag = item.is_ko ? `<span class="bg-rose-950 text-rose-300 border border-rose-600 text-[8px] font-black px-1.5 py-0.5 rounded mr-1 animate-pulse"><i class="fas fa-exclamation-triangle"></i> KNOCK-OUT</span>` : '';
+                    const safeClause = (item.clause || '').replace(/'/g, "\\'");
                     
                     container.innerHTML += `
-                        <div class="p-3 rounded-xl border ${item.is_ko ? 'bg-rose-950/20 border-rose-500/40 shadow-[0_0_10px_rgba(225,29,72,0.1)]' : 'bg-slate-900/60 border-slate-800'} space-y-2 mb-3">
+                        <div id="chk-card-${item.id}" class="p-3 rounded-xl border ${item.is_ko ? 'bg-rose-950/20 border-rose-500/40 shadow-[0_0_10px_rgba(225,29,72,0.1)]' : 'bg-slate-900/60 border-slate-800'} space-y-2 mb-3 transition-all duration-200">
                             <div>
-                                <span class="text-[10px] font-mono text-cyan-400 font-extrabold block mb-1">${koTag}${item.clause}</span>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[10px] font-mono text-cyan-400 font-extrabold flex items-center">${koTag}${item.clause}</span>
+                                    <button type="button" onclick="openFaqForGuideline('${safeClause}')" title="Zobacz kryterium IFS Food / procedurę w Bazie Wiedzy" class="text-[9px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 px-2 py-0.5 rounded flex items-center gap-1 transition cursor-pointer">
+                                        <i class="fas fa-book-open text-[8px]"></i> Wymóg IFS / CAPA
+                                    </button>
+                                </div>
                                 <p class="text-[11px] text-slate-200 leading-snug">${item.question}</p>
                             </div>
                             
-                            <div class="flex items-center gap-3 pt-2 border-t border-slate-800/80">
-                                <span class="text-[10px] font-bold text-slate-400 w-16">Ocena (1-5):</span>
-                                <input type="range" min="1" max="5" value="5" 
-                                    oninput="document.getElementById('lbl-chk-${item.id}').innerText=this.value; state.checklist_results[${item.id}].score=parseInt(this.value); if(this.value<5){setChecklistAnswer(${item.id},'NOK')}else{setChecklistAnswer(${item.id},'OK')}" 
-                                    class="flex-1 accent-cyan-500 cursor-pointer h-2 bg-slate-700 rounded-lg appearance-none">
-                                <span id="lbl-chk-${item.id}" class="text-base font-black text-cyan-400 w-6 text-center">5</span>
+                            <div class="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                                <span class="text-[10px] font-bold text-slate-400 w-16 shrink-0">Ocena (1-5):</span>
+                                
+                                <div class="inline-flex rounded-xl bg-slate-950/90 p-0.5 border border-slate-800 gap-1 shrink-0" id="score-btns-${item.id}">
+                                    <button type="button" onclick="handleChecklistSliderInput(${item.id}, 1)" id="btn-score-${item.id}-1" class="w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer">1</button>
+                                    <button type="button" onclick="handleChecklistSliderInput(${item.id}, 2)" id="btn-score-${item.id}-2" class="w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer">2</button>
+                                    <button type="button" onclick="handleChecklistSliderInput(${item.id}, 3)" id="btn-score-${item.id}-3" class="w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer">3</button>
+                                    <button type="button" onclick="handleChecklistSliderInput(${item.id}, 4)" id="btn-score-${item.id}-4" class="w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-slate-900 text-slate-400 hover:text-white border border-slate-800 cursor-pointer">4</button>
+                                    <button type="button" onclick="handleChecklistSliderInput(${item.id}, 5)" id="btn-score-${item.id}-5" class="w-6 h-6 rounded-md text-xs font-black transition-all flex items-center justify-center bg-emerald-500 text-slate-950 font-black shadow-md border-0 cursor-pointer">5</button>
+                                </div>
+
+                                <input type="range" min="1" max="5" value="5" id="slider-chk-${item.id}"
+                                    oninput="handleChecklistSliderInput(${item.id}, this.value)"
+                                    class="flex-1 accent-cyan-500 cursor-pointer h-2 bg-slate-700 rounded-lg appearance-none transition-all">
+
+                                <span id="lbl-chk-${item.id}" class="text-sm font-black text-cyan-400 w-5 text-center shrink-0">5</span>
+
+                                <div id="accept-container-${item.id}" class="shrink-0 min-w-[85px] flex justify-end">
+                                    <button type="button" id="btn-accept-${item.id}" onclick="acceptChecklistScore(${item.id})" 
+                                        class="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-[9.5px] font-black rounded-lg shadow-md transition-all flex items-center gap-1 active:scale-95 cursor-pointer">
+                                        <i class="fas fa-check text-[9px]"></i> Zatwierdź
+                                    </button>
+                                </div>
                             </div>
                             
                             <div class="pt-1">
-                                <input type="text" placeholder="Uwagi / Działania korygujące (opcjonalnie)..." 
-                                    oninput="state.checklist_results[${item.id}].notes=this.value" 
-                                    class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-[10px] text-slate-300 focus:border-cyan-500 outline-none transition-colors">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[9px] font-bold text-slate-400">Uwagi / Działania korygujące:</span>
+                                    <span class="text-[8px] text-slate-500 italic">Mów do mikrofonu w ramce</span>
+                                </div>
+                                <div class="relative w-full">
+                                    <textarea id="chk-notes-${item.id}" placeholder="Wpisz uwagę lub kliknij mikrofon w ramce i powiedz..." 
+                                        rows="1"
+                                        oninput="state.checklist_results[${item.id}].notes=this.value; this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';" 
+                                        class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 pr-9 text-[10.5px] text-slate-200 focus:border-cyan-500 outline-none transition-all resize-none overflow-hidden leading-relaxed block">${state.checklist_results[item.id]?.notes || ''}</textarea>
+                                    <button type="button" onclick="toggleSpeechToText('chk-notes-${item.id}', this)" 
+                                        title="Podyktuj uwagę bezpośrednio do ramki (np. 'jest uszkodzenie w tym miejscu')"
+                                        class="absolute right-1.5 top-1.5 w-6 h-6 rounded-md bg-slate-900 border border-slate-700 hover:border-cyan-500 text-cyan-400 hover:text-white flex items-center justify-center text-xs transition-all cursor-pointer shadow-sm">
+                                        <i class="fas fa-microphone"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -1000,35 +1938,106 @@
             }
         }
 
-        function setChecklistAnswer(id, ans) {
-            state.checklist_results[id].status = ans;
-            calculateChecklistScore();
-        }
-
         function calculateChecklistScore() {
             const keys = Object.keys(state.checklist_results);
-            let total = 0, ok = 0, koFail = false;
+            const totalCount = keys.length;
+            let acceptedCount = 0;
+            let nokCount = 0;
+            let koFail = false;
+
             keys.forEach(k => {
                 const it = state.checklist_results[k];
-                if (it.status !== "NA") {
-                    total++;
-                    if (it.status === "OK") ok++;
-                    if (it.status === "NOK" && it.is_ko) koFail = true;
+                if (it.locked || it.accepted) {
+                    acceptedCount++;
+                    if (it.status === "NOK") {
+                        nokCount++;
+                        if (it.is_ko) koFail = true;
+                    }
                 }
             });
+
+            const unacceptedCount = totalCount - acceptedCount;
+            const allAccepted = (totalCount > 0 && unacceptedCount === 0);
+
+            // 1. Badge KO w nagłówku checklisty
             const badge = document.getElementById('ko-status-badge');
             if (badge) {
                 if (koFail) {
                     badge.className = "text-[9px] font-black bg-rose-950 text-rose-300 border border-rose-500 px-2 py-0.5 rounded-full animate-pulse";
                     badge.innerHTML = "<i class='fas fa-exclamation-triangle'></i> ZŁAMANIE KO!";
-                } else {
+                } else if (allAccepted) {
                     badge.className = "text-[9px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/50 px-2 py-0.5 rounded-full";
                     badge.innerText = "KO: ZGODNE";
+                } else {
+                    badge.className = "text-[9px] font-black bg-slate-900 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full";
+                    badge.innerHTML = `<i class="fas fa-clock text-amber-400 mr-0.5"></i> Zaakceptowano: ${acceptedCount}/${totalCount}`;
+                }
+            }
+
+            // 2. Aktualizacja paska postępu
+            const counterEl = document.getElementById('checklist-progress-counter');
+            const statusEl = document.getElementById('checklist-progress-status');
+            const fillEl = document.getElementById('checklist-progress-fill');
+            const pct = totalCount > 0 ? Math.round((acceptedCount / totalCount) * 100) : 0;
+
+            if (counterEl) counterEl.innerText = `${acceptedCount} / ${totalCount} (${pct}%)`;
+            if (fillEl) {
+                fillEl.style.width = `${pct}%`;
+                fillEl.className = allAccepted ? "h-full bg-emerald-500 transition-all duration-300 rounded-full" : "h-full bg-amber-500 transition-all duration-300 rounded-full";
+            }
+
+            if (statusEl) {
+                if (allAccepted) {
+                    statusEl.innerHTML = `<span class="text-emerald-400 font-extrabold flex items-center gap-1"><i class="fas fa-check-circle"></i> Wszystkie punkty zaakceptowane (${totalCount}/${totalCount})</span>`;
+                } else {
+                    statusEl.innerHTML = `<span class="text-amber-400 font-bold flex items-center gap-1"><i class="fas fa-exclamation-circle text-rose-400"></i> Pozostało do zatwierdzenia: <strong class="text-rose-400 font-black ml-0.5">${unacceptedCount}</strong></span>`;
+                }
+            }
+
+            // 3. WYSZARZENIE PRZYCISKU ZAPISU (WYMÓG: WYŁĄCZONY DOPÓKI NIE ZAAKCEPTOWANO 100% PYTAŃ)
+            const saveBtn = document.getElementById('btn-save-audit');
+            const saveText = document.getElementById('btn-save-audit-text');
+            if (saveBtn) {
+                if (allAccepted) {
+                    saveBtn.disabled = false;
+                    saveBtn.className = "w-full tile-3d h-14 bg-gradient-to-br from-emerald-600 to-teal-600 font-black text-xs uppercase text-white shadow-xl flex items-center justify-center gap-2 rounded-2xl cursor-pointer hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] transition-all duration-200 ring-2 ring-emerald-400/40";
+                    if (saveText) {
+                        saveText.innerHTML = `<span>💾 Zapisz Audyt i Wykonaj Analizę SLM AI</span>`;
+                    }
+                } else {
+                    saveBtn.disabled = true;
+                    saveBtn.className = "w-full h-14 font-bold text-xs uppercase shadow-none flex items-center justify-center gap-2 rounded-2xl transition-all duration-300 opacity-40 bg-slate-900 text-slate-500 border border-slate-800 cursor-not-allowed pointer-events-none select-none";
+                    if (saveText) {
+                        saveText.innerHTML = `<span>🔒 Zaakceptuj wszystkie pytania (pozostało ${unacceptedCount}/${totalCount})</span>`;
+                    }
                 }
             }
         }
 
         async function saveAuditToDb() {
+            // Walidacja: 100% pytań checklisty musi być zaakceptowanych przed zapisem
+            const keys = Object.keys(state.checklist_results);
+            const unaccepted = keys.filter(k => !state.checklist_results[k].locked && !state.checklist_results[k].accepted);
+            
+            if (keys.length === 0) {
+                showToast("⚠️ Błąd: Brak pytań w checkliście do zapisu.", "warning");
+                return;
+            }
+
+            if (unaccepted.length > 0) {
+                showToast(`⚠️ Wymagane zatwierdzenie wszystkich punktów! Pozostało do zaakceptowania: ${unaccepted.length}.`, "warning");
+                const firstMissing = document.getElementById(`chk-card-${unaccepted[0]}`);
+                if (firstMissing) {
+                    firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstMissing.classList.add('ring-2', 'ring-rose-500', 'animate-pulse');
+                    setTimeout(() => firstMissing.classList.remove('ring-2', 'ring-rose-500', 'animate-pulse'), 3000);
+                }
+                return;
+            }
+
+            // NATYCHMIASTOWA REAKCJA (0 ms)
+            updateAuditHud(1, "KROK 1/2: ANALIZA SLM", "Wnioskowanie lokalnego modelu i weryfikacja IFS Food v8...", "loading");
+
             let koFailed = false;
             Object.values(state.checklist_results).forEach(it => {
                 if (it.status === "NOK" && it.is_ko) koFailed = true;
@@ -1076,13 +2085,44 @@
             formData.append("slm_analysis", slmText);
             formData.append("checklist_results", JSON.stringify(state.checklist_results));
 
+            // Załączenie zdjęcia fotograficznego (jeśli wykonano aparatem lub wybrano plik)
+            if (window.currentAuditPhotoFile) {
+                formData.append("photo", window.currentAuditPhotoFile);
+            }
+
+            // STAN 1: Natychmiastowa reakcja interfejsu (0 ms)
+            updateAuditHud(1, "KROK 1/2: WNIOSKOWANIE SLM", "Analiza parametrów CCP, GMP i normy IFS Food v8...", "loading");
+
+            // STAN 2: Transakcja bazy danych
+            setTimeout(() => {
+                const toastDesc = document.getElementById('audit-progress-desc');
+                if (toastDesc && toastDesc.textContent.includes("CCP")) {
+                    updateAuditHud(2, "KROK 2/2: ZAPIS I BLOKADA REKORDU", "Rejestracja w SQLite i wpis do Audit Trail...", "loading");
+                }
+            }, 900);
+
             const res = await fetch('/api/audit', { method: 'POST', body: formData });
+
             if (res.ok) {
-                const data = await res.json();
-                alert(`✅ Audyt zarejestrowany. Kod: ${data.audit_code}\n\nOrzeczenie SLM: ${slmText}`);
+                const data = await res.json().catch(() => ({}));
+                const verdict = data.slm_verdict || (slmText.includes('NOK') ? 'NOK' : 'OK');
+                
+                // STAN 3: Werdykt końcowy
+                if (verdict.includes('NOK') || verdict.includes('HOLD')) {
+                    updateAuditHud(3, "ODCHYLENIE CCP / HOLD LOT", `Werdykt: ${verdict} | Status: ZABLOKOWANY`, "alert");
+                } else {
+                    updateAuditHud(3, "AUDYT ZAPISANY POMYŚLNIE", `Werdykt SLM: ${verdict} | Status: ZABLOKOWANY`, "success");
+                }
+
                 showModule('hub');
-                await loadScheduleAndRender();
-                await updateKpiRibbon();
+                removeAuditPhoto(); // wyczyść załączone zdjęcie po udanym zapisie
+                if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
+                if (typeof loadAuditorHistory === 'function') await loadAuditorHistory();
+                if (typeof updateKpiRibbon === 'function') await updateKpiRibbon();
+                if (typeof loadAuditsAndRender === 'function') await loadAuditsAndRender();
+                if (typeof loadAuditorHistory === 'function') await loadAuditorHistory();
+            } else {
+                updateAuditHud(3, "BŁĄD ZAPISU AUDYTU", `Serwer zwrócił kod błędu ${res.status}`, "alert");
             }
         }
 
@@ -1097,12 +2137,21 @@
 
             const preauditTiles = document.getElementById('preaudit-lines-tiles');
             if (preauditTiles && productionLinesData.length > 0) {
-                state.line = productionLinesData[0].name;
-                document.getElementById('hidden-line-input').value = state.line;
-                preauditTiles.innerHTML = productionLinesData.map((l, idx) => `
-                    <div onclick="selectTile('line', '${l.name}', this)" class="tile-line tile-3d ${idx === 0 ? 'tile-selected' : ''} bg-slate-800 p-2 text-center cursor-pointer text-xs font-bold">${l.code || l.name}</div>
-                `).join('');
+                if (!state.line || !productionLinesData.some(l => l.name === state.line)) {
+                    state.line = productionLinesData[0].name;
+                }
+                const hiddenLine = document.getElementById('hidden-line-input');
+                if (hiddenLine) hiddenLine.value = state.line;
+                preauditTiles.innerHTML = productionLinesData.map((l, idx) => {
+                    const isSel = (l.name === state.line) || (!state.line && idx === 0);
+                    const safeName = (l.name || '').replace(/'/g, "\\'");
+                    return `
+                    <div onclick="selectTile('line', '${safeName}', this)" data-line="${l.name}" title="${l.name}${l.code ? ' (' + l.code + ')' : ''}" class="tile-line tile-3d ${isSel ? 'tile-selected' : ''} bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/80 px-2.5 py-1.5 rounded-xl text-center cursor-pointer text-xs font-bold transition-all truncate flex items-center justify-center min-h-[34px] min-w-[75px] max-w-[170px] flex-1 shadow-sm">
+                        <span class="truncate">${l.code || l.name}</span>
+                    </div>`;
+                }).join('');
             }
+            syncAgentLineSelector();
         }
 
         function selectTile(cat, val, btn) {
@@ -1113,93 +2162,678 @@
             formHistory.saveState('view-audit-form');
         }
 
+        let currentPassportLineId = null;
+
+        // --- OBSŁUGA DOKUMENTACJI FOTOGRAFICZNEJ AUDYTU (APARAT / PLIK) ---
+        window.currentAuditPhotoFile = null;
+
+        window.handleAuditPhotoSelected = function(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            // Sprawdź format pliku (zdjęcia: jpg, png, webp, heic)
+            if (!file.type.startsWith('image/')) {
+                alert('Proszę wybrać plik graficzny (zdjęcie aparatu lub plik graficzny).');
+                event.target.value = '';
+                return;
+            }
+
+            // Sprawdź limit rozmiaru (maksymalnie 15MB)
+            if (file.size > 15 * 1024 * 1024) {
+                alert('Rozmiar zdjęcia przekracza dopuszczalny limit 15 MB.');
+                event.target.value = '';
+                return;
+            }
+
+            window.currentAuditPhotoFile = file;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const previewBox = document.getElementById('audit-photo-preview-box');
+                const previewImg = document.getElementById('audit-photo-preview-img');
+                const previewName = document.getElementById('audit-photo-preview-name');
+                const removeBtn = document.getElementById('btn-remove-audit-photo');
+
+                if (previewImg) previewImg.src = e.target.result;
+                if (previewName) previewName.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                if (previewBox) previewBox.classList.remove('hidden');
+                if (removeBtn) removeBtn.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.removeAuditPhoto = function() {
+            window.currentAuditPhotoFile = null;
+            const camInput = document.getElementById('audit-photo-camera');
+            const fileInput = document.getElementById('audit-photo-file');
+            const previewBox = document.getElementById('audit-photo-preview-box');
+            const previewImg = document.getElementById('audit-photo-preview-img');
+            const previewName = document.getElementById('audit-photo-preview-name');
+            const removeBtn = document.getElementById('btn-remove-audit-photo');
+
+            if (camInput) camInput.value = '';
+            if (fileInput) fileInput.value = '';
+            if (previewImg) previewImg.src = '';
+            if (previewName) previewName.textContent = '---';
+            if (previewBox) previewBox.classList.add('hidden');
+            if (removeBtn) removeBtn.classList.add('hidden');
+        };
+
+        function generateLineCodeFromName(name) {
+            if (!name || !name.trim()) return '';
+
+            // Usuń polskie znaki diakrytyczne
+            const clean = name.trim()
+                .replace(/ą/gi, 'a').replace(/ć/gi, 'c').replace(/ę/gi, 'e')
+                .replace(/ł/gi, 'l').replace(/ń/gi, 'n').replace(/ó/gi, 'o')
+                .replace(/ś/gi, 's').replace(/ź/gi, 'z').replace(/ż/gi, 'z');
+
+            // 1. Sprawdź czy nazwa zawiera numer linii, np. "Linia 4454", "Linia 2", "L3"
+            const numMatch = clean.match(/(?:linia\s*|l\s*|#\s*)(\d+)/i) || clean.match(/(\d+)/);
+            const lineNum = numMatch ? numMatch[1] : null;
+
+            // Wyciągnij słowa kluczowe (pomijając słowa typu "Linia", "i", "w", "oraz", "na", "&")
+            const stopWords = new Set(['linia', 'line', 'i', 'w', 'na', 'oraz', 'z', 'do', 'dla', 'nr', 'the', 'and', '&', '-']);
+            const words = clean.replace(/[^a-zA-Z0-9\s]/g, ' ')
+                .split(/\s+/)
+                .filter(w => w.length > 0 && !stopWords.has(w.toLowerCase()));
+
+            // Znajdź słowo opisujące proces (np. Konszowanie, Pakowanie, Formowanie, Praliny)
+            const processWords = words.filter(w => !/^\d+$/.test(w) && !(lineNum && w.toLowerCase() === `l${lineNum}`.toLowerCase()));
+            let keyword = '';
+            if (processWords.length > 0) {
+                // Weź do 5 znaków pierwszego słowa procesowego
+                keyword = processWords[0].substring(0, 5).toUpperCase();
+            }
+
+            if (lineNum && keyword) {
+                return `L${lineNum}-${keyword}`;
+            } else if (lineNum) {
+                return `LIN-${lineNum}`;
+            } else if (words.length > 0) {
+                // Jeśli nie ma cyfry, stwórz kod z pierwszych 2-3 słów
+                const codeParts = words.slice(0, 3).map(w => w.substring(0, 4).toUpperCase());
+                return `LIN-${codeParts.join('-')}`;
+            }
+
+            return 'LIN-01';
+        }
+
+        let isCodeManuallyEdited = false;
+
+        function handleNewLineNameInput(nameVal) {
+            const codeInput = document.getElementById('new-line-code');
+            if (!codeInput) return;
+
+            // Jeśli użytkownik ręcznie nie nadpisał kodu lub pole kodu było puste
+            if (!isCodeManuallyEdited || !codeInput.value.trim()) {
+                const autoCode = generateLineCodeFromName(nameVal);
+                codeInput.value = autoCode;
+                const badge = document.getElementById('badge-code-auto');
+                if (badge) {
+                    badge.textContent = '⚡ Auto-kod';
+                    badge.className = 'text-[9px] text-amber-400 font-black tracking-wider uppercase';
+                }
+            }
+        }
+
+        function toggleLineAddForm() {
+            const form = document.getElementById('form-add-line-container');
+            const btn = document.getElementById('btn-toggle-add-line');
+            if (!form) return;
+            const isHidden = form.classList.contains('hidden');
+            form.classList.toggle('hidden', !isHidden);
+            if (btn) {
+                btn.innerHTML = isHidden ? '<i class="fas fa-times"></i> Zwiń Formularz' : '<i class="fas fa-plus"></i> Nowa Linia';
+            }
+            if (isHidden) {
+                isCodeManuallyEdited = false;
+                const codeInput = document.getElementById('new-line-code');
+                if (codeInput) {
+                    codeInput.oninput = function() {
+                        isCodeManuallyEdited = true;
+                        const badge = document.getElementById('badge-code-auto');
+                        if (badge) {
+                            badge.textContent = '✏️ Ręczny';
+                            badge.className = 'text-[9px] text-cyan-400 font-black tracking-wider uppercase';
+                        }
+                    };
+                }
+            }
+        }
+
         function renderLinesManagerList() {
             const c = document.getElementById('lines-list-container');
             if (!c) return;
+
+            // Zliczanie statystyk
+            let total = productionLinesData.length;
+            let active = 0;
+            let hold = 0;
+            let clean = 0;
+
+            productionLinesData.forEach(l => {
+                const st = (l.line_status || '').toUpperCase();
+                if (st.includes('HOLD') || st.includes('KWARANTANNA') || st.includes('BLOKAD')) hold++;
+                else if (st.includes('CIP') || st.includes('SANITYZACJA') || st.includes('MYCIE')) clean++;
+                else active++;
+            });
+
+            if (document.getElementById('stat-lines-total')) document.getElementById('stat-lines-total').innerText = total;
+            if (document.getElementById('stat-lines-active')) document.getElementById('stat-lines-active').innerText = active;
+            if (document.getElementById('stat-lines-hold')) document.getElementById('stat-lines-hold').innerText = hold;
+            if (document.getElementById('stat-lines-clean')) document.getElementById('stat-lines-clean').innerText = clean;
+
+            const getZoneBadge = (zone) => {
+                const z = (zone || '').toLowerCase();
+                if (z.includes('wysok') || z.includes('high')) {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500/40">🔴 High Care</span>`;
+                } else if (z.includes('średni') || z.includes('medium')) {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40">🟠 Medium Care</span>`;
+                } else if (z.includes('nisk') || z.includes('low')) {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-yellow-950 text-yellow-300 border border-yellow-500/40">🟡 Low Care</span>`;
+                } else if (z.includes('pakow') || z.includes('pack')) {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40">🟣 Packaging</span>`;
+                } else if (z.includes('magazyn') || z.includes('warehous')) {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40">🔵 Magazyn</span>`;
+                } else {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">⚪ Pomocnicza</span>`;
+                }
+            };
+
+            const getStatusBadge = (status) => {
+                const s = (status || '').toUpperCase();
+                if (s.includes('HOLD') || s.includes('KWARANTANNA') || s.includes('BLOKAD')) {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500 animate-pulse">🔴 HOLD LOT</span>`;
+                } else if (s.includes('WARUNKOW')) {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/50">🟡 Warunkowo</span>`;
+                } else if (s.includes('CIP') || s.includes('MYCIE') || s.includes('SANITYZ')) {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/50">🔵 Mycie CIP</span>`;
+                } else {
+                    return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">🟢 Zwolniona</span>`;
+                }
+            };
+
+            if (productionLinesData.length === 0) {
+                c.innerHTML = '<p class="text-xs text-slate-500 italic p-3 text-center">Brak zdefiniowanych linii produkcyjnych.</p>';
+                return;
+            }
+
             c.innerHTML = productionLinesData.map(l => `
-                <div onclick="openLineDetails(${l.id})" class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs cursor-pointer hover:border-emerald-500/50">
-                    <div><span class="font-black text-white block">${l.name}</span><span class="text-[10px] text-slate-400 font-bold">${l.code} • ${l.default_zone}</span></div>
-                    <button onclick="event.stopPropagation(); deleteProductionLine(${l.id})" class="tile-3d bg-red-950 border border-red-500/50 text-red-300 px-2.5 py-1 rounded font-bold">Usuń</button>
+                <div class="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 hover:border-amber-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md group">
+                    <div class="flex-1 cursor-pointer" onclick="openLinePassportModal(${l.id})">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-black text-white text-sm group-hover:text-amber-300 transition-colors">${l.name}</span>
+                            ${getStatusBadge(l.line_status)}
+                            ${getZoneBadge(l.default_zone)}
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 text-[10.5px] text-slate-400 mt-1">
+                            <span>Kod: <b class="font-mono text-slate-300">${l.code || 'Brak'}</b></span>
+                            <span class="text-slate-600">•</span>
+                            <span>Alergeny: <b class="text-amber-200">${l.allergen_profile || 'Brak profilu'}</b></span>
+                            <span class="text-slate-600">•</span>
+                            <span>CCP: <b class="text-slate-300 truncate max-w-[200px] inline-block align-bottom">${l.ccp_equipment || 'Brak'}</b></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <button onclick="openLinePassportModal(${l.id})" class="tile-3d bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer">
+                            <i class="fas fa-sliders-h"></i> Profil Linii
+                        </button>
+                        <button onclick="deleteProductionLine(${l.id})" class="tile-3d bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 text-rose-300 px-2.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer">
+                            Usuń
+                        </button>
+                    </div>
                 </div>
             `).join('');
         }
 
-        function openLineDetails(id) {
-            const line = productionLinesData.find(l => l.id === id);
-            if (!line) return;
-            const content = document.getElementById('line-details-content');
-            content.innerHTML = `
-                <p><strong>Nazwa:</strong> ${line.name}</p>
-                <p><strong>Kod (IFS):</strong> ${line.code}</p>
-                <p><strong>Status:</strong> ${line.is_active ? 'Aktywna' : 'Nieaktywna'}</p>
-                <p><strong>ID Systemowe:</strong> ${line.id}</p>
-            `;
-            document.getElementById('modal-line-details').classList.remove('hidden');
-        }
-
-        function generateLineCode(name) {
-            let code = name.toUpperCase()
-                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                .replace(/[^A-Z0-9]/g, "-")
-                .replace(/-+/g, "-")
-                .replace(/^-|-$/g, "");
-            return `LIN-${code}`;
-        }
-
-                async function addNewProductionLine() {
+        async function addNewProductionLine() {
             const name = document.getElementById('new-line-name').value.trim();
             const code = document.getElementById('new-line-code').value.trim();
             const default_zone = document.getElementById('new-line-zone').value;
+            const allergen_profile = document.getElementById('new-line-allergen').value;
+            const ccp_equipment = document.getElementById('new-line-ccp').value.trim();
+            const line_status = document.getElementById('new-line-status').value;
+            const notes = document.getElementById('new-line-notes').value.trim();
+
             if (!name) return alert("Wpisz nazwę linii!");
-            
-            let finalCode = code;
-            if (!finalCode) {
-                const generatedCode = generateLineCode(name);
-                const existingCodes = productionLinesData.map(l => l.code);
-                let uniqueCode = generatedCode;
-                let counter = 1;
-                while (existingCodes.includes(uniqueCode)) {
-                    uniqueCode = `${generatedCode}-${counter}`;
-                    counter++;
-                }
-                finalCode = uniqueCode;
-            }
 
             const res = await fetch('/api/lines', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name, code: finalCode, default_zone })
+                body: JSON.stringify({
+                    name, code, default_zone, allergen_profile, ccp_equipment, line_status, notes
+                })
             });
+
             if (res.ok) {
-                alert("✅ Dodano linię!");
+                alert("✅ Zarejestrowano nową linię produkcyjną z profilem sanitarnym!");
                 document.getElementById('new-line-name').value = '';
                 document.getElementById('new-line-code').value = '';
+                document.getElementById('new-line-notes').value = '';
+                toggleLineAddForm();
                 await loadProductionLines();
                 renderLinesManagerList();
             } else {
-                const errorData = await res.json();
-                alert(`❌ Błąd dodawania linii: ${errorData.detail || 'Nieznany błąd'}`);
+                alert("Błąd podczas dodawania linii.");
+            }
+        }
+
+        async function openLinePassportModal(lineId) {
+            currentPassportLineId = lineId;
+            const modal = document.getElementById('modal-line-passport');
+            if (!modal) return;
+
+            try {
+                const res = await fetch(`/api/lines/${lineId}`);
+                if (!res.ok) throw new Error("Nie udało się pobrać danych linii");
+                const data = await res.json();
+                const l = data.line || data;
+                const audits = data.recent_audits || [];
+
+                document.getElementById('pass-line-name').textContent = `Profil: ${l.name || '---'}`;
+                document.getElementById('pass-line-code').textContent = `Kod identyfikacyjny: ${l.code || 'Brak'}`;
+                
+                const badge = document.getElementById('pass-status-badge');
+                badge.textContent = l.line_status || 'PRODUKCJA (Zwolniona)';
+                badge.className = `text-[10px] font-black px-2.5 py-0.5 rounded-full ${getStatusBadgeClass(l.line_status)}`;
+
+                const sel = document.getElementById('pass-new-status-select');
+                if (sel) sel.value = l.line_status || 'PRODUKCJA (Zwolniona)';
+
+                document.getElementById('pass-zone').textContent = l.default_zone || 'Standardowa';
+                document.getElementById('pass-allergen').textContent = l.allergen_profile || 'Brak alergenów';
+                document.getElementById('pass-ccp').textContent = l.ccp_equipment || 'Brak aparatury krytycznej';
+
+                const auditsContainer = document.getElementById('pass-recent-audits');
+                if (audits.length > 0) {
+                    auditsContainer.innerHTML = audits.map(a => {
+                        const verdictClass = a.slm_verdict === 'OK' ? 'text-emerald-400' : 'text-rose-400 font-bold';
+                        return `
+                            <div class="flex items-center justify-between text-[10px] bg-slate-900/60 p-1.5 rounded-lg border border-slate-800/80">
+                                <span class="text-slate-300 font-mono">${a.audit_date || a.timestamp} (${a.audit_type})</span>
+                                <span class="${verdictClass}">
+                                    ${a.slm_verdict || 'OK'} (${a.total_score_pct != null ? a.total_score_pct + '%' : '---'})
+                                </span>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    auditsContainer.innerHTML = '<p class="text-[10px] text-slate-500 italic">Brak zarejestrowanych audytów dla tej linii.</p>';
+                }
+
+                modal.classList.remove('hidden');
+            } catch(e) {
+                alert("Błąd otwierania profilu linii: " + e.message);
+            }
+        }
+
+        function closeLinePassportModal() {
+            const modal = document.getElementById('modal-line-passport');
+            if (modal) modal.classList.add('hidden');
+            currentPassportLineId = null;
+        }
+
+        async function applyLineStatusChange() {
+            if (!currentPassportLineId) return;
+            const newStatus = document.getElementById('pass-new-status-select').value;
+            const notes = prompt(`Zmiana statusu linii na: "${newStatus}".\nPodaj uzasadnienie zmiany (wymóg IFS Food v8):`, "Weryfikacja jakościowa / Zmiana dyspozycji produkcyjnej");
+            
+            if (notes === null) return; // anulowano
+
+            try {
+                const res = await fetch(`/api/lines/${currentPassportLineId}/status`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ line_status: newStatus, notes: notes })
+                });
+
+                if (res.ok) {
+                    alert(`✅ Status linii został zaktualizowany na: ${newStatus}`);
+                    await loadProductionLines();
+                    renderLinesManagerList();
+                    openLinePassportModal(currentPassportLineId); // odśwież widok profilu
+                } else {
+                    alert("❌ Błąd podczas zmiany statusu linii.");
+                }
+            } catch(e) {
+                alert("Błąd połączenia: " + e.message);
             }
         }
 
         async function deleteProductionLine(id) {
-            if (!confirm("Usunąć tę linię?")) return;
+            if (!confirm("Czy na pewno chcesz usunąć tę linię z rejestru fabrycznego?")) return;
             await fetch(`/api/lines/${id}`, { method: 'DELETE' });
-            await loadProductionLines(); renderLinesManagerList();
+            await loadProductionLines();
+            renderLinesManagerList();
         }
 
         async function loadAuditorsDropdown(type = "HACCP") {
             const res = await fetch(`/api/auth/auditors?type=${encodeURIComponent(type)}`);
             const list = await res.json();
-            const opts = list.map(a => `<option value="${a}">${a}</option>`).join('');
+            
+            const createOption = (auditor) => {
+                const name = (typeof auditor === 'object' && auditor !== null) ? (auditor.name || auditor.full_name || auditor.id) : auditor;
+                const val = (typeof auditor === 'object' && auditor !== null) ? (auditor.name || auditor.id) : auditor;
+                return `<option value="${val}">${name}</option>`;
+            };
+
+            const opts = list.map(createOption).join('');
             document.getElementById('plan-auditor').innerHTML = opts;
             document.getElementById('plan-backup').innerHTML = `<option value="Brak">Brak</option>` + opts;
         }
 
         function filterPlanAuditorsByType(v) { loadAuditorsDropdown(v); }
 
+        function sanitizeBadTerms(str) {
+            if (!str) return '';
+            const bad = ['odzieżow', 'na całe tempo', 'clothing', 'sita odzieżowego', 'ccp02', 'clo1_check', 'sitom sita', 'sprawy sita', 'ciałko sita', 'sensor check', 'sita roboczego'];
+            for (let b of bad) {
+                if (str.toLowerCase().includes(b)) {
+                    return 'Awaria CCP (Detektor Metali / Sita kontrolne). Natychmiastowe zatrzymanie linii oraz blokada magazynowa partii wyrobu (Hold Lot) od ostatniego poprawnego testu wzorców.';
+                }
+            }
+            return str;
+        }
+
+        function parseSlmJson(raw) {
+            if (!raw || typeof raw !== 'string') return null;
+            let trimmed = raw.trim();
+            if (trimmed.includes('```json')) {
+                trimmed = trimmed.split('```json')[1].split('```')[0].trim();
+            } else if (trimmed.includes('```')) {
+                trimmed = trimmed.split('```')[1].split('```')[0].trim();
+            }
+
+            let startIdx = trimmed.indexOf('{');
+            let endIdx = trimmed.lastIndexOf('}');
+            if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return null;
+            let jsonStr = trimmed.substring(startIdx, endIdx + 1);
+
+            // 1. Próba czystego JSON.parse
+            try {
+                const parsed = JSON.parse(jsonStr);
+                if (parsed && typeof parsed === 'object' && (parsed.status || parsed.poziom_ryzyka || parsed.decyzja)) {
+                    return parsed;
+                }
+            } catch(e) {}
+
+            // 2. Naprawa nieliteralnych nowych linii w stringach JSON
+            try {
+                let cleaned = jsonStr.replace(/:\s*"([^"]*)"/gs, function(m, p1) {
+                    return ': "' + p1.replace(/\n/g, '\\n').replace(/\r/g, '').replace(/"/g, '\\"') + '"';
+                });
+                const parsed = JSON.parse(cleaned);
+                if (parsed && typeof parsed === 'object' && (parsed.status || parsed.poziom_ryzyka || parsed.decyzja)) {
+                    return parsed;
+                }
+            } catch(e) {}
+
+            // 3. Fallback: Ekstrakcja wyrażeniami regularnymi
+            try {
+                const statusMatch = jsonStr.match(/"status"\s*:\s*"([^"]+)"/i);
+                const riskMatch = jsonStr.match(/"poziom_ryzyka"\s*:\s*"([^"]+)"/i);
+                const decMatch = jsonStr.match(/"decyzja"\s*:\s*"((?:[^"\\]|\\.)*)"/s);
+                if (statusMatch || riskMatch || decMatch) {
+                    const akcje = [];
+                    const akcjeMatch = jsonStr.match(/"akcje_korygujace"\s*:\s*\[(.*?)\]/s);
+                    if (akcjeMatch) {
+                        const itemMatches = akcjeMatch[1].match(/"((?:[^"\\]|\\.)*)"/g);
+                        if (itemMatches) itemMatches.forEach(m => akcje.push(m.slice(1, -1)));
+                    }
+                    const podpowiedzi = [];
+                    const podpMatch = jsonStr.match(/"podpowiedzi_prewencyjne"\s*:\s*\[(.*?)\]/s);
+                    if (podpMatch) {
+                        const itemMatches = podpMatch[1].match(/"((?:[^"\\]|\\.)*)"/g);
+                        if (itemMatches) itemMatches.forEach(m => podpowiedzi.push(m.slice(1, -1)));
+                    }
+                    return {
+                        status: statusMatch ? statusMatch[1] : "NOK",
+                        poziom_ryzyka: riskMatch ? riskMatch[1] : "KRYTYCZNE (HOLD LOT)",
+                        decyzja: decMatch ? decMatch[1].replace(/\\n/g, '\n') : "Awaria CCP / Odchylenie jakościowe.",
+                        akcje_korygujace: akcje,
+                        podpowiedzi_prewencyjne: podpowiedzi
+                    };
+                }
+            } catch(e) {}
+
+            return null;
+        }
+
+        function renderGraphicAuditCard(obj) {
+            const isNok = String(obj.status || '').toUpperCase().includes('NOK');
+            const risk = obj.poziom_ryzyka || (isNok ? 'KRYTYCZNE (HOLD LOT)' : 'NISKIE');
+            let decyzja = sanitizeBadTerms(obj.decyzja || 'Zezwolenie na kontynuację operacji.');
+            
+            let akcje = Array.isArray(obj.akcje_korygujace) ? obj.akcje_korygujace : [];
+            akcje = akcje.map(a => sanitizeBadTerms(a)).filter(a => !a.toLowerCase().includes('sita odzież'));
+            if (akcje.length === 0 && isNok) {
+                akcje = [
+                    "Natychmiastowe zatrzymanie linii produkcyjnej i fizyczne odizolowanie wyrobów od ostatniego zaliczonego testu",
+                    "Założenie blokady systemowej w ERP (status HOLD) na całą podejrzaną partię wyrobów",
+                    "Przegląd mechaniczny i walidacja pętli detektora metali wzorcami Fe/Non-Fe/SS"
+                ];
+            }
+
+            let podpowiedzi = Array.isArray(obj.podpowiedzi_prewencyjne) ? obj.podpowiedzi_prewencyjne : [];
+            podpowiedzi = podpowiedzi.map(p => sanitizeBadTerms(p)).filter(p => !p.toLowerCase().includes('sita odzież'));
+            if (podpowiedzi.length === 0 && isNok) {
+                podpowiedzi = [
+                    "Skrócenie interwału weryfikacji wzorców Fe/Non-Fe/SS do 1 godziny do czasu zakończenia przeglądu technicznego",
+                    "Wdrożenie procedury kontroli czujnika ciśnienia układu pneumatycznego odrzutnika przed każdą zmianą"
+                ];
+            }
+
+            const isCritical = risk.includes('KRYTYCZ') || risk.includes('HOLD') || isNok;
+            const bannerBg = isCritical 
+                ? 'bg-gradient-to-br from-rose-950/95 via-slate-900 to-black border-rose-500/60 shadow-rose-950/40' 
+                : 'bg-gradient-to-br from-emerald-950/95 via-slate-900 to-black border-emerald-500/60 shadow-emerald-950/40';
+            
+            const badgeBg = isCritical
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
+                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50';
+
+            const icon = isCritical ? '🚨' : '✅';
+            const statusLabel = isCritical ? 'NOK (NIEZGODNY - HOLD LOT)' : 'OK (ZGODNY)';
+
+            let akcjeHtml = '';
+            if (akcje.length > 0) {
+                akcjeHtml = `
+                    <div class="mt-2.5 pt-2.5 border-t border-white/10 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[9.5px] font-black text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <span>🛠️</span> <span>Wymagane Działania Korygujące (CAPA):</span>
+                            </span>
+                            <span class="text-[8px] font-bold bg-rose-900/40 text-rose-300 px-1.5 py-0.5 rounded border border-rose-700/50">IFS KO 6</span>
+                        </div>
+                        <div class="space-y-1">
+                            ${akcje.map(a => `
+                                <div class="p-2 rounded-xl bg-black/50 border border-rose-500/30 text-[11px] text-slate-100 flex items-start gap-2 shadow-inner">
+                                    <span class="text-rose-400 font-bold">⚠️</span>
+                                    <span class="leading-snug">${a}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            let podpowiedziHtml = '';
+            if (podpowiedzi.length > 0) {
+                podpowiedziHtml = `
+                    <div class="mt-2.5 pt-2 border-t border-white/10 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[9.5px] font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <span>🛡️</span> <span>Wytyczne Prewencyjne & SOP:</span>
+                            </span>
+                            <span class="text-[8px] font-bold bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded border border-amber-700/50">Dobre Praktyki</span>
+                        </div>
+                        <div class="space-y-1">
+                            ${podpowiedzi.map(p => `
+                                <div class="p-2 rounded-xl bg-black/50 border border-amber-500/30 text-[11px] text-slate-300 flex items-start gap-2 shadow-inner">
+                                    <span class="text-amber-400 font-bold">🔹</span>
+                                    <span class="leading-snug">${p}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Odnośniki graficzne i szybkie akcje
+            const quickLinksHtml = `
+                <div class="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[8.5px] font-black text-slate-400 uppercase tracking-wider mr-1">🔗 Odnośniki:</span>
+                    <button onclick="showModule('audit-main')" class="tile-3d bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-lg text-[9px] font-black flex items-center gap-1 shadow-md">
+                        <i class="fas fa-clipboard-check"></i> Przejdź do formularza audytu
+                    </button>
+                    <button onclick="sendQuickPrompt('HACCP: Jakie są kluczowe punkty krytyczne (CCP1-CCP3) i limity na tej linii?')" class="tile-3d bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-1 rounded-lg text-[9px] font-bold flex items-center gap-1 border border-cyan-500/30">
+                        <i class="fas fa-shield-alt"></i> Standard HACCP
+                    </button>
+                    <button onclick="sendQuickPrompt('Wymień 10 kryteriów Knock-Out (KO) w normie IFS Food v8 i konsekwencje ich naruszenia.')" class="tile-3d bg-slate-800 hover:bg-slate-700 text-amber-300 px-2 py-1 rounded-lg text-[9px] font-bold flex items-center gap-1 border border-amber-500/30">
+                        <i class="fas fa-exclamation-triangle"></i> Klauzule KO
+                    </button>
+                </div>
+            `;
+
+            return `
+                <div class="rounded-2xl border p-4 shadow-2xl ${bannerBg} space-y-3 max-w-[95%]">
+                    <div class="flex items-center justify-between pb-2 border-b border-white/10 gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-xl">${icon}</span>
+                            <div>
+                                <span class="text-[9px] text-slate-400 font-bold block uppercase tracking-wider">Ocena Zgodności IFS Food v8:</span>
+                                <span class="text-xs font-black ${isCritical ? 'text-rose-400' : 'text-emerald-400'} uppercase">${statusLabel}</span>
+                            </div>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-full border text-[9px] font-black ${badgeBg}">${risk}</span>
+                    </div>
+
+                    <div class="bg-black/50 p-3 rounded-xl border border-white/10 shadow-inner">
+                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                            <span>🛑</span> <span>Decyzja Operacyjna:</span>
+                        </span>
+                        <p class="text-xs font-bold text-slate-100 leading-relaxed">${decyzja}</p>
+                    </div>
+
+                    ${akcjeHtml}
+                    ${podpowiedziHtml}
+                    ${quickLinksHtml}
+                </div>
+            `;
+        }
+
         function renderMarkdownToHtml(t) {
-            return t.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300">$1</strong>').replace(/\n/g, '<br>');
+            if (!t) return "";
+            
+            const parsedObj = parseSlmJson(t);
+            if (parsedObj) {
+                return renderGraphicAuditCard(parsedObj);
+            }
+
+            let html = t
+                .replace(/### (.*?)\n/g, '<h3 class="text-xs font-black text-amber-300 mt-2 mb-1 flex items-center gap-1">$1</h3>')
+                .replace(/## (.*?)\n/g, '<h2 class="text-xs font-black text-cyan-300 mt-2 mb-1">$1</h2>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300 font-bold">$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em class="text-slate-300">$1</em>')
+                .replace(/^> (.*?)$/gm, '<blockquote class="border-l-2 border-amber-500/60 pl-2.5 my-1.5 text-slate-200 text-xs italic bg-slate-900/60 py-1 rounded-r-lg">$1</blockquote>')
+                .replace(/`([^`]+)`/g, '<code class="bg-slate-800 text-cyan-200 px-1 py-0.5 rounded text-[10px]">$1</code>')
+                .replace(/^[•\-\*] (.*?)$/gm, '<li class="ml-3 text-slate-200 list-disc">$1</li>')
+                .replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function syncAgentLineSelector() {
+            const sel = document.getElementById('agent-line-select');
+            if (!sel) return;
+            const currVal = sel.value;
+            let opts = `<option value="Cały Zakład">🏢 Cały Zakład (Widok Ogólny)</option>`;
+            if (Array.isArray(productionLinesData) && productionLinesData.length > 0) {
+                opts += productionLinesData.map(l => `<option value="${l.name}">${l.name}</option>`).join('');
+            }
+            sel.innerHTML = opts;
+            if (currVal && Array.from(sel.options).some(o => o.value === currVal)) {
+                sel.value = currVal;
+            } else if (state && state.line && Array.from(sel.options).some(o => o.value === state.line)) {
+                sel.value = state.line;
+            }
+        }
+
+        function onAgentLineChange() {
+            const sel = document.getElementById('agent-line-select');
+            if (sel && sel.value !== "Cały Zakład") {
+                state.line = sel.value;
+            }
+        }
+
+        async function runAgentBriefing() {
+            const sel = document.getElementById('agent-line-select');
+            const line = sel ? sel.value : (state.line || "Cały Zakład");
+            const box = document.getElementById('agent-chat-box');
+            const typing = document.getElementById('agent-typing');
+            const btn = document.getElementById('btn-agent-briefing');
+
+            box.innerHTML += `
+                <div class="flex justify-end">
+                    <div class="bg-cyan-950/70 p-2.5 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%] text-xs font-bold flex items-center gap-1.5 shadow-md">
+                        <span>🚀 Żądanie odprawy dla: <u>${line}</u></span>
+                    </div>
+                </div>
+            `;
+            box.scrollTop = box.scrollHeight;
+            if (typing) typing.classList.remove('hidden');
+            if (btn) btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/agent/briefing/${encodeURIComponent(line)}`);
+                const data = await res.json();
+                
+                let statusBadge = '<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded text-[9px] font-black">STATUS: ZGODNY (OK)</span>';
+                if (data.status === 'KRYTYCZNE') {
+                    statusBadge = '<span class="bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded text-[9px] font-black animate-pulse">STATUS: KRYTYCZNY (HOLD LOT)</span>';
+                } else if (data.status === 'UWAGA') {
+                    statusBadge = '<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black">STATUS: WYMAGA UWAGI (CAPA)</span>';
+                }
+
+                let checkpointsHtml = '';
+                if (data.checkpoints && data.checkpoints.length > 0) {
+                    checkpointsHtml = `
+                        <div class="mt-2.5 pt-2 border-t border-slate-700/60">
+                            <span class="text-[9px] font-black text-cyan-300 uppercase tracking-wider block mb-1.5">🎯 Punkty wzmożonej uwagi podczas inspekcji:</span>
+                            <ul class="space-y-1 text-[11px] text-slate-300 list-none pl-0">
+                                ${data.checkpoints.map(cp => `<li class="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-start gap-1.5"><span class="text-indigo-400">▪</span> <span>${renderMarkdownToHtml(cp)}</span></li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                box.innerHTML += `
+                    <div class="flex justify-start">
+                        <div class="bg-slate-900/95 p-3.5 rounded-2xl border border-indigo-500/40 text-slate-200 max-w-[95%] shadow-xl space-y-2">
+                            <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
+                                <span class="text-[10.5px] font-black text-amber-400 flex items-center gap-1.5">
+                                    📋 ODPRAWA: ${data.line}
+                                </span>
+                                ${statusBadge}
+                            </div>
+                            <div class="text-[11.5px] leading-relaxed text-slate-200">
+                                ${renderMarkdownToHtml(data.briefing_markdown)}
+                            </div>
+                            ${checkpointsHtml}
+                            <div class="text-[9px] text-slate-500 pt-1 flex justify-between border-t border-slate-800/80 mt-1">
+                                <span>Przeanalizowano audytów: <b>${data.total_audits_checked}</b> | Niezgodności NOK: <b>${data.nok_count}</b></span>
+                                <span>Ostatni audyt: <b>${data.last_audit_date || 'N/A'}</b></span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch(e) {
+                box.innerHTML += `<div class="text-rose-400 text-xs p-2.5 bg-rose-950/40 rounded-xl border border-rose-800/40">❌ Nie udało się pobrać odprawy. Sprawdź połączenie z serwerem.</div>`;
+            } finally {
+                if (typing) typing.classList.add('hidden');
+                if (btn) btn.disabled = false;
+                box.scrollTop = box.scrollHeight;
+            }
         }
 
         async function sendAgentMessage() {
@@ -1207,45 +2841,80 @@
             const txt = inp.value.trim();
             if (!txt) return;
             const box = document.getElementById('agent-chat-box');
+            const typing = document.getElementById('agent-typing');
+            const sel = document.getElementById('agent-line-select');
+            const activeLine = sel ? sel.value : (state.line || "Cały Zakład");
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const nameInput = document.getElementById('new-line-name');
-            const codeInput = document.getElementById('new-line-code');
-            if (nameInput && codeInput) {
-                nameInput.addEventListener('input', () => {
-                    if (codeInput.value === '' || codeInput.value.startsWith('LIN-')) {
-                        const name = nameInput.value;
-                        if (name) {
-                            codeInput.value = generateLineCode(name);
-                        } else {
-                            codeInput.value = '';
-                        }
-                    }
-                });
+            if (!Array.isArray(state.agent_chat_history)) {
+                state.agent_chat_history = [];
             }
-        });
 
-            box.innerHTML += `<div class="flex justify-end"><div class="bg-cyan-950/60 p-2 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%]">${txt}</div></div>`;
+            box.innerHTML += `<div class="flex justify-end"><div class="bg-cyan-950/60 p-2.5 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%] text-xs font-semibold shadow-md">${txt}</div></div>`;
             inp.value = "";
             box.scrollTop = box.scrollHeight;
+            if (typing) typing.classList.remove('hidden');
+
+            state.agent_chat_history.push({ role: 'user', content: txt });
+
             try {
-                const res = await fetch('/api/agent/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ message: txt, user_name: state.auditor_id, user_role: state.role }) });
+                const res = await fetch('/api/agent/chat', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ 
+                        message: txt, 
+                        user_name: state.auditor_id || "Audytor", 
+                        user_role: state.role || "AUDITOR",
+                        line: activeLine,
+                        history: state.agent_chat_history
+                    }) 
+                });
                 const d = await res.json();
-                box.innerHTML += `<div class="flex justify-start"><div class="bg-indigo-950/40 p-2 rounded-xl border border-indigo-500/30 text-slate-200 max-w-[92%]">${renderMarkdownToHtml(d.reply)}</div></div>`;
+                if (d && d.reply) {
+                    state.agent_chat_history.push({ role: 'assistant', content: d.reply });
+                }
+                box.innerHTML += `
+                    <div class="flex justify-start">
+                        <div class="bg-indigo-950/50 p-3 rounded-2xl border border-indigo-500/30 text-slate-200 max-w-[92%] text-xs leading-relaxed shadow-lg">
+                            <span class="text-[9.5px] font-black text-amber-400 block mb-1">🤖 Ai Support [${activeLine}]:</span>
+                            ${renderMarkdownToHtml(d.reply)}
+                        </div>
+                    </div>
+                `;
             } catch(e) {
-                box.innerHTML += `<div class="text-rose-400 text-[10px]">❌ Błąd silnika SLM.</div>`;
+                box.innerHTML += `<div class="text-rose-400 text-[10px] p-2 bg-rose-950/30 rounded-lg">❌ Błąd komunikacji z silnikiem SLM.</div>`;
+            } finally {
+                if (typing) typing.classList.add('hidden');
+                box.scrollTop = box.scrollHeight;
             }
-            box.scrollTop = box.scrollHeight;
         }
 
-        function sendQuickPrompt(t) { document.getElementById('agent-user-input').value = t; sendAgentMessage(); }
-        function clearAgentChat() { document.getElementById('agent-chat-box').innerHTML = ""; }
+        function sendQuickPrompt(t) { 
+            const inp = document.getElementById('agent-user-input');
+            if (inp) {
+                inp.value = t;
+                sendAgentMessage();
+            }
+        }
+
+        function clearAgentChat() { 
+            state.agent_chat_history = [];
+            const box = document.getElementById('agent-chat-box');
+            if (box) {
+                box.innerHTML = `
+                    <div class="bg-indigo-950/40 p-3 rounded-2xl border border-indigo-500/30 text-slate-200">
+                        <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 Ai Support:</span>
+                        Czat został wyczyszczony. Wybierz linię i kliknij <b>„🚀 Wejście na linię”</b> lub skorzystaj z szybkich kafelków standardów.
+                    </div>
+                `;
+            }
+        }
 
         async function openMgrModal(id) {
             const res = await fetch(`/api/schedule/${id}`);
             const a = await res.json();
             document.getElementById('mgr-edit-id').value = a.id;
             document.getElementById('mgr-edit-date').value = a.scheduled_date;
+            document.getElementById('mgr-edit-date').setAttribute('data-original-date', a.scheduled_date);
             document.getElementById('mgr-edit-type').value = a.audit_type;
             document.getElementById('mgr-edit-status').value = a.status;
             document.getElementById('mgr-edit-notes').value = a.notes || "";
@@ -1269,8 +2938,12 @@
             const newDate = document.getElementById('mgr-edit-date').value;
             const today = getLocalDateString();
 
-            if (newDate < today) {
-                return alert("⚠️ Przenoszenie audytów dozwolone jest wyłącznie w przód (data bieżąca lub przyszła)!");
+            const dateInput = document.getElementById("mgr-edit-date");
+            const originalDate = dateInput ? dateInput.getAttribute("data-original-date") : "";
+
+            // Jeśli użytkownik zmienia datę spóźnionego audytu, nowy termin musi być bieżący lub przyszły
+            if (originalDate && newDate !== originalDate && newDate < today) {
+                return alert("⚠️ Nowy wyznaczony termin audytu musi być datą bieżącą lub przyszłą!");
             }
 
             const leadAuditor = document.getElementById('mgr-edit-lead').value;
@@ -1312,18 +2985,788 @@
             document.getElementById('modal-aud-view').classList.remove('hidden');
         }
 
+        
+        let currentDetailedAuditId = null;
+        let currentDetailedAuditData = null;
+
+        window.closeAuditDetailsModal = function() {
+            const modal = document.getElementById('modal-audit-details');
+            if (modal) modal.classList.add('hidden');
+            currentDetailedAuditId = null;
+            currentDetailedAuditData = null;
+        };
+
+        window.switchAuditDetailTab = function(tab) {
+            const tabs = ['report', 'checklist', 'audit-trail'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const pane = document.getElementById(`tab-pane-${t}`);
+                if (btn && pane) {
+                    if (t === tab) {
+                        btn.className = "py-2.5 px-3.5 border-b-2 border-cyan-400 text-cyan-400 flex items-center gap-1.5 transition";
+                        pane.classList.remove('hidden');
+                    } else {
+                        btn.className = "py-2.5 px-3.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition";
+                        pane.classList.add('hidden');
+                    }
+                }
+            });
+        };
+
+        window.openAuditDetailsModal = async function(id) {
+            currentDetailedAuditId = id;
+            currentDetailedAuditData = null;
+            const modal = document.getElementById('modal-audit-details');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+
+            switchAuditDetailTab('report');
+
+            document.getElementById('det-audit-id-badge').textContent = '#' + id;
+            document.getElementById('det-head-line-shift').textContent = 'Pobieranie...';
+            document.getElementById('det-head-auditor-date').textContent = 'Pobieranie danych audytu...';
+            document.getElementById('det-slm-full-analysis').textContent = 'Trwa pobieranie danych i analizy SLM...';
+            document.getElementById('adm-reply-text').value = '';
+
+            try {
+                const res = await fetch(`/api/audits/${id}`);
+                if (!res.ok) {
+                    alert('Błąd podczas pobierania szczegółów audytu.');
+                    return;
+                }
+                const a = await res.json();
+                currentDetailedAuditData = a;
+
+                // Nagłówek
+                document.getElementById('det-audit-id-badge').textContent = '#' + a.id;
+                document.getElementById('det-head-line-shift').textContent = `Linia: ${a.line || '---'} • Zmiana: ${a.shift || 'I'}`;
+                document.getElementById('det-head-auditor-date').textContent = `Audytor: ${a.auditor_id || '---'} • Czas: ${(a.timestamp || '').substring(0, 16)}`;
+
+                // Badges
+                const verdictBadge = document.getElementById('det-badge-slm-verdict');
+                if (a.slm_verdict === 'OK') {
+                    verdictBadge.textContent = 'WERDYKT: OK';
+                    verdictBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-emerald-950 text-emerald-400 border-emerald-500/40';
+                } else {
+                    verdictBadge.textContent = 'WERDYKT: NOK';
+                    verdictBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-rose-950 text-rose-400 border-rose-500/40';
+                }
+
+                const riskBadge = document.getElementById('det-badge-risk-level');
+                riskBadge.textContent = a.risk_level || 'NISKIE';
+                if ((a.risk_level || '').includes('HOLD') || (a.risk_level || '').includes('KRYTYCZNE')) {
+                    riskBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-red-950 text-red-300 border-red-500/50 animate-pulse';
+                } else if ((a.risk_level || '').includes('ŚREDNIE')) {
+                    riskBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-amber-950 text-amber-300 border-amber-500/40';
+                } else {
+                    riskBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-emerald-950 text-emerald-300 border-emerald-500/30';
+                }
+
+                const statusBadge = document.getElementById('det-badge-record-status');
+                if (a.record_status === 'ODBLOKOWANY_DO_KOREKTY') {
+                    statusBadge.textContent = '🔓 ODBLOKOWANY';
+                    statusBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-emerald-950 text-emerald-300 border-emerald-500/30';
+                } else {
+                    statusBadge.textContent = '🔒 ZABLOKOWANY';
+                    statusBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-amber-950 text-amber-300 border-amber-500/30';
+                }
+
+                // TAB 1: SLM Analysis
+                const slmTag = document.getElementById('det-slm-verdict-tag');
+                const slmContainer = document.getElementById('det-slm-container');
+                if (a.slm_verdict === 'OK') {
+                    slmTag.textContent = 'ZGODNY (RYZYKO NISKIE)';
+                    slmTag.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full border bg-emerald-950 text-emerald-400 border-emerald-500/40';
+                    slmContainer.className = 'rounded-xl border border-emerald-500/30 p-4 bg-emerald-950/10 space-y-3';
+                } else {
+                    slmTag.textContent = a.risk_level || 'NOK (KRYTYCZNE)';
+                    slmTag.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full border bg-rose-950 text-rose-300 border-rose-500/50 animate-pulse';
+                    slmContainer.className = 'rounded-xl border border-rose-500/40 p-4 bg-rose-950/15 space-y-3';
+                }
+
+                const analysisEl = document.getElementById('det-slm-full-analysis');
+                if (a.slm_analysis_parsed) {
+                    const p = a.slm_analysis_parsed;
+                    let out = '';
+                    if (p.decyzja) out += `📌 DECYZJA OPERACYJNA:\n${p.decyzja}\n\n`;
+                    if (p.akcje_korygujace && p.akcje_korygujace.length) {
+                        out += `🚨 WYMAGANE AKCJE KORYGUJĄCE (CAPA):\n`;
+                        p.akcje_korygujace.forEach((act, idx) => out += `  ${idx + 1}. ${act}\n`);
+                        out += `\n`;
+                    }
+                    if (p.podpowiedzi_prewencyjne && p.podpowiedzi_prewencyjne.length) {
+                        out += `🛡️ ZALECENIA PREWENCYJNE:\n`;
+                        p.podpowiedzi_prewencyjne.forEach((prv, idx) => out += `  • ${prv}\n`);
+                    }
+                    analysisEl.textContent = out || a.slm_analysis || 'Brak danych analizy.';
+                } else {
+                    analysisEl.textContent = a.slm_analysis || 'Analiza wygenerowana automatycznie przez moduł asystenta IFS Food v8.';
+                }
+
+                // Helper do formatowania statusu
+                const fmtOk = (val) => {
+                    const isOk = (val === 'ZGODNY' || val === 'TAK' || val === 'OK');
+                    return `<span class="${isOk ? 'text-emerald-400 font-bold' : 'text-rose-400 font-black'}">${val || '---'}</span>`;
+                };
+
+                // CCP 1
+                document.getElementById('det-ccp1-fe').innerHTML = fmtOk(a.ccp1_fe_ok);
+                document.getElementById('det-ccp1-nonfe').innerHTML = fmtOk(a.ccp1_nonfe_ok);
+                document.getElementById('det-ccp1-ss').innerHTML = fmtOk(a.ccp1_ss_ok);
+                document.getElementById('det-ccp1-reject').innerHTML = fmtOk(a.ccp1_reject_ok);
+                document.getElementById('det-ccp1-bin').innerHTML = fmtOk(a.ccp1_bin_locked);
+
+                // CCP 2 & 3
+                document.getElementById('det-ccp2-magnet').innerHTML = fmtOk(a.ccp2_magnet_ok);
+                document.getElementById('det-ccp3-sieve').innerHTML = fmtOk(a.ccp3_sieve_ok);
+
+                // KO Indicator
+                const koFailed = (a.ko_failed == 1 || (a.checklist_parsed && Object.values(a.checklist_parsed).some(q => q.is_ko && q.status === 'NOK')));
+                const koEl = document.getElementById('det-ko-status');
+                if (koFailed) {
+                    koEl.textContent = 'KO: NARUSZONE (KRYTYCZNE)';
+                    koEl.className = 'text-[9px] font-black px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-500/50 animate-pulse';
+                } else {
+                    koEl.textContent = 'KO: ZGODNE';
+                    koEl.className = 'text-[9px] font-black px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30';
+                }
+
+                // PRP / GMP
+                document.getElementById('det-health-ok').innerHTML = fmtOk(a.health_ok);
+                document.getElementById('det-glass-ok').innerHTML = fmtOk(a.glass_plastic_ok);
+                document.getElementById('det-allergen-ok').innerHTML = fmtOk(a.allergen_clean_ok);
+                document.getElementById('det-wood-ok').innerHTML = fmtOk(a.wood_policy_ok);
+                document.getElementById('det-cleanliness-ok').innerHTML = fmtOk(a.gmp_cleanliness_ok);
+                document.getElementById('det-bhp-estop-ok').innerHTML = fmtOk(a.bhp_estop_ok);
+
+                // Zdjęcie
+                const photoBox = document.getElementById('det-photo-container');
+                if (a.photo_path) {
+                    photoBox.innerHTML = `
+                        <div class="flex items-center gap-3 bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                            <a href="${a.photo_path}" target="_blank" title="Kliknij, aby powiększyć zdjęcie">
+                                <img src="${a.photo_path}" alt="Zdjęcie z audytu" class="w-24 h-24 object-cover rounded-lg border border-cyan-500/40 hover:opacity-90 hover:scale-105 transition" />
+                            </a>
+                            <div class="space-y-1 text-xs">
+                                <div class="text-white font-bold">Fotografia dowodowa niezgodności</div>
+                                <div class="text-[10px] text-slate-400">Plik: ${a.photo_path}</div>
+                                <a href="${a.photo_path}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-cyan-400 hover:underline">
+                                    🔍 Otwórz zdjęcie w pełnym rozmiarze
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    photoBox.innerHTML = `<p class="text-xs text-slate-500 italic">Brak załączonych fotografii dla tego wpisu audytu.</p>`;
+                }
+
+                // TAB 2: Checklista
+                const chBody = document.getElementById('det-checklist-table-body');
+                chBody.innerHTML = '';
+                const chItems = a.checklist_parsed ? Object.values(a.checklist_parsed) : [];
+                document.getElementById('det-badge-checklist-count').textContent = chItems.length;
+                document.getElementById('det-ch-total').textContent = chItems.length;
+
+                let nokCount = 0;
+                let koCount = 0;
+
+                if (chItems.length === 0) {
+                    chBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500">Brak zarejestrowanych pytań checklisty dla tego audytu.</td></tr>`;
+                } else {
+                    chItems.forEach(item => {
+                        const isNok = (item.status === 'NOK' || (item.score !== undefined && item.score < 5));
+                        if (isNok) nokCount++;
+                        if (item.is_ko) koCount++;
+
+                        const koBadge = item.is_ko ? `<span class="ml-1 text-[8px] bg-red-950 text-red-400 px-1 py-0.2 rounded border border-red-500/30 font-bold">KO</span>` : '';
+                        const statusColor = isNok ? 'bg-rose-950 text-rose-300 border-rose-500/40' : 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+                        const scoreDisplay = item.score !== undefined ? `${item.score}/5` : (item.status || 'OK');
+                        const notesDisplay = item.notes ? `<span class="text-amber-300 font-medium">💬 ${item.notes}</span>` : `<span class="text-slate-500 italic">Brak uwag</span>`;
+
+                        chBody.innerHTML += `
+                            <tr class="hover:bg-slate-800/60 transition">
+                                <td class="p-2.5 font-mono text-[10px] font-bold text-cyan-300 whitespace-nowrap">
+                                    ${item.clause || '---'}${koBadge}
+                                </td>
+                                <td class="p-2.5 text-slate-200 text-xs leading-snug">
+                                    ${item.question || '---'}
+                                </td>
+                                <td class="p-2.5 text-center whitespace-nowrap">
+                                    <span class="text-[9px] font-black px-2 py-0.5 rounded border ${statusColor}">
+                                        ${scoreDisplay}
+                                    </span>
+                                </td>
+                                <td class="p-2.5 text-xs">
+                                    ${notesDisplay}
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                document.getElementById('det-ch-nok').textContent = nokCount;
+                document.getElementById('det-ch-ko').textContent = koCount;
+
+                // TAB 3: Audit Trail logs
+                const trailBody = document.getElementById('det-audit-trail-logs-body');
+                trailBody.innerHTML = '';
+                const logs = a.change_logs || [];
+                document.getElementById('det-badge-trail-count').textContent = logs.length;
+
+                if (logs.length === 0) {
+                    trailBody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-500">Brak zarejestrowanych modyfikacji w Audit Trail dla tego audytu.</td></tr>`;
+                } else {
+                    logs.forEach(l => {
+                        trailBody.innerHTML += `
+                            <tr class="hover:bg-slate-800/50 transition">
+                                <td class="p-2 text-slate-400 whitespace-nowrap">${(l.timestamp || '').substring(0, 19)}</td>
+                                <td class="p-2 font-bold text-white whitespace-nowrap">${l.modified_by || 'System'}</td>
+                                <td class="p-2 font-mono text-cyan-300">${l.field_name}</td>
+                                <td class="p-2"><span class="text-slate-400 line-through mr-1">${l.old_value || '—'}</span> ➔ <span class="text-emerald-300 font-bold ml-1">${l.new_value}</span></td>
+                                <td class="p-2 text-slate-300 italic">${l.change_reason || 'Brak uzasadnienia'}</td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                // TAB 3: Formularz korekty
+                document.getElementById('adm-edit-line').value = a.line || '';
+                if (a.shift) document.getElementById('adm-edit-shift').value = a.shift;
+
+                const lineInput = document.getElementById('adm-edit-line');
+                const shiftInput = document.getElementById('adm-edit-shift');
+                const replyText = document.getElementById('adm-reply-text');
+                const btnSave = document.getElementById('btn-save-correction');
+                const modeBadge = document.getElementById('det-correction-mode-badge');
+                const noticeEl = document.getElementById('det-lock-notice');
+
+                if (a.record_status === 'ODBLOKOWANY_DO_KOREKTY') {
+                    lineInput.disabled = false;
+                    shiftInput.disabled = false;
+                    replyText.disabled = false;
+                    btnSave.disabled = false;
+                    modeBadge.textContent = 'Tryb: Odblokowany do korekty';
+                    modeBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30';
+                    noticeEl.className = 'p-2.5 rounded-lg border text-xs flex items-center gap-2 bg-emerald-950/40 border-emerald-500/40 text-emerald-300';
+                    noticeEl.innerHTML = `<span>🔓</span> <div><b>Audyt został formalnie odblokowany do edycji przez Managera Jakości.</b> Możesz wprowadzić poprawki i zatwierdzić wpis w Audit Trail.</div>`;
+                } else {
+                    lineInput.disabled = true;
+                    shiftInput.disabled = true;
+                    replyText.disabled = true;
+                    btnSave.disabled = true;
+                    modeBadge.textContent = 'Tryb: Zablokowany (Tylko do odczytu)';
+                    modeBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/30';
+                    noticeEl.className = 'p-2.5 rounded-lg border text-xs flex items-center gap-2 bg-amber-950/40 border-amber-500/40 text-amber-300';
+                    noticeEl.innerHTML = `<span>🔒</span> <div><b>Wpis jest zablokowany zgodnie z wymogami IFS Food v8.</b> Bezpośrednia modyfikacja jest niedozwolona dopóki wniosek o korektę nie zostanie zatwierdzony w panelu wniosków.</div>`;
+                }
+
+                // Pasek akcji Managera
+                const btnHold = document.getElementById('btn-modal-hold-lot');
+                if (a.slm_verdict === 'NOK' || (a.risk_level || '').includes('HOLD') || (a.risk_level || '').includes('KRYTYCZNE')) {
+                    btnHold.classList.remove('hidden');
+                } else {
+                    btnHold.classList.add('hidden');
+                }
+
+                const btnApprove = document.getElementById('btn-modal-approve');
+                const btnReject = document.getElementById('btn-modal-reject');
+                const footerInfo = document.getElementById('det-footer-status-info');
+
+                if (a.compliance_verdict === 'ZATWIERDZONY') {
+                    btnApprove.disabled = true;
+                    btnApprove.className = 'px-3 py-1.5 bg-slate-800 text-slate-500 rounded-lg text-xs font-bold cursor-not-allowed';
+                    btnApprove.innerHTML = `<span>✓ Raport Zatwierdzony</span>`;
+                    btnReject.disabled = false;
+                    btnReject.className = 'px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition';
+                    footerInfo.innerHTML = `<span class="text-emerald-400 font-bold">✓ Formalnie zatwierdzony przez Managera Jakości</span>`;
+                } else if (a.compliance_verdict === 'ODRZUCONY') {
+                    btnReject.disabled = true;
+                    btnReject.className = 'px-3 py-1.5 bg-slate-800 text-slate-500 rounded-lg text-xs font-bold cursor-not-allowed';
+                    btnReject.innerHTML = `<span>✕ Raport Odrzucony</span>`;
+                    btnApprove.disabled = false;
+                    btnApprove.className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition';
+                    footerInfo.innerHTML = `<span class="text-rose-400 font-bold">✕ Raport odrzucony przez Managera</span>`;
+                } else {
+                    btnApprove.disabled = false;
+                    btnApprove.className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1';
+                    btnApprove.innerHTML = `<span>✓ Zatwierdź Raport Audytu</span>`;
+                    btnReject.disabled = false;
+                    btnReject.className = 'px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1';
+                    btnReject.innerHTML = `<span>✕ Odrzuć Raport</span>`;
+                    footerInfo.innerHTML = `<span class="text-slate-400">Oczekuje na weryfikację i decyzję Managera Jakości</span>`;
+                }
+
+            } catch(e) {
+                console.error("Błąd pobierania danych audytu:", e);
+                alert("Wystąpił błąd podczas ładowania szczegółów audytu.");
+            }
+        };
+
+        window.handleAuditApproveFromModal = async function() {
+            if (!currentDetailedAuditId) return;
+            const targetId = Number(currentDetailedAuditId);
+            try {
+                const item = cachedManagerAudits.find(a => Number(a.id) === targetId || String(a.id) === String(targetId));
+                if (item) {
+                    item.compliance_verdict = 'ZATWIERDZONY';
+                    item.process_status = 'ZATWIERDZONY';
+                    item.record_status = 'ZABLOKOWANY';
+                }
+
+                const res = await apiFetch(`/api/audits/${targetId}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'ZATWIERDZONY', manager_name: 'Manager Jakości' })
+                });
+                if (res && res.ok) {
+                    if (typeof showToast === 'function') {
+                        showToast(`✅ Raport audytu #${targetId} został zatwierdzony i przeniesiony do Zatwierdzonych!`, 'success');
+                    } else {
+                        alert(`✅ Raport audytu #${targetId} został formalnie zatwierdzony!`);
+                    }
+                    await openAuditDetailsModal(targetId);
+                    renderManagerAuditsTable();
+                    if (typeof loadAuditResults === 'function') await loadAuditResults();
+                    if (typeof loadAuditorHistory === 'function') loadAuditorHistory();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Błąd zatwierdzania audytu: ' + (err.detail || 'Błąd serwera.'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Błąd połączenia podczas zatwierdzania audytu.');
+            }
+        };
+
+        window.handleAuditRejectFromModal = async function() {
+            if (!currentDetailedAuditId) return;
+            const targetId = Number(currentDetailedAuditId);
+            const reason = prompt('Podaj powód odrzucenia raportu z audytu (wymóg IFS Food v8):');
+            if (!reason || reason.trim() === '') return;
+
+            try {
+                const item = cachedManagerAudits.find(a => Number(a.id) === targetId || String(a.id) === String(targetId));
+                if (item) {
+                    item.compliance_verdict = 'ODRZUCONY';
+                    item.process_status = 'ODRZUCONY';
+                    item.record_status = 'ZABLOKOWANY';
+                }
+
+                const res = await apiFetch(`/api/audits/${targetId}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'ODRZUCONY', reason: reason, manager_name: 'Manager Jakości' })
+                });
+                if (res && res.ok) {
+                    alert(`✕ Raport audytu #${targetId} został odrzucony.`);
+                    await openAuditDetailsModal(targetId);
+                    renderManagerAuditsTable();
+                    if (typeof loadAuditResults === 'function') await loadAuditResults();
+                    if (typeof loadAuditorHistory === 'function') loadAuditorHistory();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Błąd odrzucania audytu: ' + (err.detail || 'Błąd serwera.'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Błąd połączenia podczas odrzucania audytu.');
+            }
+        };
+
+        window.handleHoldLotFromModal = async function() {
+            if (!currentDetailedAuditId) return;
+            const confirmAction = confirm(`⚠️ UWAGA: Czy na pewno chcesz natychmiast zarządzić procedurę wstrzymania partii (HOLD LOT) dla audytu #${currentDetailedAuditId}? Ta operacja zostanie trwale odnotowana w Audit Trail.`);
+            if (!confirmAction) return;
+
+            try {
+                const res = await apiFetch(`/api/audits/${currentDetailedAuditId}/hold-lot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason: 'Zarządzenie wstrzymania partii (HOLD LOT) na skutek werdyktu NOK', manager_name: 'Manager Jakości' })
+                });
+                if (res.ok) {
+                    alert(`🚨 Procedura HOLD LOT została zarejestrowana i oznaczona w systemie!`);
+                    await openAuditDetailsModal(currentDetailedAuditId);
+                    if (typeof loadAuditResults === 'function') await loadAuditResults();
+                } else {
+                    alert('Błąd podczas rejestracji procedury HOLD LOT.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Błąd połączenia.');
+            }
+        };
+
+        window.submitAuditCorrection = async function() {
+            if (!currentDetailedAuditId) return;
+
+            const line = document.getElementById('adm-edit-line').value.trim();
+            const shift = document.getElementById('adm-edit-shift').value;
+            const reason = document.getElementById('adm-reply-text').value.trim();
+
+            if (!reason || reason.length < 5) {
+                alert("Podanie szczegółowego powodu korekty jest wymagane przez normę IFS Food v8 (min. 5 znaków).");
+                return;
+            }
+
+            const payload = {
+                audit_id: currentDetailedAuditId,
+                modified_by: (typeof state !== 'undefined' && (state.currentAuditor || state.role)) ? (state.currentAuditor || state.role) : "Manager",
+                change_reason: reason,
+                updated_fields: {
+                    line: line,
+                    shift: shift
+                }
+            };
+
+            const btn = document.getElementById('btn-save-correction');
+            btn.disabled = true;
+            btn.textContent = 'Wysyłanie...';
+
+            try {
+                const res = await apiFetch('/api/audits/apply-correction', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    alert('✅ Korekta została zarejestrowana w dzienniku Audit Trail!');
+                    await openAuditDetailsModal(currentDetailedAuditId);
+                    if (typeof loadAuditResults === 'function') await loadAuditResults();
+                    if (typeof loadAuditorHistory === 'function') await loadAuditorHistory();
+                } else {
+                    alert('Błąd: ' + (data.detail || 'Nie udało się zapisać korekty.'));
+                }
+            } catch (e) {
+                alert('Błąd połączenia z serwerem podczas zapisu korekty.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>💾 Zapisz korektę w Audit Trail</span>';
+            }
+        };
+
+        // --- OBSŁUGA NAGRYWANIA GŁOSOWEGO (SPEECH-TO-TEXT / CIĄGŁE DYKTOWANIE W RAMCE) ---
+        window.toggleSpeechToText = function(targetElementId, btnElement) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Twoja przeglądarka nie obsługuje wbudowanego rozpoznawania mowy (Web Speech API).\nAby dyktować uwagi głosem w języku polskim, skorzystaj z przeglądarki Google Chrome, Microsoft Edge lub Safari.");
+                return;
+            }
+
+            const targetInput = document.getElementById(targetElementId);
+            if (!targetInput) return;
+
+            // Jeśli aktualnie nagrywamy to pole -> zatrzymaj
+            if (window.currentActiveRecognition && window.currentRecognitionTargetId === targetElementId) {
+                window.currentActiveRecognition.stop();
+                return;
+            }
+
+            // Jeśli nagrywaliśmy inne pole -> zatrzymaj tamto
+            if (window.currentActiveRecognition) {
+                try { window.currentActiveRecognition.stop(); } catch(e) {}
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'pl-PL';
+            recognition.interimResults = true;
+            recognition.continuous = true; // CIĄGŁE DYKTOWANIE: pozwala mówić dowolną liczbę sekund (10s, 30s, 60s...)
+
+            window.currentActiveRecognition = recognition;
+            window.currentRecognitionTargetId = targetElementId;
+
+            const existingVal = targetInput.value.trim();
+            const baseText = existingVal ? existingVal + ' ' : '';
+            let finalTranscript = '';
+
+            // Automatyczny timer bezpieczeństwa na 90 sekund ciągłego mówienia
+            const maxDurationTimer = setTimeout(() => {
+                if (window.currentActiveRecognition === recognition) {
+                    recognition.stop();
+                }
+            }, 90000);
+
+            recognition.onstart = function() {
+                if (btnElement) {
+                    btnElement.className = "absolute right-1.5 top-1.5 w-6 h-6 rounded-md border border-rose-500 bg-rose-950 text-rose-400 flex items-center justify-center text-xs animate-pulse cursor-pointer shadow-md shadow-rose-500/40";
+                    btnElement.innerHTML = '<i class="fas fa-microphone text-rose-400"></i>';
+                    btnElement.title = "Trwa ciągłe nagrywanie... Mów uwagę (np. 'jest uszkodzenie w tym miejscu'). Kliknij mikrofon, aby zakończyć.";
+                }
+                targetInput.classList.add('ring-2', 'ring-rose-500/50', 'border-rose-500');
+            };
+
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + ' ';
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                const spoken = (finalTranscript + interimTranscript).trim();
+                targetInput.value = (baseText + spoken).trim();
+                targetInput.dispatchEvent(new Event('input'));
+            };
+
+            recognition.onerror = function(event) {
+                console.warn('Błąd rozpoznawania mowy:', event.error);
+                if (event.error === 'not-allowed') {
+                    alert('Dostęp do mikrofonu został zablokowany. Włącz uprawnienia mikrofonu w przeglądarce.');
+                }
+            };
+
+            recognition.onend = function() {
+                clearTimeout(maxDurationTimer);
+                window.currentActiveRecognition = null;
+                window.currentRecognitionTargetId = null;
+                targetInput.classList.remove('ring-2', 'ring-rose-500/50', 'border-rose-500');
+                if (btnElement) {
+                    btnElement.className = "absolute right-1.5 top-1.5 w-6 h-6 rounded-md bg-slate-900 border border-slate-700 hover:border-cyan-500 text-cyan-400 hover:text-white flex items-center justify-center text-xs transition-all cursor-pointer shadow-sm";
+                    btnElement.innerHTML = '<i class="fas fa-microphone"></i>';
+                    btnElement.title = "Podyktuj uwagę bezpośrednio do ramki (zamiana głosu na tekst)";
+                }
+            };
+
+            try {
+                recognition.start();
+            } catch(e) {
+                console.error("Nie udało się uruchomić rozpoznawania mowy:", e);
+            }
+        };
+
         function closeAudModal() { document.getElementById('modal-aud-view').classList.add('hidden'); }
+
+        window.handleAuditAction = async function(action, id) {
+            const numId = Number(id);
+
+            if (action === 'approve') {
+                // 1. Natychmiastowa aktualizacja optymistyczna w pamięci podręcznej UI
+                const item = cachedManagerAudits.find(a => Number(a.id) === numId || String(a.id) === String(id));
+                if (item) {
+                    item.compliance_verdict = 'ZATWIERDZONY';
+                    item.process_status = 'ZATWIERDZONY';
+                    item.record_status = 'ZABLOKOWANY';
+                }
+
+                // 2. Key User pozostaje w bieżącym oknie głównym — audyt natychmiast znika z oczekujących
+                renderManagerAuditsTable();
+
+                if (typeof showToast === 'function') {
+                    showToast(`✅ Audyt #${id} zatwierdzony! Przeniesiono do zakładki "Zatwierdzone".`, 'success');
+                }
+
+                try {
+                    const res = await apiFetch(`/api/audits/${id}/status`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'ZATWIERDZONY' })
+                    });
+                    if (res && res.ok) {
+                        await loadAuditResults();
+                        if (typeof loadAuditorHistory === 'function') loadAuditorHistory();
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        alert('Błąd podczas zatwierdzania audytu: ' + (err.detail || 'Brak uprawnień lub błąd serwera.'));
+                        await loadAuditResults();
+                    }
+                } catch (e) {
+                    console.warn('API status patch error:', e);
+                    alert('Nie udało się zapisać zmiany w bazie danych. Sprawdź połączenie.');
+                    await loadAuditResults();
+                }
+
+            } else if (action === 'reject') {
+                const reason = prompt('Podaj powód odrzucenia audytu (wymóg IFS Food v8):');
+                if (!reason || reason.trim() === '') return;
+
+                // Natychmiastowa aktualizacja optymistyczna w UI
+                const item = cachedManagerAudits.find(a => Number(a.id) === numId || String(a.id) === String(id));
+                if (item) {
+                    item.compliance_verdict = 'ODRZUCONY';
+                    item.process_status = 'ODRZUCONY';
+                    item.record_status = 'ZABLOKOWANY';
+                }
+
+                // Audyt natychmiast znika z okna głównego i wpada do zakładki "Odrzucone audyty"
+                renderManagerAuditsTable();
+
+                if (typeof showToast === 'function') {
+                    showToast(`✕ Audyt #${id} został odrzucony i przeniesiony do zakładki "Odrzucone audyty".`, 'warning');
+                }
+
+                try {
+                    const res = await apiFetch(`/api/audits/${id}/status`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'ODRZUCONY', reason: reason })
+                    });
+                    if (res && res.ok) {
+                        await loadAuditResults();
+                        if (typeof loadAuditorHistory === 'function') loadAuditorHistory();
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        alert('Błąd podczas odrzucania audytu: ' + (err.detail || 'Błąd serwera.'));
+                        await loadAuditResults();
+                    }
+                } catch (e) {
+                    console.warn('API status patch fallback:', e);
+                    await loadAuditResults();
+                }
+
+            } else if (action === 'details') {
+                if (typeof openAuditDetailsModal === 'function') {
+                    openAuditDetailsModal(id);
+                } else {
+                    alert('Szczegóły audytu #' + id);
+                }
+            }
+        };
+
         
         function startAuditorTask() {
             if (!activeSelectedAudit) return;
             state.line = activeSelectedAudit.line;
             state.active_audit_type = activeSelectedAudit.audit_type || "HACCP";
-            document.getElementById('badge-active-standard').innerText = state.active_audit_type;
+            setInspectionStandard(state.active_audit_type);
             
             document.getElementById('hidden-line-input').value = state.line;
+            document.querySelectorAll('.tile-line').forEach(b => {
+                if (b.getAttribute('data-line') === state.line || b.textContent.trim() === state.line) {
+                    b.classList.add('tile-selected');
+                } else {
+                    b.classList.remove('tile-selected');
+                }
+            });
             formHistory.saveState('view-audit-form'); 
             
             closeAudModal();
-            loadChecklistForAudit(state.active_audit_type);
             showModule('audit-main');
         }
+
+
+    window.toggleAuditorPinVisibility = function(show) {
+        const pinInput = document.getElementById('edit-auditor-pin');
+        if (pinInput) {
+            pinInput.type = show ? 'text' : 'password';
+        }
+    };
+
+    window.showAuditorProfileModal = function(user) {
+        if (!user) return;
+        window.currentAuditorId = user.id;
+
+        const nameEl = document.getElementById('edit-auditor-name');
+        const roleEl = document.getElementById('edit-auditor-role');
+        const pinInput = document.getElementById('edit-auditor-pin');
+        const showPinCb = document.getElementById('edit-auditor-show-pin');
+
+        if (nameEl) nameEl.value = user.full_name || '';
+        if (roleEl) roleEl.value = user.role || 'AUDITOR';
+        
+        if (pinInput) {
+            pinInput.value = user.pin || '';
+            pinInput.type = 'text';
+        }
+        if (showPinCb) {
+            showPinCb.checked = true;
+        }
+
+        const qualCheckboxes = document.querySelectorAll('#edit-auditor-qualifications input[type="checkbox"]');
+        const userQuals = Array.isArray(user.qualifications) ? user.qualifications : (user.qualifications ? String(user.qualifications).split(',').map(q => q.trim()) : ['HACCP', 'GMP', 'GHP']);
+        qualCheckboxes.forEach(checkbox => {
+            checkbox.checked = userQuals.includes(checkbox.value);
+        });
+
+        const zoneCheckboxes = document.querySelectorAll('#edit-auditor-zones input[type="checkbox"]');
+        const userZones = Array.isArray(user.zones) ? user.zones : (user.zones ? String(user.zones).split(',').map(z => z.trim()) : ['ALL']);
+        zoneCheckboxes.forEach(checkbox => {
+            checkbox.checked = userZones.includes(checkbox.value);
+        });
+
+        document.getElementById('auditor-profile-modal').classList.remove('hidden');
+    };
+
+    window.saveAuditorProfile = async function() {
+        const auditorId = window.currentAuditorId;
+        if (!auditorId) {
+            alert('Błąd: brak ID audytora do zapisu.');
+            return;
+        }
+
+        const fullName = (document.getElementById('edit-auditor-name')?.value || '').trim();
+        const role = document.getElementById('edit-auditor-role')?.value || 'AUDITOR';
+        const pin = (document.getElementById('edit-auditor-pin')?.value || '').trim();
+
+        if (!fullName) return alert('Wprowadź imię i nazwisko!');
+        if (!pin) return alert('Wprowadź kod PIN!');
+
+        const selectedQuals = Array.from(document.querySelectorAll('#edit-auditor-qualifications input[type="checkbox"]')).filter(cb => cb.checked).map(cb => cb.value);
+        const selectedZones = Array.from(document.querySelectorAll('#edit-auditor-zones input[type="checkbox"]')).filter(cb => cb.checked).map(cb => cb.value);
+
+        const updatedAuditor = {
+            full_name: fullName,
+            role: role,
+            pin: pin,
+            qualifications: selectedQuals,
+            zones: selectedZones
+        };
+
+        try {
+            const res = await apiFetch(`/api/users/${auditorId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(updatedAuditor)
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                alert('❌ Błąd podczas zapisu: ' + (errorData.detail || errorData.message || res.statusText));
+                return;
+            }
+
+            if (typeof renderAuditorsList === 'function') await renderAuditorsList();
+            if (typeof loadAuditorsDropdown === 'function') await loadAuditorsDropdown();
+            if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
+
+            document.getElementById('auditor-profile-modal').classList.add('hidden');
+            alert('✅ Profil audytora oraz kod PIN zostały pomyślnie zaktualizowane!');
+
+        } catch (error) {
+            console.error('Wystąpił błąd sieci lub serwera:', error);
+            alert('❌ Wystąpił błąd sieci lub serwera podczas zapisu profilu.');
+        }
+    };
+
+    window.clearCurrentMonthSchedule = async function() {
+        const monthSelect = document.getElementById('autoplan-month');
+        const yearSelect = document.getElementById('autoplan-year');
+        const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex]?.text : 'wybranego miesiąca';
+        
+        if (!confirm()) {
+            return;
+        }
+
+        try {
+            const payload = {
+                month: monthSelect ? parseInt(monthSelect.value) : new Date().getMonth() + 1,
+                year: yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear()
+            };
+            const res = await fetch('/api/schedule/clear-month', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                console.warn('Dedykowany endpoint clear-month niedostępny, odświeżam widok harmonogramu.');
+            }
+            if (typeof loadSchedule === 'function') loadSchedule();
+            if (typeof loadScheduleAndRender === 'function') loadScheduleAndRender();
+            closeAutoPlanModal();
+        } catch (err) {
+            console.error('Błąd podczas czyszczenia miesiąca:', err);
+        }
+    };

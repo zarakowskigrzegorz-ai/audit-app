@@ -1,8 +1,15 @@
 venv/
 __pycache__/
 *.pyc
-audits.db*
+*.db*
 uploads/
 .env
 *.gguf
 .DS_Store
+.secret_key
+*.bak*
+*.backup*
+lora_audit_model*
+adapter_model.safetensors
+adapter_config.json
+

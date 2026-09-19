@@ -55,17 +55,22 @@ function updateAuditHud(step, title, desc, mode) {
         function showModule(modId, pushToHistory = true) {
             document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
             
+            // Jeśli rola to AUDYTOR i wywołano 'hub', domyślnie otwórz kalendarz
+            if (modId === 'hub' && state.role === 'AUDITOR') {
+                modId = 'calendar';
+            }
+
             let targetId = modId;
-            if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor'; }
+            if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'view-calendar'; }
             else if (modId === 'audit-main') { targetId = 'view-audit-main'; }
             else if (!modId.startsWith('view-') && !modId.startsWith('hub-')) { targetId = 'view-' + modId; }
 
             let target = document.getElementById(targetId);
             // Fallback zapobiegający czarnemu ekranowi:
             if (!target) {
-                targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor';
+                targetId = state.role === 'MANAGER' ? 'hub-manager' : 'view-calendar';
                 target = document.getElementById(targetId);
-                modId = 'hub';
+                modId = state.role === 'MANAGER' ? 'hub' : 'calendar';
             }
 
             if(target) {
@@ -76,15 +81,35 @@ function updateAuditHud(step, title, desc, mode) {
                 }
                 currentModule = modId;
             }
+
+            // Zarządzanie widocznością głównego formularza audytu
+            const auditForm = document.getElementById('view-audit-form');
+            if (auditForm) {
+                if (modId === 'audit-main') {
+                    auditForm.classList.remove('hidden');
+                } else {
+                    auditForm.classList.add('hidden');
+                }
+            }
+
             updateDockButtons();
             
+            // Obsługa pionowego menu audytora
+            const audSidebar = document.getElementById('auditor-sidebar-menu');
+            if (audSidebar) {
+                if (state.role === 'AUDITOR' && modId !== 'audit-main' && modId !== 'auth') {
+                    audSidebar.classList.remove('hidden');
+                    updateAuditorSidebarActiveTile(modId);
+                } else {
+                    audSidebar.classList.add('hidden');
+                }
+            }
+
             // Odświeżanie na żywo przy powrocie do Dashboardu / Hubu
-            if(modId === 'hub') {
-                const activeHubId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor';
+            if(modId === 'hub' && state.role === 'MANAGER') {
                 document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
-                const hubEl = document.getElementById(activeHubId);
+                const hubEl = document.getElementById('hub-manager');
                 if (hubEl) hubEl.classList.remove('hidden');
-                // Bezpieczne odświeżenie danych w tle bez blokowania UI
                 try {
                     if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
                 } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
@@ -94,8 +119,237 @@ function updateAuditHud(step, title, desc, mode) {
             if(modId === 'lines') renderLinesManagerList();
             if(modId === 'manager-results') { loadAuditResults(); loadManagerEditRequests(); }
             if(modId === 'auditor-history') loadAuditorHistory();
+            if(modId === 'agent') syncAgentLineSelector();
+            if(modId === 'faq') loadInlineFaq();
 
             updateTopNavActiveState(modId);
+        }
+
+        function updateAuditorSidebarActiveTile(modId) {
+            const tiles = {
+                'calendar': document.getElementById('aud-tile-calendar'),
+                'auditor-history': document.getElementById('aud-tile-history'),
+                'faq': document.getElementById('aud-tile-faq'),
+                'agent': document.getElementById('aud-tile-agent')
+            };
+
+            const inactiveClass = "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-slate-800 bg-slate-900/80 hover:bg-slate-850 hover:border-slate-700 shadow-md text-slate-400 group";
+            
+            const activeClasses = {
+                'calendar': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-blue-400/50 bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 shadow-xl shadow-blue-500/25 ring-2 ring-blue-400/50 text-white scale-[1.01]",
+                'auditor-history': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-orange-400/50 bg-gradient-to-br from-orange-600 via-amber-700 to-slate-900 shadow-xl shadow-orange-500/25 ring-2 ring-orange-400/50 text-white scale-[1.01]",
+                'faq': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-emerald-400/50 bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 shadow-xl shadow-emerald-500/25 ring-2 ring-emerald-400/50 text-white scale-[1.01]",
+                'agent': "aud-nav-tile tile-3d relative p-3.5 rounded-2xl flex flex-col justify-between transition-all duration-200 cursor-pointer border border-indigo-400/50 bg-gradient-to-br from-purple-600 via-indigo-700 to-slate-900 shadow-xl shadow-indigo-500/25 ring-2 ring-indigo-400/50 text-white scale-[1.01]"
+            };
+
+            for (const [key, el] of Object.entries(tiles)) {
+                if (!el) continue;
+                if (key === modId) {
+                    el.className = activeClasses[key] || activeClasses['calendar'];
+                    const ind = el.querySelector('.aud-tile-indicator');
+                    if (ind) ind.classList.remove('opacity-0');
+                } else {
+                    el.className = inactiveClass;
+                    const ind = el.querySelector('.aud-tile-indicator');
+                    if (ind) ind.classList.add('opacity-0');
+                }
+            }
+        }
+
+        let currentInlineFaqCat = 'ALL';
+        let activeInlineGuidelineId = null;
+        let inlineFilteredList = [];
+
+        async function loadInlineFaq() {
+            if (typeof CHECKLIST_GUIDELINES === 'undefined' || !Array.isArray(CHECKLIST_GUIDELINES) || CHECKLIST_GUIDELINES.length === 0) {
+                try {
+                    const res = await fetch('/api/checklist/guidelines');
+                    if (res.ok) {
+                        const data = await res.json();
+                        window.CHECKLIST_GUIDELINES = data;
+                        if (typeof CHECKLIST_GUIDELINES !== 'undefined') CHECKLIST_GUIDELINES = data;
+                    }
+                } catch(e) { console.error('Błąd pobierania bazy wiedzy:', e); }
+            }
+
+            const items = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+            if (!activeInlineGuidelineId && items.length > 0) {
+                activeInlineGuidelineId = items[0].id;
+            }
+
+            updateInlineFaqCounts();
+            filterInlineFaq(false);
+        }
+
+        function updateInlineFaqCounts() {
+            const items = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+            const counts = { ALL: items.length, CCP: 0, GMP: 0, GHP: 0, FOREIGN_MATTER: 0 };
+            items.forEach(item => {
+                if (counts[item.category] !== undefined) counts[item.category]++;
+            });
+            for (let k in counts) {
+                const el = document.getElementById(`inline-count-${k}`);
+                if (el) el.innerText = counts[k];
+            }
+        }
+
+        function setInlineFaqCategory(cat, btn) {
+            currentInlineFaqCat = cat;
+            document.querySelectorAll('.inline-faq-cat-btn').forEach(b => {
+                b.className = 'inline-faq-cat-btn w-full text-left px-3 py-2 rounded-xl text-[11px] font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 flex items-center justify-between transition cursor-pointer';
+            });
+            if (btn) {
+                btn.className = 'inline-faq-cat-btn w-full text-left px-3 py-2 rounded-xl text-[11px] font-black bg-emerald-500 text-slate-950 flex items-center justify-between transition cursor-pointer shadow-md shadow-emerald-500/20';
+            }
+            filterInlineFaq(true);
+        }
+
+        function filterInlineFaq(autoSelectFirst = false) {
+            const search = (document.getElementById('inlineFaqSearchInput')?.value || '').toLowerCase();
+            const allItems = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+            inlineFilteredList = allItems.filter(item => {
+                const matchCat = (currentInlineFaqCat === 'ALL' || item.category === currentInlineFaqCat);
+                const matchSearch = (item.title || '').toLowerCase().includes(search) || 
+                                    (item.question || '').toLowerCase().includes(search) || 
+                                    (item.criteria || '').toLowerCase().includes(search) ||
+                                    (item.ifs_clause || '').toLowerCase().includes(search);
+                return matchCat && matchSearch;
+            });
+
+            if (autoSelectFirst && inlineFilteredList.length > 0) {
+                activeInlineGuidelineId = inlineFilteredList[0].id;
+            } else if (inlineFilteredList.length > 0 && !inlineFilteredList.some(i => i.id === activeInlineGuidelineId)) {
+                activeInlineGuidelineId = inlineFilteredList[0].id;
+            }
+
+            renderInlineFaqList();
+            renderInlineFaqDetail();
+        }
+
+        function selectInlineGuideline(id) {
+            activeInlineGuidelineId = id;
+            renderInlineFaqList();
+            renderInlineFaqDetail();
+        }
+
+        function renderInlineFaqList() {
+            const container = document.getElementById('inlineFaqItemListContainer');
+            if (!container) return;
+
+            if (inlineFilteredList.length === 0) {
+                container.innerHTML = '<p class="text-center py-6 text-slate-500 text-xs font-bold">Brak wyników</p>';
+                return;
+            }
+
+            container.innerHTML = inlineFilteredList.map(item => {
+                const isActive = item.id === activeInlineGuidelineId;
+                const activeClass = isActive 
+                    ? 'bg-slate-800 border-emerald-500/60 shadow-lg ring-1 ring-emerald-500/40 text-white' 
+                    : 'bg-slate-900/50 border-slate-800/80 hover:bg-slate-850 hover:border-slate-700 text-slate-300';
+
+                const riskBadge = item.risk_level === 'KO' 
+                    ? '<span class="px-2 py-0.5 text-[8.5px] font-black rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 uppercase">KO</span>' 
+                    : item.risk_level === 'MAJOR' 
+                    ? '<span class="px-2 py-0.5 text-[8.5px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">Major</span>' 
+                    : '<span class="px-2 py-0.5 text-[8.5px] font-black rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">Minor</span>';
+
+                return `
+                    <div onclick="selectInlineGuideline('${item.id}')" 
+                         class="p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col gap-1 ${activeClass}">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[10px] font-black text-slate-400 font-mono">${item.id}</span>
+                            ${riskBadge}
+                        </div>
+                        <p class="text-xs font-black line-clamp-2 leading-snug">${item.title}</p>
+                        <span class="text-[9.5px] text-slate-400 font-mono mt-0.5 truncate">${item.ifs_clause || ''}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderInlineFaqDetail() {
+            const panel = document.getElementById('inlineFaqDetailPanel');
+            if (!panel) return;
+
+            const items = window.CHECKLIST_GUIDELINES || (typeof CHECKLIST_GUIDELINES !== 'undefined' ? CHECKLIST_GUIDELINES : []);
+            const item = items.find(g => g.id === activeInlineGuidelineId);
+            if (!item) {
+                panel.innerHTML = '<div class="h-full flex items-center justify-center text-slate-500 text-xs">Wybierz punkt z listy po lewej stronie</div>';
+                return;
+            }
+
+            const riskBadge = item.risk_level === 'KO' 
+                ? '<span class="px-2.5 py-0.5 text-[9px] font-black rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 uppercase">KO (Knock-Out)</span>' 
+                : item.risk_level === 'MAJOR' 
+                ? '<span class="px-2.5 py-0.5 text-[9px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">Major</span>' 
+                : '<span class="px-2.5 py-0.5 text-[9px] font-black rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">Minor</span>';
+
+            panel.innerHTML = `
+                <div class="space-y-4">
+                    <!-- Nagłówek punktu -->
+                    <div class="border-b border-slate-800 pb-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 text-[10px] font-black rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30">${item.category_label || item.category}</span>
+                                ${riskBadge}
+                                <span class="text-xs font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">${item.id}</span>
+                            </div>
+                            <span class="text-xs font-mono text-cyan-400/90 bg-cyan-950/30 px-2.5 py-1 rounded-lg border border-cyan-500/30">${item.ifs_clause || 'IFS Food v8'}</span>
+                        </div>
+                        <h1 class="text-lg sm:text-xl font-black text-white">${item.title}</h1>
+                    </div>
+
+                    <!-- Pytanie audytowe -->
+                    <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 flex items-start space-x-3">
+                        <span class="text-emerald-400 font-black text-xl leading-none">„</span>
+                        <div class="flex-1">
+                            <p class="text-[10px] text-slate-400 uppercase font-black tracking-wider mb-1">Pytanie z formularza audytowego</p>
+                            <p class="text-xs sm:text-sm text-slate-100 font-semibold leading-relaxed">${item.question}</p>
+                        </div>
+                    </div>
+
+                    <!-- Wyjaśnienie 1: Kryterium Zgodności -->
+                    <div class="bg-emerald-950/20 p-4 sm:p-5 rounded-2xl border border-emerald-500/25 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]"></span>
+                                Kryterium Zgodności (Standard Zakładowy)
+                            </h3>
+                            <span class="text-[10px] font-mono text-emerald-300 bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-500/30">WYMÓG AUDYTOWY</span>
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">${item.criteria}</p>
+                        ${item.correct_action ? `
+                            <div class="pt-2.5 border-t border-emerald-500/15 text-xs text-emerald-300 flex items-center gap-2">
+                                <strong class="text-white font-bold">Stan pożądany na linii:</strong> <span>${item.correct_action}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Wyjaśnienie 2: Postępowanie Awaryjne & CAPA -->
+                    <div class="bg-rose-950/20 p-4 sm:p-5 rounded-2xl border border-rose-500/25 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-black text-rose-400 uppercase tracking-wider flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.8)]"></span>
+                                Odchylenie, Kwarantanna & Postępowanie Korekcyjne
+                            </h3>
+                            <span class="text-[10px] font-mono text-rose-300 bg-rose-900/40 px-2 py-0.5 rounded border border-rose-500/30">PROCEDURA AWARYJNA</span>
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">${item.deviation_action || 'Brak zdefiniowanego odchylenia'}</p>
+                        <div class="pt-2.5 border-t border-rose-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                            <div class="text-rose-300">
+                                <strong class="text-white font-bold">Klauzula normy:</strong> ${item.ifs_clause || 'IFS Food v8'}
+                            </div>
+                            ${item.deviation_action ? `
+                                <button type="button" onclick="navigator.clipboard.writeText('${item.deviation_action.replace(/'/g, "\\'")}'); alert('Skopiowano działanie CAPA do schowka!');" 
+                                        class="px-3 py-1.5 bg-rose-900/50 hover:bg-rose-800 text-rose-200 rounded-xl text-xs font-bold border border-rose-500/30 transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                    Kopiuj do CAPA
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         function navGoBack() {
@@ -122,12 +376,15 @@ function updateAuditHud(step, title, desc, mode) {
             navHistory.push(currentModule);
             navForward = [];
             document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
-            const targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor';
-            const target = document.getElementById(targetId);
-            if (target) target.classList.remove('hidden');
-            currentModule = 'hub';
-            updateDockButtons();
-            updateTopNavActiveState('hub');
+            if (state.role === 'AUDITOR') {
+                showModule('calendar', false);
+            } else {
+                const target = document.getElementById('hub-manager');
+                if (target) target.classList.remove('hidden');
+                currentModule = 'hub';
+                updateDockButtons();
+                updateTopNavActiveState('hub');
+            }
         }
 
         function updateDockButtons() {
@@ -142,7 +399,7 @@ function updateAuditHud(step, title, desc, mode) {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('ios-tab-active');
             });
-            if (modId === 'hub') document.getElementById('tag-hub')?.classList.add('ios-tab-active');
+            if (modId === 'hub' || (state.role === 'AUDITOR' && modId === 'calendar')) document.getElementById('tag-hub')?.classList.add('ios-tab-active');
             if (modId === 'calendar') document.getElementById('tag-calendar')?.classList.add('ios-tab-active');
             if (modId === 'agent') document.getElementById('tag-agent')?.classList.add('ios-tab-active');
         }
@@ -527,6 +784,29 @@ function updateAuditHud(step, title, desc, mode) {
             renderCalendar();
         }
 
+        function formatAuditorBadge(auditor) {
+            if (!auditor) return "Audytor";
+            const clean = auditor.replace(/\s*\(.*?\)/g, "").trim();
+            if (!clean) return "Audytor";
+            if (clean.toLowerCase().includes("administrator")) return "Admin";
+            
+            const parts = clean.split(/\s+/);
+            if (parts.length === 1) return parts[0];
+            
+            // Jeśli pierwszy człon to inicjał z kropką: np. "G. Zarakowski"
+            if (parts[0].length <= 2 && parts[0].includes('.')) {
+                return `${parts[0]} ${parts[1]}`;
+            }
+            // Jeśli ostatni człon to już inicjał: np. "Stefaw W." lub "Stefan W"
+            const lastPart = parts[parts.length - 1];
+            if (lastPart.length <= 2) {
+                const init = lastPart.endsWith('.') ? lastPart : `${lastPart}.`;
+                return `${parts[0]} ${init}`;
+            }
+            // Imię + pierwsza litera nazwiska: "Grzegorz Zarakowski" -> "Grzegorz Z."
+            return `${parts[0]} ${lastPart.charAt(0)}.`;
+        }
+
         function renderCalendar() {
             const year = currentCalDate.getFullYear(), month = currentCalDate.getMonth();
             const names = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
@@ -571,9 +851,13 @@ function updateAuditHud(step, title, desc, mode) {
                         
                         let badgeHtml = "";
                         dayAudits.forEach(a => {
-                            const aType = (a.audit_type || "HACCP").toUpperCase();
+                            const aType = (a.audit_type || "HACCP").toUpperCase().trim();
                             const isCompleted = (a.status === 'WYKONANY');
                             const isOverdue = (!isCompleted && currentFullDate < todayStr);
+
+                            // Formatowanie: rodzaj audytu oraz imię audytora bądź inicjały
+                            const cleanAud = (a.lead_auditor || "Audytor").replace(/\s*\(.*?\)/g, "").trim();
+                            const auditorDisplay = formatAuditorBadge(cleanAud);
 
                             let badgeColor = aType === "GMP" ? "bg-purple-600 border-purple-400" :
                                              aType === "GHP" ? "bg-cyan-600 border-cyan-400" : "bg-emerald-600 border-emerald-400";
@@ -584,8 +868,15 @@ function updateAuditHud(step, title, desc, mode) {
                             badgeHtml += `
                                 <div draggable="true" ondragstart="event.stopPropagation(); event.dataTransfer.setData('text/plain', ${a.id});"
                                      onclick="event.stopPropagation(); state.role === 'MANAGER' ? openMgrModal(${a.id}) : openAudModal(${a.id});" 
-                                     class="${badgeStyle} border text-[7px] font-extrabold px-1.5 py-0.5 rounded truncate shadow flex items-center justify-between gap-1 mb-0.5 cursor-pointer relative z-10 hover:brightness-110">
-                                    <span>${isOverdue ? '🔴 ' : ''}${aType}:${a.line.split(' ')[0]} • ${a.lead_auditor.split(' ')[0]}${isCompleted ? ' ✓' : ''}</span>
+                                     title="${aType} • ${cleanAud} (${a.line || ''})"
+                                     class="${badgeStyle} border rounded-lg py-1 px-1.5 shadow-md flex flex-col justify-center mb-1 cursor-pointer relative z-10 hover:scale-[1.02] transition-transform hover:brightness-110 leading-tight">
+                                    <div class="flex items-center justify-between font-black text-[10.5px] uppercase tracking-wider">
+                                        <span>${isOverdue ? '🔴 ' : ''}${aType}</span>
+                                        ${isCompleted ? '<span class="text-emerald-300 font-black text-[11px] ml-1">✓</span>' : ''}
+                                    </div>
+                                    <div class="text-[9.5px] font-bold text-white/95 truncate mt-0.5" title="${cleanAud}">
+                                        ${auditorDisplay}
+                                    </div>
                                 </div>
                             `;
                         });
@@ -842,7 +1133,7 @@ function updateAuditHud(step, title, desc, mode) {
                     return;
                 }
 
-                myAudits.slice(0, 10).forEach(a => {
+                myAudits.slice(0, 15).forEach(a => {
                     const auditId = a.id || 0;
                     const lineName = a.line || 'Brak nazwy linii';
                     const dateStr = a.timestamp ? String(a.timestamp).substring(0, 16) : 'Brak daty';
@@ -851,18 +1142,34 @@ function updateAuditHud(step, title, desc, mode) {
                     const isOk = String(a.slm_verdict).toUpperCase() === 'OK';
 
                     list.innerHTML += `
-                        <div class="glass-card bg-slate-900/90 p-3.5 rounded-xl flex justify-between items-center border-l-4 ${isOk ? 'border-emerald-500' : 'border-rose-500'} mb-2">
-                            <div>
-                                <h4 class="font-bold text-xs text-white">${lineName}</h4>
-                                <p class="text-[9px] text-slate-400 mt-0.5">Data: ${dateStr} | Status: <b class="${isLocked ? 'text-amber-400' : 'text-emerald-400'}">${statusText}</b></p>
+                        <div class="tile-3d bg-slate-900/90 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-slate-800/90 hover:border-orange-500/40 transition-all shadow-lg group">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl ${isOk ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'} flex items-center justify-center text-base shrink-0">
+                                    <i class="fas ${isOk ? 'fa-check-circle' : 'fa-exclamation-triangle'}"></i>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h4 class="font-black text-sm text-white">${lineName}</h4>
+                                        <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${isOk ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-rose-950 text-rose-300 border border-rose-500/40'}">
+                                            ${isOk ? 'Werdykt: Zgodny' : 'Zastrzeżenia SLM'}
+                                        </span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 text-[10.5px] text-slate-400 mt-1">
+                                        <span class="flex items-center gap-1 font-medium"><i class="far fa-clock text-slate-500 text-[10px]"></i> ${dateStr}</span>
+                                        <span class="text-slate-600">•</span>
+                                        <span class="font-semibold">Status: <b class="${isLocked ? 'text-amber-400' : 'text-emerald-400 font-bold'}">${statusText.replace(/_/g, ' ')}</b></span>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
+                            <div class="shrink-0 self-end sm:self-center">
                                 ${isLocked 
-                                    ? `<button onclick="requestAuditCorrection(${auditId})" class="tile-3d bg-amber-950/80 border border-amber-500/50 text-amber-300 px-3 py-1.5 rounded font-bold text-[10px] transition hover:bg-amber-900 cursor-pointer">
-                                         🔓 Wnioskuj o korektę
+                                    ? `<button type="button" onclick="requestAuditCorrection(${auditId})" class="tile-3d px-3.5 py-2 bg-gradient-to-r from-amber-600/90 to-orange-600/90 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs rounded-xl shadow-md border border-amber-400/40 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all">
+                                         <i class="fas fa-lock-open text-[10px]"></i>
+                                         <span>Wnioskuj o korektę</span>
                                        </button>`
-                                    : `<span class="text-emerald-400 font-extrabold text-[10px] bg-emerald-950 px-2 py-1 rounded border border-emerald-500/40">
-                                         Edycja dozwolona
+                                    : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm">
+                                         <i class="fas fa-check text-[10px]"></i>
+                                         <span>Edycja dozwolona</span>
                                        </span>`
                                 }
                             </div>
@@ -905,36 +1212,105 @@ function updateAuditHud(step, title, desc, mode) {
         }
 
         function startDirectInspection() {
-            state.active_audit_type = "HACCP";
-            document.getElementById('badge-active-standard').innerText = "HACCP";
-            document.getElementById('badge-active-standard').className = "text-[9px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full";
-            
+            setInspectionStandard("HACCP");
             document.getElementById('view-audit-form').reset();
             formHistory.saveState('view-audit-form');
-            
-            loadChecklistForAudit("HACCP");
             showModule('audit-main');
         }
 
         function setInspectionStandard(std, btn) {
             state.active_audit_type = std;
-            document.querySelectorAll('.btn-insp-std').forEach(b => {
-                b.className = "btn-insp-std tile-3d bg-slate-800 p-1.5 text-xs font-black text-slate-300";
-            });
-            const badge = document.getElementById('badge-active-standard');
-            badge.innerText = std;
-            if (std === 'HACCP') {
-                btn.className = "btn-insp-std tile-3d tile-selected bg-emerald-600 p-1.5 text-xs font-black text-white";
-                badge.className = "text-[9px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full";
-            } else if (std === 'GMP') {
-                btn.className = "btn-insp-std tile-3d tile-selected bg-purple-600 p-1.5 text-xs font-black text-white";
-                badge.className = "text-[9px] font-black bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full";
-            } else {
-                btn.className = "btn-insp-std tile-3d tile-selected bg-cyan-600 p-1.5 text-xs font-black text-white";
-                badge.className = "text-[9px] font-black bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded-full";
+            if (!btn) {
+                btn = document.querySelector(`.btn-insp-std[data-std="${std}"]`);
             }
+            
+            const inactiveClasses = {
+                'HACCP': "btn-insp-std w-16 h-16 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-slate-400 flex flex-col items-center justify-center gap-1 shadow-md hover:border-emerald-500/60 hover:text-emerald-300 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none font-bold",
+                'GMP': "btn-insp-std w-16 h-16 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-slate-400 flex flex-col items-center justify-center gap-1 shadow-md hover:border-purple-500/60 hover:text-purple-300 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none font-bold",
+                'GHP': "btn-insp-std w-16 h-16 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-slate-400 flex flex-col items-center justify-center gap-1 shadow-md hover:border-cyan-500/60 hover:text-cyan-300 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none font-bold"
+            };
+
+            const activeClasses = {
+                'HACCP': "btn-insp-std w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 border-2 border-emerald-300 text-white flex flex-col items-center justify-center gap-1 shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/40 scale-105 transition-all duration-200 cursor-pointer select-none font-black",
+                'GMP': "btn-insp-std w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 via-fuchsia-700 to-indigo-700 border-2 border-purple-300 text-white flex flex-col items-center justify-center gap-1 shadow-lg shadow-purple-500/30 ring-2 ring-purple-400/40 scale-105 transition-all duration-200 cursor-pointer select-none font-black",
+                'GHP': "btn-insp-std w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-600 via-blue-600 to-cyan-700 border-2 border-cyan-300 text-white flex flex-col items-center justify-center gap-1 shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-400/40 scale-105 transition-all duration-200 cursor-pointer select-none font-black"
+            };
+
+            document.querySelectorAll('.btn-insp-std').forEach(b => {
+                const bStd = b.getAttribute('data-std') || (b.innerText.includes('HACCP') ? 'HACCP' : b.innerText.includes('GMP') ? 'GMP' : 'GHP');
+                b.className = inactiveClasses[bStd] || inactiveClasses['HACCP'];
+            });
+
+            const badge = document.getElementById('badge-active-standard');
+            if (badge) badge.innerText = std;
+
+            if (btn) {
+                btn.className = activeClasses[std] || activeClasses['HACCP'];
+            }
+
+            if (badge) {
+                if (std === 'HACCP') {
+                    badge.className = "text-[9px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full";
+                } else if (std === 'GMP') {
+                    badge.className = "text-[9px] font-black bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full";
+                } else {
+                    badge.className = "text-[9px] font-black bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded-full";
+                }
+            }
+
             loadChecklistForAudit(std);
             formHistory.saveState('view-audit-form');
+        }
+
+        function showChecklistAcceptBtn(id) {
+            if (state.checklist_results && state.checklist_results[id] && state.checklist_results[id].locked) return;
+            const btn = document.getElementById(`btn-accept-${id}`);
+            if (btn && btn.classList.contains('hidden')) {
+                btn.classList.remove('hidden');
+            }
+        }
+
+        function handleChecklistSliderInput(id, val) {
+            if (state.checklist_results && state.checklist_results[id] && state.checklist_results[id].locked) return;
+            const lbl = document.getElementById(`lbl-chk-${id}`);
+            if (lbl) lbl.innerText = val;
+            
+            if (state.checklist_results && state.checklist_results[id]) {
+                state.checklist_results[id].score = parseInt(val);
+                if (parseInt(val) < 5) {
+                    setChecklistAnswer(id, 'NOK');
+                } else {
+                    setChecklistAnswer(id, 'OK');
+                }
+            }
+            showChecklistAcceptBtn(id);
+        }
+
+        function acceptChecklistScore(id) {
+            if (!state.checklist_results || !state.checklist_results[id]) return;
+            state.checklist_results[id].locked = true;
+
+            const slider = document.getElementById(`slider-chk-${id}`);
+            if (slider) {
+                slider.disabled = true;
+                slider.classList.remove('cursor-pointer', 'accent-cyan-500');
+                slider.classList.add('opacity-30', 'cursor-not-allowed', 'pointer-events-none', 'grayscale');
+            }
+
+            const lbl = document.getElementById(`lbl-chk-${id}`);
+            if (lbl) {
+                lbl.classList.remove('text-cyan-400');
+                lbl.classList.add('text-slate-400');
+            }
+
+            const container = document.getElementById(`accept-container-${id}`);
+            if (container) {
+                container.innerHTML = `
+                    <span class="px-2 py-0.5 bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded-lg text-[9px] font-extrabold flex items-center gap-1 shadow-sm">
+                        <i class="fas fa-lock text-[8px] text-emerald-400"></i> Zaakceptowano
+                    </span>
+                `;
+            }
         }
 
         async function loadChecklistForAudit(auditType) {
@@ -947,7 +1323,7 @@ function updateAuditHud(step, title, desc, mode) {
                 container.innerHTML = "";
 
                 items.forEach(item => {
-                    state.checklist_results[item.id] = { status: "OK", is_ko: item.is_ko, clause: item.clause, question: item.question, score: 5, notes: "" };
+                    state.checklist_results[item.id] = { status: "OK", is_ko: item.is_ko, clause: item.clause, question: item.question, score: 5, notes: "", locked: false };
                     const koTag = item.is_ko ? `<span class="bg-rose-950 text-rose-300 border border-rose-600 text-[8px] font-black px-1.5 py-0.5 rounded mr-1 animate-pulse"><i class="fas fa-exclamation-triangle"></i> KNOCK-OUT</span>` : '';
                     
                     container.innerHTML += `
@@ -957,12 +1333,19 @@ function updateAuditHud(step, title, desc, mode) {
                                 <p class="text-[11px] text-slate-200 leading-snug">${item.question}</p>
                             </div>
                             
-                            <div class="flex items-center gap-3 pt-2 border-t border-slate-800/80">
-                                <span class="text-[10px] font-bold text-slate-400 w-16">Ocena (1-5):</span>
-                                <input type="range" min="1" max="5" value="5" 
-                                    oninput="document.getElementById('lbl-chk-${item.id}').innerText=this.value; state.checklist_results[${item.id}].score=parseInt(this.value); if(this.value<5){setChecklistAnswer(${item.id},'NOK')}else{setChecklistAnswer(${item.id},'OK')}" 
-                                    class="flex-1 accent-cyan-500 cursor-pointer h-2 bg-slate-700 rounded-lg appearance-none">
-                                <span id="lbl-chk-${item.id}" class="text-base font-black text-cyan-400 w-6 text-center">5</span>
+                            <div class="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                                <span class="text-[10px] font-bold text-slate-400 w-16 shrink-0">Ocena (1-5):</span>
+                                <input type="range" min="1" max="5" value="5" id="slider-chk-${item.id}"
+                                    oninput="handleChecklistSliderInput(${item.id}, this.value)"
+                                    onpointerdown="showChecklistAcceptBtn(${item.id})"
+                                    class="flex-1 accent-cyan-500 cursor-pointer h-2 bg-slate-700 rounded-lg appearance-none transition-all">
+                                <span id="lbl-chk-${item.id}" class="text-sm font-black text-cyan-400 w-5 text-center shrink-0">5</span>
+                                <div id="accept-container-${item.id}" class="shrink-0 min-w-[76px] flex justify-end">
+                                    <button type="button" id="btn-accept-${item.id}" onclick="acceptChecklistScore(${item.id})" 
+                                        class="hidden px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-[9.5px] font-black rounded-lg shadow-md transition-all flex items-center gap-1 active:scale-95 animate-pulse cursor-pointer">
+                                        <i class="fas fa-check text-[9px]"></i> Zatwierdź
+                                    </button>
+                                </div>
                             </div>
                             
                             <div class="pt-1">
@@ -1419,18 +1802,24 @@ function updateAuditHud(step, title, desc, mode) {
             if (!activeSelectedAudit) return;
             state.line = activeSelectedAudit.line;
             state.active_audit_type = activeSelectedAudit.audit_type || "HACCP";
-            document.getElementById('badge-active-standard').innerText = state.active_audit_type;
+            setInspectionStandard(state.active_audit_type);
             
             document.getElementById('hidden-line-input').value = state.line;
             formHistory.saveState('view-audit-form'); 
             
             closeAudModal();
-            loadChecklistForAudit(state.active_audit_type);
             showModule('audit-main');
         }
     
 
         // --- LOGIKA PROFILU AUDYTORA (OCZYSZCZONA) ---
+        window.toggleAuditorPinVisibility = function(show) {
+            const pinInput = document.getElementById("edit-auditor-pin");
+            if (pinInput) {
+                pinInput.type = show ? "text" : "password";
+            }
+        };
+
         window.showAuditorProfileModal = function(user) {
             if (!user) return;
             window.currentAuditorId = user.id;
@@ -1438,9 +1827,17 @@ function updateAuditHud(step, title, desc, mode) {
             const nameEl = document.getElementById("edit-auditor-name");
             const roleEl = document.getElementById("edit-auditor-role");
             const pinEl = document.getElementById("edit-auditor-pin");
+            const showPinCb = document.getElementById("edit-auditor-show-pin");
+
             if (nameEl) nameEl.value = user.full_name || "";
             if (roleEl) roleEl.value = user.role || "AUDITOR";
-            if (pinEl) pinEl.value = user.pin || "";
+            if (pinEl) {
+                pinEl.value = user.pin || "";
+                pinEl.type = "text";
+            }
+            if (showPinCb) {
+                showPinCb.checked = true;
+            }
 
             const qualCheckboxes = document.querySelectorAll("#edit-auditor-qualifications input[type='checkbox']");
             const userQuals = Array.isArray(user.qualifications) ? user.qualifications : (user.qualifications ? String(user.qualifications).split(",").map(q => q.trim()) : ["HACCP", "GMP", "GHP"]);
@@ -1456,11 +1853,14 @@ function updateAuditHud(step, title, desc, mode) {
 
         window.saveAuditorProfile = async function() {
             const auditorId = window.currentAuditorId;
-            if (!auditorId) return console.error("Brak ID audytora");
+            if (!auditorId) return alert("Błąd: brak ID audytora");
 
-            const fullName = document.getElementById("edit-auditor-name")?.value || "";
+            const fullName = (document.getElementById("edit-auditor-name")?.value || "").trim();
             const role = document.getElementById("edit-auditor-role")?.value || "AUDITOR";
-            const pin = document.getElementById("edit-auditor-pin")?.value || "";
+            const pin = (document.getElementById("edit-auditor-pin")?.value || "").trim();
+
+            if (!fullName) return alert("Wprowadź imię i nazwisko!");
+            if (!pin) return alert("Wprowadź kod PIN!");
 
             const selectedQuals = Array.from(document.querySelectorAll("#edit-auditor-qualifications input[type='checkbox']")).filter(cb => cb.checked).map(cb => cb.value);
             const selectedZones = Array.from(document.querySelectorAll("#edit-auditor-zones input[type='checkbox']")).filter(cb => cb.checked).map(cb => cb.value);
@@ -1473,13 +1873,16 @@ function updateAuditHud(step, title, desc, mode) {
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    return alert("Błąd zapisu: " + (err.message || res.statusText));
+                    return alert("Błąd zapisu: " + (err.detail || err.message || res.statusText));
                 }
-                if (typeof renderAuditorsList === "function") renderAuditorsList();
+                if (typeof renderAuditorsList === "function") await renderAuditorsList();
+                if (typeof loadAuditorsDropdown === "function") await loadAuditorsDropdown();
+                if (typeof loadScheduleAndRender === "function") await loadScheduleAndRender();
                 document.getElementById("auditor-profile-modal")?.classList.add("hidden");
-                alert("Profil zaktualizowany pomyślnie.");
+                alert("✅ Profil audytora oraz kod PIN zostały pomyślnie zaktualizowane!");
             } catch (e) {
                 console.error("Błąd zapisu profilu:", e);
+                alert("Wystąpił błąd sieci lub serwera podczas zapisu profilu.");
             }
         };
 
