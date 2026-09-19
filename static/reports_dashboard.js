@@ -43,10 +43,23 @@ function ensureReportsViewExists() {
                     <button type="button" id="rf-btn-all" onclick="setReportsFilterRange('all')" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-cyan-500 text-slate-950 shadow-md transition cursor-pointer">Wszystko</button>
                 </div>
                 <button type="button" onclick="window.location.href='/api/audits/export/excel'" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-emerald-950/40 cursor-pointer active:scale-95">
-                    <i class="fa-solid fa-file-excel"></i> Excel (.XLSX)
+                    <svg class="w-4 h-4 shrink-0 text-emerald-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                        <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                        <path d="M8 12h8"/>
+                        <path d="M8 16h8"/>
+                        <path d="M12 9v10"/>
+                    </svg>
+                    <span>Excel (.XLSX)</span>
                 </button>
                 <button type="button" onclick="openPowerBiExportModal()" class="px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-amber-950/40 cursor-pointer active:scale-95">
-                    <i class="fa-solid fa-chart-simple"></i> Power BI
+                    <svg class="w-3.5 h-3.5 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="14" width="3.5" height="7" rx="1" fill="currentColor"/>
+                        <rect x="9.5" y="9" width="3.5" height="12" rx="1" fill="currentColor"/>
+                        <rect x="16" y="4" width="3.5" height="17" rx="1" fill="currentColor"/>
+                        <path d="M15 4l5-1m0 0l-1 5m1-5l-6 6" stroke-width="2"/>
+                    </svg>
+                    <span>Power BI</span>
                 </button>
                 <button type="button" onclick="showModule('hub')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
                     <i class="fa-solid fa-arrow-left"></i> Wróć do Menu
