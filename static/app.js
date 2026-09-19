@@ -1832,7 +1832,8 @@ function updateAuditHud(step, title, desc, mode) {
             if (nameEl) nameEl.value = user.full_name || "";
             if (roleEl) roleEl.value = user.role || "AUDITOR";
             if (pinEl) {
-                pinEl.value = user.pin || "";
+                pinEl.value = "";
+                pinEl.placeholder = "Zostaw puste aby zachować obecny PIN";
                 pinEl.type = "text";
             }
             if (showPinCb) {
@@ -1860,16 +1861,19 @@ function updateAuditHud(step, title, desc, mode) {
             const pin = (document.getElementById("edit-auditor-pin")?.value || "").trim();
 
             if (!fullName) return alert("Wprowadź imię i nazwisko!");
-            if (!pin) return alert("Wprowadź kod PIN!");
+            if (pin && pin.length < 3) return alert("Nowy kod PIN musi zawierać co najmniej 3 znaki!");
 
             const selectedQuals = Array.from(document.querySelectorAll("#edit-auditor-qualifications input[type='checkbox']")).filter(cb => cb.checked).map(cb => cb.value);
             const selectedZones = Array.from(document.querySelectorAll("#edit-auditor-zones input[type='checkbox']")).filter(cb => cb.checked).map(cb => cb.value);
 
+            const payload = { full_name: fullName, role, qualifications: selectedQuals, zones: selectedZones };
+            if (pin) payload.pin = pin;
+
             try {
-                const res = await fetch(`/api/users/${auditorId}`, {
+                const res = await apiFetch(`/api/users/${auditorId}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ full_name: fullName, role, pin, qualifications: selectedQuals, zones: selectedZones })
+                    body: JSON.stringify(payload)
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
@@ -1879,7 +1883,10 @@ function updateAuditHud(step, title, desc, mode) {
                 if (typeof loadAuditorsDropdown === "function") await loadAuditorsDropdown();
                 if (typeof loadScheduleAndRender === "function") await loadScheduleAndRender();
                 document.getElementById("auditor-profile-modal")?.classList.add("hidden");
-                alert("✅ Profil audytora oraz kod PIN zostały pomyślnie zaktualizowane!");
+                const msg = pin 
+                    ? "✅ Profil audytora oraz nowy kod PIN zostały pomyślnie zaktualizowane!" 
+                    : "✅ Profil audytora został pomyślnie zaktualizowany (dotychczasowy PIN zachowany)!";
+                alert(msg);
             } catch (e) {
                 console.error("Błąd zapisu profilu:", e);
                 alert("Wystąpił błąd sieci lub serwera podczas zapisu profilu.");

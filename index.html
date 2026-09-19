@@ -1524,7 +1524,7 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260919_v13"></script>
+    <script src="/static/js/app.js?v=20260919_v14"></script>
 
 <div id="auditor-profile-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
        <div class="glass-card bg-slate-900 border border-cyan-500/30 p-6 rounded-2xl w-full max-w-md shadow-2xl relative text-left">
@@ -1552,13 +1552,14 @@
                    </div>
                    <div>
                         <div class="flex items-center justify-between mb-0.5">
-                            <label class="text-[10px] text-slate-400 block font-bold">Identyfikator / PIN:</label>
+                            <label class="text-[10px] text-slate-400 block font-bold">Kod PIN <span class="text-[9px] text-emerald-400 font-normal">(istniejący aktywny)</span>:</label>
                             <label class="flex items-center gap-1 cursor-pointer text-[9.5px] font-bold text-cyan-400 hover:text-cyan-300 select-none">
                                 <input type="checkbox" id="edit-auditor-show-pin" onchange="toggleAuditorPinVisibility(this.checked)" checked class="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-cyan-500">
                                 <span>Pokaż PIN</span>
                             </label>
                         </div>
-                        <input type="text" maxlength="6" id="edit-auditor-pin" placeholder="np. 1004" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 text-xs font-mono font-bold tracking-wider focus:border-cyan-500 focus:outline-none">
+                        <input type="text" maxlength="6" id="edit-auditor-pin" placeholder="Zostaw puste aby zachować obecny PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 text-xs font-mono font-bold tracking-wider focus:border-cyan-500 focus:outline-none">
+                        <p class="text-[8.5px] text-slate-500 mt-0.5">Audytor posiada już nadany PIN. Wpisz nowy tylko jeśli chcesz go zmienić.</p>
                     </div>
                </div>
                <div>

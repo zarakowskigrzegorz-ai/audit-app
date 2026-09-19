@@ -3886,7 +3886,8 @@
         if (roleEl) roleEl.value = user.role || 'AUDITOR';
         
         if (pinInput) {
-            pinInput.value = user.pin || '';
+            pinInput.value = '';
+            pinInput.placeholder = 'Zostaw puste aby zachować obecny PIN';
             pinInput.type = 'text';
         }
         if (showPinCb) {
@@ -3920,7 +3921,10 @@
         const pin = (document.getElementById('edit-auditor-pin')?.value || '').trim();
 
         if (!fullName) return alert('Wprowadź imię i nazwisko!');
-        if (!pin) return alert('Wprowadź kod PIN!');
+        // PIN jest opcjonalny przy edycji - jeśli podany, musi mieć co najmniej 3 znaki
+        if (pin && pin.length < 3) {
+            return alert('Nowy kod PIN musi zawierać co najmniej 3 znaki!');
+        }
 
         const selectedQuals = Array.from(document.querySelectorAll('#edit-auditor-qualifications input[type="checkbox"]')).filter(cb => cb.checked).map(cb => cb.value);
         const selectedZones = Array.from(document.querySelectorAll('#edit-auditor-zones input[type="checkbox"]')).filter(cb => cb.checked).map(cb => cb.value);
@@ -3928,10 +3932,13 @@
         const updatedAuditor = {
             full_name: fullName,
             role: role,
-            pin: pin,
             qualifications: selectedQuals,
             zones: selectedZones
         };
+        // Dołącz nowy PIN tylko jeśli został jawnie wpisany przez użytkownika
+        if (pin) {
+            updatedAuditor.pin = pin;
+        }
 
         try {
             const res = await apiFetch(`/api/users/${auditorId}`, {
@@ -3953,7 +3960,10 @@
             if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
 
             document.getElementById('auditor-profile-modal').classList.add('hidden');
-            alert('✅ Profil audytora oraz kod PIN zostały pomyślnie zaktualizowane!');
+            const successMsg = pin 
+                ? '✅ Profil audytora oraz nowy kod PIN zostały pomyślnie zaktualizowane!' 
+                : '✅ Profil audytora został pomyślnie zaktualizowany (dotychczasowy PIN zachowany)!';
+            alert(successMsg);
 
         } catch (error) {
             console.error('Wystąpił błąd sieci lub serwera:', error);
