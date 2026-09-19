@@ -26,8 +26,15 @@ body {
         .cal-day { min-height: 80px; transition: all 0.18s; }
         @keyframes floatSlow { 0%, 100% { transform: translateY(0px) scale(1); } 50% { transform: translateY(-4px) scale(1.04); } }
         .animate-float { animation: floatSlow 3.5s ease-in-out infinite; }
-        .ios-dock { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6); }
-        .ios-tab-btn { white-space: nowrap; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); font-weight: 800; }
-        .ios-tab-active { background: rgba(30, 41, 59, 0.95) !important; border: 1px solid rgba(56, 189, 248, 0.5) !important; color: #38bdf8 !important; }
+        .ios-dock { background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(24px); border: 1px solid rgba(51, 65, 85, 0.7); box-shadow: 0 10px 30px -6px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.1); }
+        .ios-tab-btn { white-space: nowrap; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); font-weight: 700; }
+        .ios-tab-btn:hover:not(.ios-tab-active) { background: rgba(30, 41, 59, 0.65); color: #ffffff !important; }
+        .ios-tab-active { 
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important; 
+            border: 1px solid rgba(56, 189, 248, 0.6) !important; 
+            color: #ffffff !important; 
+            box-shadow: 0 4px 18px -2px rgba(2, 132, 199, 0.5), inset 0 1px 1.5px rgba(255, 255, 255, 0.4) !important; 
+        }
+        .ios-tab-active svg { color: #ffffff !important; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

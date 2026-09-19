@@ -399,7 +399,7 @@ function updateAuditHud(step, title, desc, mode) {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('ios-tab-active');
             });
-            if (modId === 'hub' || (state.role === 'AUDITOR' && modId === 'calendar')) document.getElementById('tag-hub')?.classList.add('ios-tab-active');
+            if (modId === 'hub') document.getElementById('tag-hub')?.classList.add('ios-tab-active');
             if (modId === 'calendar') document.getElementById('tag-calendar')?.classList.add('ios-tab-active');
             if (modId === 'agent') document.getElementById('tag-agent')?.classList.add('ios-tab-active');
         }
