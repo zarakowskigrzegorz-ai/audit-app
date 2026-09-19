@@ -688,7 +688,10 @@
             }
         }
 
+        let currentPromptRole = null;
+
         function openPinPrompt(role) {
+            currentPromptRole = role;
             const container = document.getElementById('pin-container');
             const label = document.getElementById('pin-role-label');
             const desc = document.getElementById('pin-role-desc');
@@ -697,12 +700,12 @@
             container.classList.remove('hidden');
             if (role === 'MANAGER') {
                 label.innerText = 'Logowanie Key User (Kierownik Jakości)';
-                desc.innerText = '';
+                desc.innerText = 'Wprowadź PIN Key Usera';
                 quickSelect.classList.add('hidden');
                 document.getElementById('input-pin').value = '';
             } else {
                 label.innerText = 'Logowanie Audytora';
-                desc.innerText = '';
+                desc.innerText = 'Wprowadź swój kod PIN audytora';
                 quickSelect.classList.remove('hidden');
                 document.getElementById('input-pin').value = '';
             }
@@ -710,7 +713,10 @@
         }
 
         function setQuickPin(v) { document.getElementById('input-pin').value = v; submitLogin(); }
-        function closePinPrompt() { document.getElementById('pin-container').classList.add('hidden'); }
+        function closePinPrompt() { 
+            currentPromptRole = null;
+            document.getElementById('pin-container').classList.add('hidden'); 
+        }
         function switchUserPrompt() {
             document.getElementById('main-app').classList.add('hidden');
             document.getElementById('bottom-dock').classList.add('hidden');
@@ -722,14 +728,24 @@
             const pin = document.getElementById('input-pin').value.trim();
             if (!pin) return alert("Wprowadź PIN!");
             try {
+                const payload = { pin };
+                if (currentPromptRole) {
+                    payload.expected_role = currentPromptRole;
+                }
                 const res = await fetch('/api/auth/login', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ pin })
+                    body: JSON.stringify(payload)
                 });
-                if (!res.ok) return alert("❌ Nieprawidłowy kod PIN!");
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    return alert("❌ " + (err.detail || "Nieprawidłowy kod PIN!"));
+                }
                 const user = await res.json();
                 applyLoginUser(user);
-            } catch(e) { alert("Błąd połączenia."); }
+            } catch(e) { 
+                console.error("Login connection error:", e);
+                alert("Błąd połączenia z serwerem."); 
+            }
         }
 
         async function applyLoginUser(user) {

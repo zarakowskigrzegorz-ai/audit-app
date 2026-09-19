@@ -556,7 +556,10 @@ function updateAuditHud(step, title, desc, mode) {
             } catch (err) { alert("ℹ️ Zaloguj się kodem PIN, a następnie powiąż Face ID/Odcisk ikoną w nagłówku."); }
         }
 
+        let currentPromptRole = null;
+
         window.openPinPrompt = function(role) {
+            currentPromptRole = role;
             const container = document.getElementById('pin-container');
             const label = document.getElementById('pin-role-label');
             const desc = document.getElementById('pin-role-desc');
@@ -565,9 +568,9 @@ function updateAuditHud(step, title, desc, mode) {
             container.classList.remove('hidden');
             if (role === 'MANAGER') {
                 if (label) label.innerText = 'Logowanie Key User (Kierownik Jakości)';
-                if (desc) desc.innerText = 'PIN zarządzania (domyślnie: 9999)';
+                if (desc) desc.innerText = 'Wprowadź PIN Key Usera';
                 if (quickSelect) quickSelect.classList.add('hidden');
-                document.getElementById('input-pin').value = '9999';
+                document.getElementById('input-pin').value = '';
             } else {
                 if (label) label.innerText = 'Logowanie Audytora';
                 if (desc) desc.innerText = 'Wprowadź swój kod PIN';
@@ -578,7 +581,10 @@ function updateAuditHud(step, title, desc, mode) {
         }
 
         window.setQuickPin = function(v) { document.getElementById('input-pin').value = v; submitLogin(); }
-        window.closePinPrompt = function() { document.getElementById('pin-container').classList.add('hidden'); }
+        window.closePinPrompt = function() { 
+            currentPromptRole = null;
+            document.getElementById('pin-container').classList.add('hidden'); 
+        }
         window.switchUserPrompt = function() {
             document.getElementById('main-app').classList.add('hidden');
             document.getElementById('bottom-dock').classList.add('hidden');
@@ -590,11 +596,18 @@ function updateAuditHud(step, title, desc, mode) {
             const pin = document.getElementById('input-pin').value.trim();
             if (!pin) return alert("Wprowadź PIN!");
             try {
+                const payload = { pin };
+                if (currentPromptRole) {
+                    payload.expected_role = currentPromptRole;
+                }
                 const res = await fetch('/api/auth/login', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ pin })
+                    body: JSON.stringify(payload)
                 });
-                if (!res.ok) return alert("❌ Nieprawidłowy kod PIN!");
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    return alert("❌ " + (err.detail || "Nieprawidłowy kod PIN!"));
+                }
                 const user = await res.json();
                 applyLoginUser(user);
             } catch(e) { alert("Błąd połączenia."); }

@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 class PinLoginModel(BaseModel):
     pin: str
+    expected_role: Optional[str] = None
 
 class BiometricRegisterVerifyModel(BaseModel):
     user_id: int
@@ -45,7 +46,14 @@ async def auth_login(payload: PinLoginModel, request: Request):
         raise HTTPException(status_code=400, detail="Wprowadź kod PIN")
 
     async with get_db() as conn:
-        cursor = await conn.execute("SELECT id, pin, full_name, role FROM users WHERE is_active = 1")
+        if payload.expected_role:
+            cursor = await conn.execute(
+                "SELECT id, pin, full_name, role FROM users WHERE is_active = 1 AND role = ?",
+                (payload.expected_role,)
+            )
+        else:
+            cursor = await conn.execute("SELECT id, pin, full_name, role FROM users WHERE is_active = 1")
+            
         users = await cursor.fetchall()
         
         matched_user = None
@@ -61,9 +69,16 @@ async def auth_login(payload: PinLoginModel, request: Request):
                 event_type="LOGIN_FAILED",
                 ip_address=client_ip,
                 severity="WARN",
-                details="Nieudana próba logowania kodem PIN"
+                details=f"Nieudana próba logowania kodem PIN (oczekiwana rola: {payload.expected_role or 'DOWOLNA'})"
             )
-            raise HTTPException(status_code=401, detail="Nieprawidłowy kod PIN")
+            detail_msg = (
+                "Nieprawidłowy kod PIN dla konta Key User (Kierownik Jakości)" 
+                if payload.expected_role == "MANAGER" 
+                else "Nieprawidłowy kod PIN dla konta Audytora"
+                if payload.expected_role == "AUDITOR"
+                else "Nieprawidłowy kod PIN"
+            )
+            raise HTTPException(status_code=401, detail=detail_msg)
         
         reset_login_failures(client_ip)
         token = create_access_token(matched_user)
