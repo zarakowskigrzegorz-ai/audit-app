@@ -237,3 +237,58 @@
     animation: live-indicator-ping 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Animacja szkicowania ołówkiem i pulsowania linii w notatniku */
+@keyframes pencil-write {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    20% { transform: translate(-1.2px, 1.2px) rotate(-6deg); }
+    40% { transform: translate(1px, -1px) rotate(4deg); }
+    60% { transform: translate(-1.5px, 2px) rotate(-4deg); }
+    80% { transform: translate(0.5px, -0.5px) rotate(3deg); }
+    100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.animate-pencil-writing {
+    animation: pencil-write 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    transform-origin: 14px 14px;
+}
+
+@keyframes notebook-line-pulse {
+    0%, 100% { opacity: 0.35; stroke-width: 1.8; }
+    50% { opacity: 1; stroke-width: 2.4; stroke: #fde047; }
+}
+
+.animate-notebook-line-1 {
+    animation: notebook-line-pulse 2.6s ease-in-out infinite;
+    animation-delay: 0s;
+}
+.animate-notebook-line-2 {
+    animation: notebook-line-pulse 2.6s ease-in-out infinite;
+    animation-delay: 0.65s;
+}
+.animate-notebook-line-3 {
+    animation: notebook-line-pulse 2.6s ease-in-out infinite;
+    animation-delay: 1.3s;
+}
+
+@keyframes notebook-card-sheen {
+    0% { transform: translateX(-150%); opacity: 0; }
+    20% { opacity: 1; }
+    40% { transform: translateX(250%); opacity: 0; }
+    100% { transform: translateX(250%); opacity: 0; }
+}
+
+.notebook-sheen-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 60%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.85), rgba(253, 224, 71, 1), transparent);
+    animation: notebook-card-sheen 4.5s ease-in-out infinite;
+}
+
+.notebook-textarea:focus {
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.6);
+    border-color: rgba(251, 191, 36, 0.9);
+}
+

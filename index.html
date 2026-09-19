@@ -1527,6 +1527,9 @@
 
                     <!-- PRAWA STRONA (6 kolumn): ORAMKOWANA SZYBKA NOTATKA DO KEY USERA (POWIĘKSZONE POLE TEKSTOWE, ROZSZERZONA, ANIMOWANA I POUFNA) -->
                     <div class="lg:col-span-6 bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/25 rounded-2xl border-2 border-amber-500/60 hover:border-amber-400 p-4 sm:p-5 shadow-2xl flex flex-col justify-between relative overflow-hidden transition-all duration-300 ring-1 ring-amber-500/30 bws-glow-amber-animated min-h-[520px] lg:min-h-[570px]">
+                        <!-- Płynny promień świetlny animacji notatnika -->
+                        <div class="notebook-sheen-bar pointer-events-none"></div>
+
                         <!-- Górny pasek statusu kanału -->
                         <div>
                             <div class="flex items-center justify-between border-b border-amber-500/30 pb-2.5 mb-3">
@@ -1537,46 +1540,90 @@
                                     </span>
                                     <span id="quick-note-dest-badge" class="text-[10.5px] sm:text-[11px] font-black text-amber-300 uppercase tracking-wider">DO: KEY USER (MANAGER)</span>
                                 </div>
-                                <span class="text-[8.5px] sm:text-[9px] font-extrabold bg-amber-950/90 text-amber-300 px-2.5 py-0.5 rounded border border-amber-500/40 shadow-sm bws-live-pulse">DIRECT LIVE</span>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[8.5px] sm:text-[9px] font-extrabold bg-amber-950/90 text-amber-300 px-2.5 py-0.5 rounded border border-amber-500/40 shadow-sm bws-live-pulse">DIRECT LIVE</span>
+                                </div>
                             </div>
 
                             <div class="flex items-start gap-3 mb-3">
-                                <div class="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
-                                    <!-- Nowy wektor notatnika z ołówkiem ze zrzutu ekranu -->
-                                    <svg class="w-4.5 h-4.5 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner group hover:border-amber-300 transition">
+                                    <!-- Animowany dynamiczny notatnik ze szkicującym ołówkiem i pulsującymi liniami tekstu -->
+                                    <svg class="w-5 h-5 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3"/>
                                         <path d="M15 7V5a2 2 0 0 0-2-2"/>
-                                        <line x1="6.5" y1="8" x2="11.5" y2="8"/>
-                                        <line x1="6.5" y1="12" x2="9.5" y2="12"/>
-                                        <line x1="6.5" y1="16" x2="12" y2="16"/>
-                                        <path d="m14 13.5 4.5-4.5a1.8 1.8 0 0 1 2.5 2.5l-4.5 4.5-3 0.5 0.5-3Z"/>
-                                        <path d="m17.5 10 2 2"/>
+                                        <!-- Pulsujące linie tekstu w notatniku -->
+                                        <line x1="6.5" y1="8" x2="11.5" y2="8" class="animate-notebook-line-1"/>
+                                        <line x1="6.5" y1="12" x2="9.5" y2="12" class="animate-notebook-line-2"/>
+                                        <line x1="6.5" y1="16" x2="12" y2="16" class="animate-notebook-line-3"/>
+                                        <!-- Dynamicznie szkicujący ołówek -->
+                                        <g class="animate-pencil-writing">
+                                            <path d="m14 13.5 4.5-4.5a1.8 1.8 0 0 1 2.5 2.5l-4.5 4.5-3 0.5 0.5-3Z" fill="rgba(245, 158, 11, 0.25)"/>
+                                            <path d="m17.5 10 2 2"/>
+                                        </g>
                                     </svg>
                                 </div>
                                 <div>
                                     <h3 class="text-sm font-black text-white leading-tight flex items-center gap-2">
                                         <span>Szybka Notatka z Hali</span>
-                                        <span class="text-[9px] font-bold text-amber-400/90 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">Ad-Hoc</span>
+                                        <span class="text-[9px] font-bold text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded-full border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                                            <span>Rejestr Ad-Hoc</span>
+                                        </span>
                                     </h3>
                                     <p class="text-[10px] sm:text-[10.5px] font-medium text-slate-400 mt-0.5 leading-snug">Bezpośrednie zgłoszenie operacyjne, wątpliwości IFS i uwagi do Key Usera</p>
                                 </div>
                             </div>
 
-                            <!-- Wybór linii i priorytetu -->
-                            <div class="grid grid-cols-2 gap-2.5 mb-3 text-xs">
+                            <!-- Wybór linii i nowy pasek priorytetu z unikalnymi wektorami -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 text-xs">
                                 <div>
-                                    <label class="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-wide">Dotyczy Linii:</label>
+                                    <label class="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-wide flex items-center gap-1">
+                                        <i class="fas fa-industry text-amber-400/80"></i> Dotyczy Linii:
+                                    </label>
                                     <select id="quick-note-line" class="w-full bg-slate-950 border border-slate-700/90 focus:border-amber-400 rounded-lg p-2 text-[11px] font-bold text-white outline-none transition cursor-pointer">
                                         <option value="">— Ogólna / Cała Hala —</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-wide">Priorytet:</label>
-                                    <select id="quick-note-priority" class="w-full bg-slate-950 border border-slate-700/90 focus:border-amber-400 rounded-lg p-2 text-[11px] font-black text-amber-300 outline-none transition cursor-pointer">
-                                        <option value="INFO">ℹ️ Informacja</option>
-                                        <option value="WARNING">⚠️ Zwróć Uwagę</option>
-                                        <option value="HOLD">🚨 Zagrożenie / HOLD</option>
-                                    </select>
+                                    <label class="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-wide flex items-center justify-between">
+                                        <span>Poziom Priorytetu:</span>
+                                        <span id="prio-selected-label" class="text-[9px] font-bold text-cyan-300">Rutynowy</span>
+                                    </label>
+                                    <!-- Ukryte pole kompatybilne z logiką API -->
+                                    <input type="hidden" id="quick-note-priority" value="INFO">
+                                    <div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-950/90 rounded-xl border border-slate-800 shadow-inner">
+                                        <!-- 1. INFO: Nowa unikalna ikona wektorowa rejestru audytowego -->
+                                        <button type="button" id="prio-btn-INFO" onclick="setQuickNotePriority('INFO')" title="Priorytet Rutynowy: Standardowa notatka lub uwaga z inspekcji" class="prio-pill py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[10px] font-black transition border bg-cyan-950/90 text-cyan-300 border-cyan-500/50 shadow-sm shadow-cyan-950/50 cursor-pointer">
+                                            <!-- Podkładka inspekcyjna z haczykiem i telemetrią -->
+                                            <svg class="w-3.5 h-3.5 text-cyan-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                                <rect x="8" y="2" width="8" height="4" rx="1.5" ry="1.5"/>
+                                                <path d="m9 14 2 2 4-4"/>
+                                            </svg>
+                                            <span class="truncate">Info</span>
+                                        </button>
+
+                                        <!-- 2. WARNING: Nowa unikalna ikona wektorowa tarczy ostrzegawczej z wyładowaniem -->
+                                        <button type="button" id="prio-btn-WARNING" onclick="setQuickNotePriority('WARNING')" title="Priorytet Ostrzegawczy: Odchylenie CP / Niezgodność Dobrych Praktyk Higienicznych (GMP)" class="prio-pill py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[10px] font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-amber-300 hover:bg-amber-950/30 cursor-pointer">
+                                            <!-- Tarcza kontroli jakości z dynamicznym wyładowaniem ostrzegawczym -->
+                                            <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                <path d="m13 7-3 5h4l-2 5"/>
+                                            </svg>
+                                            <span class="truncate">Uwaga</span>
+                                        </button>
+
+                                        <!-- 3. HOLD: Nowa unikalna ikona wektorowa przemysłowego wyłącznika STOP / bariery kwarantanny -->
+                                        <button type="button" id="prio-btn-HOLD" onclick="setQuickNotePriority('HOLD')" title="Priorytet Krytyczny: Zagrożenie CCP / Natychmiastowe Wstrzymanie Procesu Produkcyjnego" class="prio-pill py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[10px] font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer">
+                                            <!-- Przemysłowy STOP / Ośmiokąt blokady bezpieczeństwa z wykrzyknikiem -->
+                                            <svg class="w-3.5 h-3.5 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/>
+                                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                            </svg>
+                                            <span class="truncate">HOLD</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 

@@ -1397,10 +1397,19 @@
                 cachedManagerNotes.forEach(n => {
                     const isUnread = !n.is_read;
                     const prioBadge = n.priority === 'HOLD' 
-                        ? '<span class="bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">🚨 Wstrzymanie</span>'
+                        ? `<span class="bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
+                             <svg class="w-3 h-3 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                             <span>Wstrzymanie (HOLD)</span>
+                           </span>`
                         : n.priority === 'WARNING'
-                        ? '<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">⚠️ Uwaga</span>'
-                        : '<span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">ℹ️ Informacja</span>';
+                        ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
+                             <svg class="w-3 h-3 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m13 7-3 5h4l-2 5"/></svg>
+                             <span>Odchylenie (Uwaga)</span>
+                           </span>`
+                        : `<span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm">
+                             <svg class="w-3 h-3 text-cyan-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1.5" ry="1.5"/><path d="m9 14 2 2 4-4"/></svg>
+                             <span>Rutynowa (Info)</span>
+                           </span>`;
                     
                     const readBtn = isUnread 
                         ? `<button onclick="markAuditorNoteAsRead(${n.id})" class="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap">✓ Oznacz jako przeczytane</button>`
@@ -2504,6 +2513,54 @@
             }
         };
 
+        window.setQuickNotePriority = function(prio) {
+            const hiddenInput = document.getElementById('quick-note-priority');
+            if (hiddenInput) hiddenInput.value = prio;
+
+            const label = document.getElementById('prio-selected-label');
+            if (label) {
+                if (prio === 'HOLD') {
+                    label.textContent = 'Wstrzymanie CCP';
+                    label.className = 'text-[9px] font-black text-rose-400 animate-pulse';
+                } else if (prio === 'WARNING') {
+                    label.textContent = 'Odchylenie CP';
+                    label.className = 'text-[9px] font-black text-amber-400';
+                } else {
+                    label.textContent = 'Rutynowy';
+                    label.className = 'text-[9px] font-bold text-cyan-300';
+                }
+            }
+
+            const configs = {
+                'INFO': {
+                    id: 'prio-btn-INFO',
+                    active: 'bg-cyan-950/90 text-cyan-300 border-cyan-500/50 shadow-sm shadow-cyan-950/50',
+                    inactive: 'bg-slate-900/60 text-slate-400 border-transparent hover:text-cyan-300 hover:bg-cyan-950/30'
+                },
+                'WARNING': {
+                    id: 'prio-btn-WARNING',
+                    active: 'bg-amber-950/90 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-950/50',
+                    inactive: 'bg-slate-900/60 text-slate-400 border-transparent hover:text-amber-300 hover:bg-amber-950/30'
+                },
+                'HOLD': {
+                    id: 'prio-btn-HOLD',
+                    active: 'bg-rose-950/90 text-rose-300 border-rose-500/50 shadow-sm shadow-rose-950/50 animate-pulse-subtle',
+                    inactive: 'bg-slate-900/60 text-slate-400 border-transparent hover:text-rose-400 hover:bg-rose-950/30'
+                }
+            };
+
+            Object.keys(configs).forEach(k => {
+                const item = configs[k];
+                const el = document.getElementById(item.id);
+                if (!el) return;
+                if (k === prio) {
+                    el.className = `prio-pill py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[10px] font-black transition border cursor-pointer ${item.active}`;
+                } else {
+                    el.className = `prio-pill py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[10px] font-black transition border cursor-pointer ${item.inactive}`;
+                }
+            });
+        };
+
         window.toggleAnonymousNote = function(isAnon) {
             const feedback = document.getElementById('quick-note-feedback');
             const destBadge = document.getElementById('quick-note-dest-badge');
@@ -2576,6 +2633,7 @@
                 if (res.ok) {
                     textarea.value = "";
                     window.updateQuickNoteCounter(textarea);
+                    if (window.setQuickNotePriority) window.setQuickNotePriority('INFO');
                     if (feedback) {
                         feedback.innerText = isAnonymous 
                             ? "✓ Wysłano anonimowo (IFS Culture) do Key Usera!" 
