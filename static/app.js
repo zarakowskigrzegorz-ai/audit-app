@@ -788,18 +788,19 @@ function updateAuditHud(step, title, desc, mode) {
                 'GMP': 'btn-tag-gmp',
                 'GHP': 'btn-tag-ghp',
                 'WYKONANY': 'btn-tag-done',
-                'SPOZNIONY': 'btn-tag-overdue'
+                'SPOZNIONY': 'btn-tag-overdue',
+                'SWIETO': 'btn-tag-holiday'
             };
 
             Object.entries(map).forEach(([k, id]) => {
                 const b = document.getElementById(id);
                 if (!b) return;
                 if (activeSelectedFilter === k) {
-                    b.classList.remove('opacity-40');
-                    b.classList.add('ring-2', 'ring-white', 'brightness-125');
+                    b.classList.remove('opacity-50');
+                    b.classList.add('ring-2', 'ring-cyan-300', 'brightness-125', 'scale-105');
                 } else {
-                    b.classList.add('opacity-40');
-                    b.classList.remove('ring-2', 'ring-white', 'brightness-125');
+                    b.classList.add('opacity-50');
+                    b.classList.remove('ring-2', 'ring-cyan-300', 'brightness-125', 'scale-105');
                 }
             });
 
@@ -868,6 +869,7 @@ function updateAuditHud(step, title, desc, mode) {
                             if (activeSelectedFilter === 'GHP') return aType === 'GHP';
                             if (activeSelectedFilter === 'WYKONANY') return isCompleted;
                             if (activeSelectedFilter === 'SPOZNIONY') return isOverdue;
+                            if (activeSelectedFilter === 'SWIETO') return !!holidayName;
                             return false;
                         });
                         
@@ -881,11 +883,28 @@ function updateAuditHud(step, title, desc, mode) {
                             const cleanAud = (a.lead_auditor || "Audytor").replace(/\s*\(.*?\)/g, "").trim();
                             const auditorDisplay = formatAuditorBadge(cleanAud);
 
-                            let badgeColor = aType === "GMP" ? "bg-purple-600 border-purple-400" :
-                                             aType === "GHP" ? "bg-cyan-600 border-cyan-400" : "bg-emerald-600 border-emerald-400";
+                            let badgeColor = aType === "GMP" ? "bg-purple-950/90 border-purple-500/60 text-purple-200 shadow-purple-950/40" :
+                                             aType === "GHP" ? "bg-blue-950/90 border-cyan-500/60 text-cyan-200 shadow-cyan-950/40" : 
+                                             "bg-emerald-950/90 border-emerald-500/60 text-emerald-200 shadow-emerald-950/40";
                             
-                            let badgeStyle = isCompleted ? `${badgeColor} opacity-75 text-white` :
-                                             isOverdue ? "bg-red-600 border-red-400 text-white animate-pulse" : `${badgeColor} text-white`;
+                            let badgeStyle = isCompleted ? `${badgeColor} opacity-80` :
+                                             isOverdue ? "bg-rose-950/90 border-rose-500/80 text-rose-200 animate-pulse shadow-rose-950/50" : `${badgeColor}`;
+
+                            let typeIcon = '';
+                            if (aType === 'GMP') {
+                                typeIcon = `<svg class="w-3 h-3 text-purple-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`;
+                            } else if (aType === 'GHP') {
+                                typeIcon = `<svg class="w-3 h-3 text-cyan-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
+                            } else {
+                                typeIcon = `<svg class="w-3 h-3 text-emerald-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
+                            }
+
+                            let statusIcon = '';
+                            if (isCompleted) {
+                                statusIcon = `<span title="Wykonany" class="flex items-center text-emerald-400"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+                            } else if (isOverdue) {
+                                statusIcon = `<span title="Spóźniony" class="flex items-center text-rose-400"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 15 13.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>`;
+                            }
 
                             badgeHtml += `
                                 <div draggable="true" ondragstart="event.stopPropagation(); event.dataTransfer.setData('text/plain', ${a.id});"
@@ -893,10 +912,10 @@ function updateAuditHud(step, title, desc, mode) {
                                      title="${aType} • ${cleanAud} (${a.line || ''})"
                                      class="${badgeStyle} border rounded-lg py-1 px-1.5 shadow-md flex flex-col justify-center mb-1 cursor-pointer relative z-10 hover:scale-[1.02] transition-transform hover:brightness-110 leading-tight">
                                     <div class="flex items-center justify-between font-black text-[10.5px] uppercase tracking-wider">
-                                        <span>${isOverdue ? '🔴 ' : ''}${aType}</span>
-                                        ${isCompleted ? '<span class="text-emerald-300 font-black text-[11px] ml-1">✓</span>' : ''}
+                                        <span class="flex items-center gap-1">${typeIcon}<span>${aType}</span></span>
+                                        ${statusIcon}
                                     </div>
-                                    <div class="text-[9.5px] font-bold text-white/95 truncate mt-0.5" title="${cleanAud}">
+                                    <div class="text-[9.5px] font-bold text-white/90 truncate mt-0.5" title="${cleanAud}">
                                         ${auditorDisplay}
                                     </div>
                                 </div>
@@ -906,10 +925,10 @@ function updateAuditHud(step, title, desc, mode) {
                         grid.innerHTML += `
                             <div ondragover="event.preventDefault()" ondrop="handleAuditDrop(event, '${currentFullDate}')"
                                  onclick="if(state.role==='MANAGER'){openManualPlanModal('${currentFullDate}')}" 
-                                 class="cal-day tile-3d ${holidayName ? 'bg-rose-950/30 border-rose-900/50' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1 flex flex-col justify-between cursor-pointer rounded-xl">
+                                 class="cal-day tile-3d ${holidayName ? 'bg-amber-950/20 border-amber-900/40' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1 flex flex-col justify-between cursor-pointer rounded-xl">
                                 <div class="flex justify-between items-start">
-                                    <span class="text-[10px] font-extrabold ${holidayName ? 'text-rose-400' : 'text-slate-200'}">${dateIter}</span>
-                                    ${holidayName ? `<span class="text-[7px] text-rose-300 truncate max-w-[50px] font-extrabold">🏖️ ${holidayName}</span>` : ''}
+                                    <span class="text-[10px] font-extrabold ${holidayName ? 'text-amber-400' : 'text-slate-200'}">${dateIter}</span>
+                                    ${holidayName ? `<span class="text-[7.5px] text-amber-300 truncate max-w-[65px] font-extrabold flex items-center gap-0.5" title="${holidayName}"><svg class="w-2.5 h-2.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="2" y1="2" x2="22" y2="22"/></svg> ${holidayName}</span>` : ''}
                                 </div>
                                 <div class="space-y-0.5 mt-0.5">${badgeHtml}</div>
                             </div>
@@ -1129,6 +1148,45 @@ function updateAuditHud(step, title, desc, mode) {
             }
         }
 
+        let activeAuditorHistoryTab = 'pending'; // 'pending' (<7 dni oczekujące), 'completed' (<7 dni wykonane), 'approved' (<7 dni zaakceptowane), 'history' (>7 dni starsze)
+
+        window.setAuditorHistoryTab = function(tab) {
+            if (tab === 'recent') tab = 'pending';
+            if (tab === 'archive') tab = 'history';
+            activeAuditorHistoryTab = tab;
+
+            const btnPending = document.getElementById('tab-btn-auditor-pending') || document.getElementById('tab-btn-auditor-recent');
+            const btnCompleted = document.getElementById('tab-btn-auditor-completed');
+            const btnApproved = document.getElementById('tab-btn-auditor-approved');
+            const btnHistory = document.getElementById('tab-btn-auditor-history') || document.getElementById('tab-btn-auditor-archive');
+
+            const inactiveClass = 'px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
+
+            if (btnPending) btnPending.className = inactiveClass;
+            if (btnCompleted) btnCompleted.className = inactiveClass;
+            if (btnApproved) btnApproved.className = inactiveClass;
+            if (btnHistory) btnHistory.className = inactiveClass;
+
+            if (tab === 'pending') {
+                if (btnPending) {
+                    btnPending.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            } else if (tab === 'completed') {
+                if (btnCompleted) {
+                    btnCompleted.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black bg-blue-500 text-slate-950 shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            } else if (tab === 'approved') {
+                if (btnApproved) {
+                    btnApproved.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            } else if (tab === 'history') {
+                if (btnHistory) {
+                    btnHistory.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            }
+            loadAuditorHistory();
+        };
+
         async function loadAuditorHistory() {
             const list = document.getElementById('auditor-history-list');
             if (!list) return;
@@ -1149,51 +1207,141 @@ function updateAuditHud(step, title, desc, mode) {
                     return String(a.auditor_id).trim() === String(state.auditor_id).trim() || true;
                 });
 
+                const now = new Date();
+                const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+
+                const pendingAudits = [];
+                const completedAudits = [];
+                const approvedAudits = [];
+                const historyAudits = [];
+
+                myAudits.forEach(a => {
+                    const cv = String(a.compliance_verdict || '').trim().toUpperCase();
+                    const ps = String(a.process_status || '').trim().toUpperCase();
+                    const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
+
+                    const auditDate = a.timestamp ? new Date(a.timestamp.replace(' ', 'T')) : new Date();
+                    const isOlderThan7Days = !isNaN(auditDate.getTime()) && (auditDate < sevenDaysAgo);
+
+                    if (isOlderThan7Days) {
+                        historyAudits.push(a);
+                    } else {
+                        completedAudits.push(a);
+                        if (isApproved) {
+                            approvedAudits.push(a);
+                        } else {
+                            pendingAudits.push(a);
+                        }
+                    }
+                });
+
+                const badgePending = document.getElementById('badge-count-auditor-pending') || document.getElementById('badge-count-auditor-recent');
+                const badgeCompleted = document.getElementById('badge-count-auditor-completed');
+                const badgeApproved = document.getElementById('badge-count-auditor-approved');
+                const badgeHistory = document.getElementById('badge-count-auditor-history') || document.getElementById('badge-count-auditor-archive');
+
+                if (badgePending) badgePending.textContent = pendingAudits.length;
+                if (badgeCompleted) badgeCompleted.textContent = completedAudits.length;
+                if (badgeApproved) badgeApproved.textContent = approvedAudits.length;
+                if (badgeHistory) badgeHistory.textContent = historyAudits.length;
+
+                let displayAudits = pendingAudits;
+                if (activeAuditorHistoryTab === 'completed') {
+                    displayAudits = completedAudits;
+                } else if (activeAuditorHistoryTab === 'approved') {
+                    displayAudits = approvedAudits;
+                } else if (activeAuditorHistoryTab === 'history') {
+                    displayAudits = historyAudits;
+                }
+
                 list.innerHTML = '';
-                if (myAudits.length === 0) {
-                    list.innerHTML = '<p class="text-xs text-slate-400">Brak zarejestrowanych audytów. Masz czyste konto!</p>';
+                if (displayAudits.length === 0) {
+                    if (activeAuditorHistoryTab === 'history') {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak starszych audytów w Historii (>7 dni).</p></div>';
+                    } else if (activeAuditorHistoryTab === 'approved') {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak jeszcze zaakceptowanych audytów przez Key Usera w bieżącym tygodniu.</p></div>';
+                    } else if (activeAuditorHistoryTab === 'completed') {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak zrealizowanych audytów w bieżącym tygodniu.</p></div>';
+                    } else {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-emerald-500/30 text-center space-y-1"><p class="text-xs font-black text-emerald-400 flex items-center justify-center gap-1.5"><svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><span>Wszystkie bieżące audyty zostały zaakceptowane przez Key Usera!</span></p><p class="text-[11px] text-slate-400">Brak wpisów oczekujących na decyzję. Wszystkie zatwierdzone wpisy znajdziesz w karcie „Zaakceptowane”, a starsze w „Historii audytów”.</p></div>';
+                    }
                     return;
                 }
 
-                myAudits.slice(0, 15).forEach(a => {
+                displayAudits.slice(0, 30).forEach(a => {
                     const auditId = a.id || 0;
                     const lineName = a.line || 'Brak nazwy linii';
-                    const dateStr = a.timestamp ? String(a.timestamp).substring(0, 16) : 'Brak daty';
+                    const dateStr = a.timestamp ? String(a.timestamp).substring(0, 16).replace('T', ' ') : 'Brak daty';
                     const statusText = a.record_status || 'ZABLOKOWANY';
                     const isLocked = statusText !== 'ODBLOKOWANY_DO_KOREKTY';
                     const isOk = String(a.slm_verdict).toUpperCase() === 'OK';
+                    const isApproved = (a.compliance_verdict === 'ZATWIERDZONY' || a.process_status === 'ZATWIERDZONY');
+                    const riskLevel = a.risk_level || 'NISKIE';
+                    const complianceVerdict = a.compliance_verdict || a.slm_verdict || '---';
+                    const shiftStr = a.shift || '---';
+
+                    const isCritical = !isApproved && (
+                        !isOk || 
+                        String(riskLevel).toUpperCase().includes('KRYTYCZNE') || 
+                        String(riskLevel).toUpperCase().includes('HOLD') || 
+                        String(complianceVerdict).toUpperCase() === 'ODRZUCONY'
+                    );
+
+                    let shiftDisplay = shiftStr;
+                    if (shiftStr === '1' || shiftStr === 'I') shiftDisplay = 'I (06:00 - 14:00)';
+                    else if (shiftStr === '2' || shiftStr === 'II') shiftDisplay = 'II (14:00 - 22:00)';
+                    else if (shiftStr === '3' || shiftStr === 'III') shiftDisplay = 'III (22:00 - 06:00)';
+                    else if (!shiftStr || shiftStr === '---') shiftDisplay = 'I (06:00 - 14:00)';
+
+                    let scorePctVal = 100;
+                    if (a.total_score_pct != null) scorePctVal = Math.round(parseFloat(a.total_score_pct));
+                    else if (a.audit_score != null) scorePctVal = Math.round(parseFloat(a.audit_score));
+                    const scorePassText = isCritical ? `${scorePctVal}% FAIL` : `${scorePctVal}% PASS`;
+
+                    let statusPartiiText = 'BLOKADA JAKOŚCIOWA (CCP-2)';
+                    if (riskLevel && (riskLevel.includes('CCP') || riskLevel.includes('KRYTYCZNE') || riskLevel.includes('HOLD'))) {
+                        const cleanR = riskLevel.replace(/[^A-Za-z0-9\-]/g, '');
+                        statusPartiiText = `BLOKADA JAKOŚCIOWA (${cleanR || 'CCP-2'})`;
+                    } else if (complianceVerdict === 'ODRZUCONY') {
+                        statusPartiiText = 'BLOKADA JAKOŚCIOWA (ODRZUCENIE)';
+                    }
 
                     list.innerHTML += `
-                        <div class="tile-3d bg-slate-900/90 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-slate-800/90 hover:border-orange-500/40 transition-all shadow-lg group">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-xl ${isOk ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'} flex items-center justify-center text-base shrink-0">
-                                    <i class="fas ${isOk ? 'fa-check-circle' : 'fa-exclamation-triangle'}"></i>
-                                </div>
-                                <div>
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <h4 class="font-black text-sm text-white">${lineName}</h4>
-                                        <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${isOk ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-rose-950 text-rose-300 border border-rose-500/40'}">
-                                            ${isOk ? 'Werdykt: Zgodny' : 'Zastrzeżenia SLM'}
-                                        </span>
+                        <div class="rounded-2xl ${isCritical ? 'border border-rose-500/70 hover:border-rose-400/90 bg-gradient-to-r from-rose-950/40 via-slate-900/90 to-slate-900/95 hover:shadow-rose-950/40' : 'border border-emerald-500/70 hover:border-emerald-400/90 bg-gradient-to-r from-emerald-950/40 via-slate-900/90 to-slate-900/95 hover:shadow-emerald-950/40'} overflow-hidden transition-all shadow-lg p-3.5 sm:p-4 mb-2.5">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <div class="w-11 h-11 rounded-2xl ${isCritical ? 'bg-rose-950/80 border border-rose-500/50 text-rose-400' : 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-400'} flex items-center justify-center shrink-0 shadow-sm">
+                                        ${isCritical 
+                                            ? `<svg class="w-5 h-5 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+                                            : `<svg class="w-6 h-6 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>`
+                                        }
                                     </div>
-                                    <div class="flex flex-wrap items-center gap-2 text-[10.5px] text-slate-400 mt-1">
-                                        <span class="flex items-center gap-1 font-medium"><i class="far fa-clock text-slate-500 text-[10px]"></i> ${dateStr}</span>
-                                        <span class="text-slate-600">•</span>
-                                        <span class="font-semibold">Status: <b class="${isLocked ? 'text-amber-400' : 'text-emerald-400 font-bold'}">${statusText.replace(/_/g, ' ')}</b></span>
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-2.5 flex-wrap">
+                                            <h4 class="font-black text-sm sm:text-base text-white tracking-wide truncate">${lineName}</h4>
+                                            ${isCritical 
+                                                ? `<span class="bg-rose-950/90 border border-rose-500/60 px-2.5 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-black text-rose-300 flex items-center gap-1.5 shadow-sm"><span class="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block shadow-[0_0_6px_#f43f5e] animate-pulse"></span>ODCHYLENIE KRYTYCZNE</span>`
+                                                : `<span class="bg-emerald-950/90 border border-emerald-500/60 px-2.5 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-black text-emerald-300 flex items-center gap-1.5 shadow-sm"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_#34d399]"></span>${isApproved ? 'AUTORYZACJA KIEROWNIKA' : 'AUTORYZACJA JAKOŚCI'}</span>`
+                                            }
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2 text-[10.5px] sm:text-[11px] text-slate-400 mt-1">
+                                            <span class="flex items-center gap-1 font-medium"><svg class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 15 14"/></svg><span>${dateStr}</span></span>
+                                            <span class="text-slate-600">•</span>
+                                            <span>Zmiana: <b class="text-slate-200 font-semibold">${shiftDisplay}</b></span>
+                                            <span class="text-slate-600">•</span>
+                                            ${isCritical 
+                                                ? `<span>Status partii: <b class="text-rose-400 font-black tracking-wide">${statusPartiiText}</b></span>`
+                                                : `<span>Zgodność IFS: <b class="text-cyan-300 font-bold">${scorePassText}</b></span>`
+                                            }
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="shrink-0 self-end sm:self-center">
-                                ${isLocked 
-                                    ? `<button type="button" onclick="requestAuditCorrection(${auditId})" class="tile-3d px-3.5 py-2 bg-gradient-to-r from-amber-600/90 to-orange-600/90 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs rounded-xl shadow-md border border-amber-400/40 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all">
-                                         <i class="fas fa-lock-open text-[10px]"></i>
-                                         <span>Wnioskuj o korektę</span>
-                                       </button>`
-                                    : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm">
-                                         <i class="fas fa-check text-[10px]"></i>
-                                         <span>Edycja dozwolona</span>
-                                       </span>`
-                                }
+                                <div class="flex items-center shrink-0 self-end sm:self-center">
+                                    ${isCritical 
+                                        ? `<button type="button" onclick="requestAuditCorrection(${auditId})" class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-rose-950/80 hover:bg-rose-900 border border-rose-500/60 text-rose-300 font-bold text-xs flex items-center gap-2 shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"><svg class="w-4 h-4 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg><span>Działanie korygujące</span><svg class="w-3.5 h-3.5 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>`
+                                        : `<button type="button" class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/60 text-emerald-300 font-bold text-xs flex items-center gap-2 shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"><svg class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span>Raport IFS</span><svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>`
+                                    }
+                                </div>
                             </div>
                         </div>
                     `;

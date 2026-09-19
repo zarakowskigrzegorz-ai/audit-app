@@ -715,43 +715,70 @@
 
 
         async function applyLoginUser(user) {
-            state.user_id = user.id;
-            state.auditor_id = user.full_name.trim();
-            state.role = user.role;
-            if (user.access_token) {
-                state.token = user.access_token;
-                sessionStorage.setItem('quality_audit_token', user.access_token);
-            }
-
-            document.getElementById('display-auditor').innerText = state.auditor_id;
-            const roleEl = document.getElementById('display-role');
-            if (roleEl) {
-                if (state.role === "MANAGER") {
-                    roleEl.innerText = "👑 KEY USER (MANAGER)";
-                    roleEl.className = "text-[8.5px] font-black text-blue-400 uppercase block tracking-wider";
-                } else {
-                    roleEl.innerText = "👤 AUDYTOR";
-                    roleEl.className = "text-[8.5px] font-black text-emerald-400 uppercase block tracking-wider";
+            try {
+                state.user_id = user.id;
+                state.auditor_id = user.full_name.trim();
+                state.role = user.role;
+                if (user.access_token) {
+                    state.token = user.access_token;
+                    sessionStorage.setItem('quality_audit_token', user.access_token);
                 }
-            }
-            
-            if (state.role === "MANAGER") {
-                await renderAuditorsList();
-            }
 
-            await loadProductionLines();
-            document.getElementById('view-auth').classList.add('hidden');
-            document.getElementById('main-app').classList.remove('hidden');
-            document.getElementById('main-app').classList.add('flex');
-            
-            navHistory = []; navForward = [];
-            document.getElementById('bottom-dock').classList.remove('hidden');
-            showModule('hub', false); 
-            
-            await loadScheduleAndRender();
-            await updateKpiRibbon();
-            formHistory.saveState('view-audit-form');
-            formHistory.saveState('modal-plan-form');
+                const auditorEl = document.getElementById('display-auditor');
+                if (auditorEl) auditorEl.innerText = state.auditor_id;
+                const roleEl = document.getElementById('display-role');
+                if (roleEl) {
+                    if (state.role === "MANAGER") {
+                        roleEl.innerText = "👑 KEY USER (MANAGER)";
+                        roleEl.className = "text-[8.5px] font-black text-blue-400 uppercase block tracking-wider";
+                    } else {
+                        roleEl.innerText = "👤 AUDYTOR";
+                        roleEl.className = "text-[8.5px] font-black text-emerald-400 uppercase block tracking-wider";
+                    }
+                }
+
+                // Natychmiastowe ukrycie ekranu logowania i otwarcie aplikacji
+                const viewAuth = document.getElementById('view-auth');
+                if (viewAuth) viewAuth.classList.add('hidden');
+                const mainApp = document.getElementById('main-app');
+                if (mainApp) {
+                    mainApp.classList.remove('hidden');
+                    mainApp.classList.add('flex');
+                }
+                const dock = document.getElementById('bottom-dock');
+                if (dock) dock.classList.remove('hidden');
+
+                navHistory = []; navForward = [];
+                showModule('hub', false); 
+
+                // Pobranie danych w tle
+                if (state.role === "MANAGER" && typeof renderAuditorsList === 'function') {
+                    await renderAuditorsList().catch(e => console.warn(e));
+                }
+                if (typeof loadProductionLines === 'function') {
+                    await loadProductionLines().catch(e => console.warn(e));
+                }
+                if (typeof loadScheduleAndRender === 'function') {
+                    await loadScheduleAndRender().catch(e => console.warn(e));
+                }
+                if (typeof updateKpiRibbon === 'function') {
+                    await updateKpiRibbon().catch(e => console.warn(e));
+                }
+                if (window.formHistory && typeof formHistory.saveState === 'function') {
+                    formHistory.saveState('view-audit-form');
+                    formHistory.saveState('modal-plan-form');
+                }
+            } catch(e) {
+                console.error("Błąd w applyLoginUser:", e);
+                const viewAuth = document.getElementById('view-auth');
+                if (viewAuth) viewAuth.classList.add('hidden');
+                const mainApp = document.getElementById('main-app');
+                if (mainApp) {
+                    mainApp.classList.remove('hidden');
+                    mainApp.classList.add('flex');
+                }
+                showModule('hub', false);
+            }
         }
         window.applyLoginUser = applyLoginUser;
 
@@ -878,18 +905,19 @@
                 'GMP': 'btn-tag-gmp',
                 'GHP': 'btn-tag-ghp',
                 'WYKONANY': 'btn-tag-done',
-                'SPOZNIONY': 'btn-tag-overdue'
+                'SPOZNIONY': 'btn-tag-overdue',
+                'SWIETO': 'btn-tag-holiday'
             };
 
             Object.entries(map).forEach(([k, id]) => {
                 const b = document.getElementById(id);
                 if (!b) return;
                 if (activeSelectedFilter === k) {
-                    b.classList.remove('opacity-40');
-                    b.classList.add('ring-2', 'ring-white', 'brightness-125');
+                    b.classList.remove('opacity-50');
+                    b.classList.add('ring-2', 'ring-cyan-300', 'brightness-125', 'scale-105');
                 } else {
-                    b.classList.add('opacity-40');
-                    b.classList.remove('ring-2', 'ring-white', 'brightness-125');
+                    b.classList.add('opacity-50');
+                    b.classList.remove('ring-2', 'ring-cyan-300', 'brightness-125', 'scale-105');
                 }
             });
 
@@ -958,6 +986,7 @@
                             if (activeSelectedFilter === 'GHP') return aType === 'GHP';
                             if (activeSelectedFilter === 'WYKONANY') return isCompleted;
                             if (activeSelectedFilter === 'SPOZNIONY') return isOverdue;
+                            if (activeSelectedFilter === 'SWIETO') return !!holidayName;
                             return false;
                         });
                         
@@ -971,22 +1000,39 @@
                             const cleanAud = (a.lead_auditor || "Audytor").replace(/\s*\(.*?\)/g, "").trim();
                             const auditorDisplay = formatAuditorBadge(cleanAud);
 
-                            let badgeColor = aType === "GMP" ? "bg-purple-600 border-purple-400" :
-                                             aType === "GHP" ? "bg-cyan-600 border-cyan-400" : "bg-emerald-600 border-emerald-400";
+                            let badgeColor = aType === "GMP" ? "bg-purple-950/90 border-purple-500/60 text-purple-200 shadow-purple-950/40" :
+                                             aType === "GHP" ? "bg-blue-950/90 border-cyan-500/60 text-cyan-200 shadow-cyan-950/40" : 
+                                             "bg-emerald-950/90 border-emerald-500/60 text-emerald-200 shadow-emerald-950/40";
                             
-                            let badgeStyle = isCompleted ? `${badgeColor} opacity-75 text-white` :
-                                             isOverdue ? "bg-red-600 border-red-400 text-white animate-pulse" : `${badgeColor} text-white`;
+                            let badgeStyle = isCompleted ? `${badgeColor} opacity-80` :
+                                             isOverdue ? "bg-rose-950/90 border-rose-500/80 text-rose-200 animate-pulse shadow-rose-950/50" : `${badgeColor}`;
+
+                            let typeIcon = '';
+                            if (aType === 'GMP') {
+                                typeIcon = `<svg class="w-3 h-3 text-purple-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`;
+                            } else if (aType === 'GHP') {
+                                typeIcon = `<svg class="w-3 h-3 text-cyan-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
+                            } else {
+                                typeIcon = `<svg class="w-3 h-3 text-emerald-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
+                            }
+
+                            let statusIcon = '';
+                            if (isCompleted) {
+                                statusIcon = `<span title="Wykonany" class="flex items-center text-emerald-400"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+                            } else if (isOverdue) {
+                                statusIcon = `<span title="Spóźniony" class="flex items-center text-rose-400"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 15 13.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>`;
+                            }
 
                             badgeHtml += `
                                 <div draggable="true" ondragstart="event.stopPropagation(); event.dataTransfer.setData('text/plain', ${a.id});"
                                      onclick="event.stopPropagation(); state.role === 'MANAGER' ? openMgrModal(${a.id}) : openAudModal(${a.id});" 
                                      title="${aType} • ${cleanAud} (${a.line || ''})"
                                      class="${badgeStyle} border rounded-lg py-1 px-1.5 sm:px-2 shadow-md flex flex-col justify-center mb-1 cursor-pointer relative z-10 hover:scale-[1.02] transition-transform hover:brightness-110 leading-tight">
-                                    <div class="flex items-center justify-between font-black text-[11px] sm:text-xs uppercase tracking-wider">
-                                        <span>${isOverdue ? '🔴 ' : ''}${aType}</span>
-                                        ${isCompleted ? '<span class="text-emerald-300 font-black text-xs ml-1">✓</span>' : ''}
+                                    <div class="flex items-center justify-between font-black text-[10.5px] sm:text-[11.5px] uppercase tracking-wider">
+                                        <span class="flex items-center gap-1">${typeIcon}<span>${aType}</span></span>
+                                        ${statusIcon}
                                     </div>
-                                    <div class="text-[10px] sm:text-[11px] font-bold text-white/95 truncate mt-0.5" title="${cleanAud}">
+                                    <div class="text-[9.5px] sm:text-[10.5px] font-bold text-white/90 truncate mt-0.5" title="${cleanAud}">
                                         ${auditorDisplay}
                                     </div>
                                 </div>
@@ -996,10 +1042,10 @@
                         grid.innerHTML += `
                             <div ondragover="event.preventDefault()" ondrop="handleAuditDrop(event, '${currentFullDate}')"
                                  onclick="if(state.role==='MANAGER'){openManualPlanModal('${currentFullDate}')}" 
-                                 class="cal-day tile-3d ${holidayName ? 'bg-rose-950/30 border-rose-900/50' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1.5 sm:p-2 flex flex-col justify-between cursor-pointer rounded-xl">
+                                 class="cal-day tile-3d ${holidayName ? 'bg-amber-950/20 border-amber-900/40' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1.5 sm:p-2 flex flex-col justify-between cursor-pointer rounded-xl">
                                 <div class="flex justify-between items-start">
-                                    <span class="text-[10px] font-extrabold ${holidayName ? 'text-rose-400' : 'text-slate-200'}">${dateIter}</span>
-                                    ${holidayName ? `<span class="text-[7px] text-rose-300 truncate max-w-[50px] font-extrabold">🏖️ ${holidayName}</span>` : ''}
+                                    <span class="text-[10px] font-extrabold ${holidayName ? 'text-amber-400' : 'text-slate-200'}">${dateIter}</span>
+                                    ${holidayName ? `<span class="text-[7.5px] text-amber-300 truncate max-w-[65px] font-extrabold flex items-center gap-0.5" title="${holidayName}"><svg class="w-2.5 h-2.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="2" y1="2" x2="22" y2="22"/></svg> ${holidayName}</span>` : ''}
                                 </div>
                                 <div class="space-y-0.5 mt-0.5">${badgeHtml}</div>
                             </div>
@@ -1433,26 +1479,40 @@
             }
         }
 
-        let activeAuditorHistoryTab = 'recent'; // 'recent' (<= 7 dni) lub 'archive' (> 7 dni)
+        let activeAuditorHistoryTab = 'pending'; // 'pending' (oczekujące <7 dni), 'completed' (wykonane <7 dni), 'approved' (zaakceptowane <7 dni), 'history' (starsze >7 dni)
 
         window.setAuditorHistoryTab = function(tab) {
+            if (tab === 'recent') tab = 'pending';
+            if (tab === 'archive') tab = 'history';
             activeAuditorHistoryTab = tab;
-            const btnRecent = document.getElementById('tab-btn-auditor-recent');
-            const btnArchive = document.getElementById('tab-btn-auditor-archive');
 
-            if (tab === 'recent') {
-                if (btnRecent) {
-                    btnRecent.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition cursor-pointer';
+            const btnPending = document.getElementById('tab-btn-auditor-pending') || document.getElementById('tab-btn-auditor-recent');
+            const btnCompleted = document.getElementById('tab-btn-auditor-completed');
+            const btnApproved = document.getElementById('tab-btn-auditor-approved');
+            const btnHistory = document.getElementById('tab-btn-auditor-history') || document.getElementById('tab-btn-auditor-archive');
+
+            const inactiveClass = 'px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
+
+            if (btnPending) btnPending.className = inactiveClass;
+            if (btnCompleted) btnCompleted.className = inactiveClass;
+            if (btnApproved) btnApproved.className = inactiveClass;
+            if (btnHistory) btnHistory.className = inactiveClass;
+
+            if (tab === 'pending') {
+                if (btnPending) {
+                    btnPending.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer';
                 }
-                if (btnArchive) {
-                    btnArchive.className = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
+            } else if (tab === 'completed') {
+                if (btnCompleted) {
+                    btnCompleted.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black bg-blue-500 text-slate-950 shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition cursor-pointer';
                 }
-            } else {
-                if (btnArchive) {
-                    btnArchive.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-cyan-600 text-white shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition cursor-pointer';
+            } else if (tab === 'approved') {
+                if (btnApproved) {
+                    btnApproved.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition cursor-pointer';
                 }
-                if (btnRecent) {
-                    btnRecent.className = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
+            } else if (tab === 'history') {
+                if (btnHistory) {
+                    btnHistory.className = 'px-3.5 py-1.5 rounded-xl text-xs font-black bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center gap-1.5 transition cursor-pointer';
                 }
             }
             loadAuditorHistory();
@@ -1478,41 +1538,70 @@
                     return String(a.auditor_id).trim() === String(state.auditor_id).trim() || true;
                 });
 
-                // REGUŁA 7 DNI DLA ZATWIERDZONYCH AUDYTÓW:
-                // Audyt trafia do Archiwum tylko wtedy, gdy jest ZATWIERDZONY przez Managera i minęło więcej niż 7 dni.
-                // Audyty niezatwierdzone, w trakcie korekty lub HOLD LOT zawsze pozostają w sekcji Bieżące!
+                // REGUŁA PODZIAŁU AUDYTÓW (IFS FOOD V8):
+                // 1. Audyty starsze niż 7 dni automatycznie wpadają do zakładki „Historia audytów (>7 dni)”.
+                // 2. Wszystkie wykonane audyty z bieżącego tygodnia trafiają do „Audyty wykonane”.
+                // 3. Audyty zaakceptowane przez Key Usera (ZATWIERDZONY) trafiają do „Zaakceptowane”.
+                // 4. W widoku głównym („Oczekujące na akceptację”) pozostają tylko bieżące wpisy oczekujące na decyzję!
                 const now = new Date();
                 const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
 
-                const recentAudits = [];
-                const archiveAudits = [];
+                const pendingAudits = [];
+                const completedAudits = [];
+                const approvedAudits = [];
+                const historyAudits = [];
 
                 myAudits.forEach(a => {
-                    const isApproved = (a.compliance_verdict === 'ZATWIERDZONY' || a.process_status === 'ZATWIERDZONY');
+                    const cv = String(a.compliance_verdict || '').trim().toUpperCase();
+                    const ps = String(a.process_status || '').trim().toUpperCase();
+                    const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
+
                     const auditDate = a.timestamp ? new Date(a.timestamp.replace(' ', 'T')) : new Date();
                     const isOlderThan7Days = !isNaN(auditDate.getTime()) && (auditDate < sevenDaysAgo);
 
-                    if (isApproved && isOlderThan7Days) {
-                        archiveAudits.push(a);
+                    if (isOlderThan7Days) {
+                        historyAudits.push(a);
                     } else {
-                        recentAudits.push(a);
+                        // Bieżący tydzień (<7 dni):
+                        completedAudits.push(a); // Każdy zrealizowany bieżący audyt jest w wykonanych
+                        if (isApproved) {
+                            approvedAudits.push(a); // Po zatwierdzeniu przez Key Usera automatycznie wpada do Zaakceptowane
+                        } else {
+                            pendingAudits.push(a); // Dopóki nie zaakceptowany, oczekuje na decyzję
+                        }
                     }
                 });
 
-                // Aktualizacja liczników na zakładkach
-                const badgeRecent = document.getElementById('badge-count-auditor-recent');
-                const badgeArchive = document.getElementById('badge-count-auditor-archive');
-                if (badgeRecent) badgeRecent.textContent = recentAudits.length;
-                if (badgeArchive) badgeArchive.textContent = archiveAudits.length;
+                // Aktualizacja liczników na 4 zakładkach
+                const badgePending = document.getElementById('badge-count-auditor-pending') || document.getElementById('badge-count-auditor-recent');
+                const badgeCompleted = document.getElementById('badge-count-auditor-completed');
+                const badgeApproved = document.getElementById('badge-count-auditor-approved');
+                const badgeHistory = document.getElementById('badge-count-auditor-history') || document.getElementById('badge-count-auditor-archive');
 
-                const displayAudits = (activeAuditorHistoryTab === 'archive') ? archiveAudits : recentAudits;
+                if (badgePending) badgePending.textContent = pendingAudits.length;
+                if (badgeCompleted) badgeCompleted.textContent = completedAudits.length;
+                if (badgeApproved) badgeApproved.textContent = approvedAudits.length;
+                if (badgeHistory) badgeHistory.textContent = historyAudits.length;
+
+                let displayAudits = pendingAudits;
+                if (activeAuditorHistoryTab === 'completed') {
+                    displayAudits = completedAudits;
+                } else if (activeAuditorHistoryTab === 'approved') {
+                    displayAudits = approvedAudits;
+                } else if (activeAuditorHistoryTab === 'history') {
+                    displayAudits = historyAudits;
+                }
 
                 list.innerHTML = '';
                 if (displayAudits.length === 0) {
-                    if (activeAuditorHistoryTab === 'archive') {
-                        list.innerHTML = '<div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-center"><p class="text-xs text-slate-400">Brak starszych zatwierdzonych audytów w Archiwum (>7 dni).</p></div>';
+                    if (activeAuditorHistoryTab === 'history') {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak starszych audytów w Historii (>7 dni).</p></div>';
+                    } else if (activeAuditorHistoryTab === 'approved') {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak jeszcze zaakceptowanych audytów przez Key Usera w bieżącym tygodniu.</p></div>';
+                    } else if (activeAuditorHistoryTab === 'completed') {
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 text-center space-y-1"><p class="text-xs text-slate-400">Brak zrealizowanych audytów w bieżącym tygodniu.</p></div>';
                     } else {
-                        list.innerHTML = '<div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-center"><p class="text-xs text-slate-400">Brak bieżących audytów w ostatnich 7 dniach. Masz czyste konto!</p></div>';
+                        list.innerHTML = '<div class="bg-slate-950/60 p-5 rounded-2xl border border-emerald-500/30 text-center space-y-1"><p class="text-xs font-black text-emerald-400 flex items-center justify-center gap-1.5"><svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><span>Wszystkie bieżące audyty zostały zaakceptowane przez Key Usera!</span></p><p class="text-[11px] text-slate-400">Brak wpisów oczekujących na decyzję. Wszystkie zatwierdzone wpisy znajdziesz w karcie „Zaakceptowane”, a starsze w „Historii audytów”.</p></div>';
                     }
                     return;
                 }
@@ -1572,103 +1661,175 @@
                         }
                     }
 
+                    // Klasyfikacja: Zgodny / Certyfikacyjny vs Odchylenie Krytyczne (Wariant A: Certyfikacyjny)
+                    // LOGIKA BIZNESOWA IFS:
+                    // Jeśli audyt został zaakceptowany (isApproved), NIE WYMAGA korekty ani działań korygujących!
+                    // Jest gotowy, zatwierdzony i autoryzowany przez Key Usera (kolor szmaragdowy / zielony).
+                    // Na czerwono (Odchylenie krytyczne / Działanie korygujące) są tylko audyty niezaakceptowane z incydentem / odrzuceniem!
+                    const isCritical = !isApproved && (
+                        !isOk || 
+                        String(riskLevel).toUpperCase().includes('KRYTYCZNE') || 
+                        String(riskLevel).toUpperCase().includes('HOLD') || 
+                        String(complianceVerdict).toUpperCase() === 'ODRZUCONY'
+                    );
+
+                    // Formatowanie zmiany
+                    let shiftDisplay = shiftStr;
+                    if (shiftStr === '1' || shiftStr === 'I') shiftDisplay = 'I (06:00 - 14:00)';
+                    else if (shiftStr === '2' || shiftStr === 'II') shiftDisplay = 'II (14:00 - 22:00)';
+                    else if (shiftStr === '3' || shiftStr === 'III') shiftDisplay = 'III (22:00 - 06:00)';
+                    else if (!shiftStr || shiftStr === '---') shiftDisplay = 'I (06:00 - 14:00)';
+
+                    // Zgodność IFS %
+                    let scorePctVal = 100;
+                    if (a.total_score_pct != null) scorePctVal = Math.round(parseFloat(a.total_score_pct));
+                    else if (a.audit_score != null) scorePctVal = Math.round(parseFloat(a.audit_score));
+                    const scorePassText = isCritical ? `${scorePctVal}% FAIL` : `${scorePctVal}% PASS`;
+
+                    // Status partii przy odchyleniu krytycznym
+                    let statusPartiiText = 'BLOKADA JAKOŚCIOWA (CCP-2)';
+                    if (riskLevel && (riskLevel.includes('CCP') || riskLevel.includes('KRYTYCZNE') || riskLevel.includes('HOLD'))) {
+                        const cleanR = riskLevel.replace(/[^A-Za-z0-9\-]/g, '');
+                        statusPartiiText = `BLOKADA JAKOŚCIOWA (${cleanR || 'CCP-2'})`;
+                    } else if (complianceVerdict === 'ODRZUCONY') {
+                        statusPartiiText = 'BLOKADA JAKOŚCIOWA (ODRZUCENIE)';
+                    }
+
                     const panelId = `audit-detail-panel-${auditId}`;
 
-                    // Dynamiczne podświetlenie w zieleni, jeśli audyt został zatwierdzony przez Key Usera
-                    const cardBorderClass = isApproved 
-                        ? 'border-2 border-emerald-500 shadow-lg shadow-emerald-500/20 bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-slate-900/90 ring-1 ring-emerald-400/50' 
-                        : 'border border-slate-800/90 shadow-md bg-slate-900/80';
-
-                    const iconBoxClass = isApproved
-                        ? 'bg-emerald-500/20 border-2 border-emerald-400 text-emerald-300 shadow-md shadow-emerald-500/40'
-                        : (isOk ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border border-rose-500/30 text-rose-400');
-
-                    const resultTextClass = isApproved
-                        ? 'text-emerald-300 font-extrabold drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
-                        : (isOk ? 'text-emerald-400' : 'text-rose-400');
-
                     list.innerHTML += `
-                        <div class="rounded-2xl ${cardBorderClass} overflow-hidden transition-all">
-                            <!-- Nagłówek wiersza — klikalna linia -->
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 cursor-pointer hover:bg-slate-800/50 transition-all"
+                        <div class="rounded-2xl ${isCritical ? 'border border-rose-500/70 hover:border-rose-400/90 bg-gradient-to-r from-rose-950/40 via-slate-900/90 to-slate-900/95 hover:shadow-rose-950/40' : 'border border-emerald-500/70 hover:border-emerald-400/90 bg-gradient-to-r from-emerald-950/40 via-slate-900/90 to-slate-900/95 hover:shadow-emerald-950/40'} overflow-hidden transition-all shadow-lg">
+                            <!-- Nagłówek wiersza WARIANT A (Certyfikacyjny / Stempel IFS / Rygor Jakościowy) -->
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 cursor-pointer ${isCritical ? 'hover:bg-rose-950/20' : 'hover:bg-emerald-950/20'} transition-all"
                                  onclick="toggleAuditHistoryPanel('${panelId}', this)">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-xl ${iconBoxClass} flex items-center justify-center text-sm shrink-0">
-                                        <i class="fas ${isApproved ? 'fa-badge-check' : (isOk ? 'fa-check-circle' : 'fa-exclamation-triangle')}"></i>
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <!-- Ikona: Rozeta Certyfikacyjna lub Kłódka Rygoru -->
+                                    <div class="w-11 h-11 rounded-2xl ${isCritical ? 'bg-rose-950/80 border border-rose-500/50 text-rose-400' : 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-400'} flex items-center justify-center shrink-0 shadow-sm">
+                                        ${isCritical 
+                                            ? `<svg class="w-5 h-5 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                               </svg>`
+                                            : `<svg class="w-6 h-6 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                 <circle cx="12" cy="8" r="6"/>
+                                                 <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>
+                                               </svg>`
+                                        }
                                     </div>
-                                    <div>
-                                        <div class="flex items-center gap-2 flex-wrap">
-                                            <h4 class="font-black text-sm text-white">${lineName}</h4>
-                                            ${isApproved 
-                                                ? `<span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-500 text-slate-950 border border-emerald-300 shadow-md shadow-emerald-500/40 flex items-center gap-1 animate-pulse">
-                                                     <i class="fas fa-check-double text-[8px]"></i> ZATWIERDZONY PRZEZ MANAGERA
+                                    <div class="min-w-0">
+                                        <!-- Wiersz 1: Nazwa linii + Pigułka statusu certyfikacji / rygoru -->
+                                        <div class="flex items-center gap-2.5 flex-wrap">
+                                            <h4 class="font-black text-sm sm:text-base text-white tracking-wide truncate">${lineName}</h4>
+                                            ${isCritical 
+                                                ? `<span class="bg-rose-950/90 border border-rose-500/60 px-2.5 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-black text-rose-300 flex items-center gap-1.5 shadow-sm">
+                                                     <span class="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block shadow-[0_0_6px_#f43f5e] animate-pulse"></span>
+                                                     <span>ODCHYLENIE KRYTYCZNE</span>
                                                    </span>`
-                                                : `<span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${isOk ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-rose-950 text-rose-300 border border-rose-500/40'}">
-                                                     ${isOk ? 'Zgodny' : 'Zastrzeżenia'}
+                                                : `<span class="bg-emerald-950/90 border border-emerald-500/60 px-2.5 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-black text-emerald-300 flex items-center gap-1.5 shadow-sm">
+                                                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_#34d399]"></span>
+                                                     <span>${isApproved ? 'AUTORYZACJA KIEROWNIKA' : 'AUTORYZACJA JAKOŚCI'}</span>
                                                    </span>`
-                                            }
-                                            ${isApproved 
-                                                ? `<span class="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-500/60">👑 Zweryfikowany</span>`
-                                                : (isLocked ? '<span class="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-950 text-amber-300 border border-amber-500/40">🔒 Zablokowany</span>' : '<span class="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-950/60 text-emerald-300 border border-emerald-600/40">Edytowalny</span>')
                                             }
                                         </div>
-                                        <div class="flex flex-wrap items-center gap-2 text-[10.5px] text-slate-400 mt-0.5">
-                                            <span class="flex items-center gap-1"><i class="far fa-clock text-slate-500 text-[10px]"></i> ${dateStr}</span>
+                                        <!-- Wiersz 2: Zegarek, data, zmiana, zgodność IFS / status partii -->
+                                        <div class="flex flex-wrap items-center gap-2 text-[10.5px] sm:text-[11px] text-slate-400 mt-1">
+                                            <span class="flex items-center gap-1 font-medium">
+                                                <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <circle cx="12" cy="12" r="10"/>
+                                                    <polyline points="12 6 12 12 15 14"/>
+                                                </svg>
+                                                <span>${dateStr}</span>
+                                            </span>
                                             <span class="text-slate-600">•</span>
-                                            <span>Zmiana: <b class="text-slate-300">${shiftStr}</b></span>
+                                            <span>Zmiana: <b class="text-slate-200 font-semibold">${shiftDisplay}</b></span>
                                             <span class="text-slate-600">•</span>
-                                            <span>Wynik: <b class="${resultTextClass}">${scoreRaw}</b></span>
+                                            ${isCritical 
+                                                ? `<span>Status partii: <b class="text-rose-400 font-black tracking-wide">${statusPartiiText}</b></span>`
+                                                : `<span>Zgodność IFS: <b class="text-cyan-300 font-bold">${scorePassText}</b></span>`
+                                            }
                                         </div>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                                    ${isApproved 
-                                        ? `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm">
-                                             <i class="fas fa-check-circle text-emerald-400 text-xs"></i>
-                                             <span>Zatwierdzono</span>
-                                           </span>`
-                                        : (isLocked
-                                            ? `<button type="button" onclick="event.stopPropagation(); requestAuditCorrection(${auditId})" class="tile-3d px-3 py-1.5 bg-gradient-to-r from-amber-600/90 to-orange-600/90 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs rounded-xl shadow-md border border-amber-400/40 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all">
-                                                 <i class="fas fa-lock-open text-[10px]"></i>
-                                                 <span>Wnioskuj o korektę</span>
-                                               </button>`
-                                            : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                                 <i class="fas fa-check text-[10px]"></i>
-                                                 <span>Edycja dozwolona</span>
-                                               </span>`
-                                        )
+                                <!-- Prawa strona: Przycisk funkcyjny z chevronem (Raport IFS / Działanie korygujące) -->
+                                <div class="flex items-center shrink-0 self-end sm:self-center">
+                                    ${isCritical 
+                                        ? `<div class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-rose-950/80 hover:bg-rose-900 border border-rose-500/60 text-rose-300 font-bold text-xs flex items-center gap-2 shadow-sm transition-all hover:scale-105 active:scale-95 select-none">
+                                             <svg class="w-4 h-4 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                                             </svg>
+                                             <span>Działanie korygujące</span>
+                                             <svg class="w-3.5 h-3.5 text-rose-400 audit-chevron transition-transform duration-200 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                                 <polyline points="6 9 12 15 18 9"/>
+                                             </svg>
+                                           </div>`
+                                        : `<div class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/60 text-emerald-300 font-bold text-xs flex items-center gap-2 shadow-sm transition-all hover:scale-105 active:scale-95 select-none">
+                                             <svg class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                                 <polyline points="14 2 14 8 20 8"/>
+                                                 <line x1="16" y1="13" x2="8" y2="13"/>
+                                                 <line x1="16" y1="17" x2="8" y2="17"/>
+                                             </svg>
+                                             <span>Raport IFS</span>
+                                             <svg class="w-3.5 h-3.5 text-emerald-400 audit-chevron transition-transform duration-200 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                                 <polyline points="6 9 12 15 18 9"/>
+                                             </svg>
+                                           </div>`
                                     }
-                                    <span class="text-slate-500 text-xs font-bold audit-chevron transition-transform duration-200">▼</span>
                                 </div>
                             </div>
 
-                            <!-- Panel szczegółów (wyszarzony, rozwijany) -->
-                            <div id="${panelId}" class="hidden border-t ${isApproved ? 'border-emerald-500/30' : 'border-slate-800/70'}">
-                                <div class="p-4 space-y-3 opacity-90 bg-slate-950/60">
-
-                                    <!-- Blokada info -->
-                                    ${isLocked ? `
-                                    <div class="flex items-start gap-2 ${isApproved ? 'bg-emerald-950/40 border border-emerald-500/50' : 'bg-amber-950/30 border border-amber-700/40'} rounded-xl p-3">
-                                        <i class="fas ${isApproved ? 'fa-check-circle text-emerald-400' : 'fa-lock text-amber-400'} mt-0.5 text-sm shrink-0"></i>
-                                        <p class="text-[11px] ${isApproved ? 'text-emerald-200 font-bold' : 'text-amber-200 font-medium'} leading-snug">${lockReason}</p>
-                                    </div>` : ''}
+                            <!-- Panel szczegółów (rozwijany) -->
+                            <div id="${panelId}" class="hidden border-t ${isCritical ? 'border-rose-500/30 bg-rose-950/20' : 'border-emerald-500/30 bg-emerald-950/10'}">
+                                <div class="p-4 space-y-3 opacity-95 bg-slate-950/70">
+                                    <!-- Blokada / Alert CAPA -->
+                                    ${isCritical 
+                                        ? `<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-rose-950/50 border border-rose-500/50">
+                                             <div class="flex items-start gap-2.5">
+                                                 <svg class="w-5 h-5 text-rose-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                     <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                                                     <line x1="12" y1="9" x2="12" y2="13"/>
+                                                     <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                                 </svg>
+                                                 <div>
+                                                     <p class="text-xs font-black text-rose-300">Wymagane działanie korygujące (CAPA) i wniosek do Managera</p>
+                                                     <p class="text-[10.5px] text-rose-200/80 mt-0.5">${lockReason || 'Audyt objęty rygorem jakościowym IFS Food v8. Aby wznowić linię/partię, złóż wniosek o korektę.'}</p>
+                                                 </div>
+                                             </div>
+                                             <button type="button" onclick="event.stopPropagation(); requestAuditCorrection(${auditId})" class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 shrink-0 transition active:scale-95 cursor-pointer">
+                                                 <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                                 </svg>
+                                                 <span>Złóż wniosek o korektę</span>
+                                             </button>
+                                           </div>`
+                                        : (isApproved 
+                                            ? `<div class="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/50">
+                                                 <svg class="w-5 h-5 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                                     <polyline points="22 4 12 14.01 9 11.01"/>
+                                                 </svg>
+                                                 <p class="text-xs font-bold text-emerald-200">${lockReason || 'Oficjalny rekord IFS Food v8 autoryzowany przez Key Usera (Manager Jakości).'}</p>
+                                               </div>`
+                                            : '')
+                                    }
 
                                     <!-- Główne parametry -->
                                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                        <div class="bg-slate-900/60 rounded-xl p-2.5 border ${isApproved ? 'border-emerald-500/40' : 'border-slate-800'}">
-                                            <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Wynik ogólny</div>
-                                            <div class="text-sm font-black ${resultTextClass}">${scoreRaw}</div>
+                                        <div class="bg-slate-900/60 rounded-xl p-2.5 border ${isCritical ? 'border-rose-500/30' : 'border-emerald-500/30'}">
+                                            <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Zgodność IFS</div>
+                                            <div class="text-sm font-black ${isCritical ? 'text-rose-400' : 'text-cyan-300'}">${scoreRaw}</div>
                                         </div>
-                                        <div class="bg-slate-900/60 rounded-xl p-2.5 border ${isApproved ? 'border-emerald-500/40' : 'border-slate-800'}">
+                                        <div class="bg-slate-900/60 rounded-xl p-2.5 border ${isCritical ? 'border-rose-500/30' : 'border-emerald-500/30'}">
                                             <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Werdykt / Status</div>
-                                            <div class="text-sm font-black ${isApproved ? 'text-emerald-400' : (isOk ? 'text-emerald-400' : 'text-rose-400')}">${isApproved ? 'ZATWIERDZONY' : (complianceVerdict || a.slm_verdict || '---')}</div>
+                                            <div class="text-sm font-black ${isCritical ? 'text-rose-400' : 'text-emerald-400'}">${isApproved ? 'AUTORYZOWANY' : (complianceVerdict || a.slm_verdict || 'ZGODNY')}</div>
                                         </div>
                                         <div class="bg-slate-900/60 rounded-xl p-2.5 border border-slate-800">
                                             <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Poziom ryzyka</div>
-                                            <div class="text-xs font-black ${riskLevel.includes('KRYTYCZNE') || riskLevel.includes('HOLD') ? 'text-rose-400' : riskLevel.includes('WYSOKI') ? 'text-amber-400' : 'text-slate-300'}">${riskLevel}</div>
+                                            <div class="text-xs font-black ${isCritical ? 'text-rose-400' : 'text-slate-300'}">${riskLevel}</div>
                                         </div>
                                         <div class="bg-slate-900/60 rounded-xl p-2.5 border border-slate-800">
-                                            <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Data / Czas</div>
+                                            <div class="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Data / Godzina</div>
                                             <div class="text-xs font-bold text-slate-300">${dateStr}</div>
                                         </div>
                                     </div>
@@ -1685,7 +1846,6 @@
 
                                     <!-- Skrót punktów checklisty -->
                                     ${chSummary || '<div class="text-[10px] text-slate-500 italic">Szczegółowe dane pytań niedostępne w tym widoku.</div>'}
-
                                 </div>
                             </div>
                         </div>
