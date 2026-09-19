@@ -76,7 +76,7 @@
             <!-- KAFEL 3D: KEY USER (MANAGER) -->
             <div id="cap-auth-manager" class="bws-cap-viewport bws-cap-auth bws-cap-auth-manager relative select-none" onclick="toggleAuthCap('MANAGER', event)">
                 <!-- Awers: front kafelka -->
-                <div class="bws-cap-front bg-gradient-to-br from-amber-600 via-yellow-600 to-amber-700 flex flex-col items-center justify-between p-3.5 border border-amber-300/40 shadow-xl text-center">
+                <div class="bws-cap-front bg-gradient-to-br from-amber-600 via-yellow-600 to-amber-700 flex flex-col items-center justify-center gap-3.5 p-4 border border-amber-300/40 shadow-xl text-center">
                     <div class="animate-float p-2.5 rounded-2xl bg-amber-950/50 border border-amber-300/30">
                         <svg class="w-9 h-9 text-white drop-shadow-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                     </div>
@@ -84,9 +84,6 @@
                         <span class="text-xs font-black text-white tracking-wider drop-shadow block">KEY USER (MANAGER)</span>
                         <span class="text-[9px] font-bold text-amber-200/90 text-center block mt-0.5">Kierownik Jakości & Nadzór</span>
                     </div>
-                    <span class="text-[8px] bg-amber-950/80 text-amber-300 font-black px-2.5 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
-                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> Wprowadź PIN ▾
-                    </span>
                 </div>
 
                 <!-- Rewers: spód kapsla 3D z polem PIN -->
@@ -99,13 +96,12 @@
                         <button type="button" onclick="event.stopPropagation(); toggleAuthCap('MANAGER', event);" class="text-slate-400 hover:text-white text-xs font-bold px-1">&times;</button>
                     </div>
 
-                    <div class="my-auto space-y-1.5">
-                        <input type="password" id="auth-pin-manager" maxlength="6" placeholder="Wpisz PIN ••••" 
+                    <div class="my-auto">
+                        <input type="password" id="auth-pin-manager" maxlength="6" placeholder="••••" 
                                onfocus="onAuthPinFocus('MANAGER')" 
                                onblur="onAuthPinBlur('MANAGER')" 
                                onkeydown="onAuthPinKeyDown('MANAGER', event)" 
                                class="w-full text-center bg-slate-950/90 border border-amber-400/50 focus:border-amber-300 rounded-xl py-2 px-2 text-lg font-black tracking-widest text-amber-300 focus:outline-none shadow-inner">
-                        <p class="text-[8px] text-amber-200/60 text-center font-bold">Wciśnij Enter lub kliknij poniżej</p>
                     </div>
 
                     <button type="button" onclick="event.stopPropagation(); submitAuthPin('MANAGER');" class="w-full py-2 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg border border-amber-300/40 flex items-center justify-center gap-1.5 transition-transform active:scale-95">
@@ -118,7 +114,7 @@
             <!-- KAFEL 3D: AUDYTOR OPERACYJNY -->
             <div id="cap-auth-auditor" class="bws-cap-viewport bws-cap-auth bws-cap-auth-auditor relative select-none" onclick="toggleAuthCap('AUDITOR', event)">
                 <!-- Awers: front kafelka -->
-                <div class="bws-cap-front bg-gradient-to-br from-blue-600 via-cyan-600 to-cyan-500 flex flex-col items-center justify-between p-3.5 border border-cyan-300/40 shadow-xl text-center">
+                <div class="bws-cap-front bg-gradient-to-br from-blue-600 via-cyan-600 to-cyan-500 flex flex-col items-center justify-center gap-3.5 p-4 border border-cyan-300/40 shadow-xl text-center">
                     <div class="animate-float p-2.5 rounded-2xl bg-cyan-950/50 border border-cyan-300/30" style="animation-delay: 1.5s;">
                         <svg class="w-9 h-9 text-white drop-shadow-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="m9 14 2 2 4-4"/></svg>
                     </div>
@@ -126,9 +122,6 @@
                         <span class="text-xs font-black text-white tracking-wider drop-shadow block">AUDYTOR OPERACYJNY</span>
                         <span class="text-[9px] font-bold text-cyan-200/90 text-center block mt-0.5">Inspekcja Stanowiskowa</span>
                     </div>
-                    <span class="text-[8px] bg-cyan-950/80 text-cyan-300 font-black px-2.5 py-1 rounded-full border border-cyan-400/40 flex items-center gap-1">
-                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> Wprowadź PIN ▾
-                    </span>
                 </div>
 
                 <!-- Rewers: spód kapsla 3D z polem PIN -->
@@ -141,13 +134,12 @@
                         <button type="button" onclick="event.stopPropagation(); toggleAuthCap('AUDITOR', event);" class="text-slate-400 hover:text-white text-xs font-bold px-1">&times;</button>
                     </div>
 
-                    <div class="my-auto space-y-1.5">
-                        <input type="password" id="auth-pin-auditor" maxlength="6" placeholder="Wpisz PIN ••••" 
+                    <div class="my-auto">
+                        <input type="password" id="auth-pin-auditor" maxlength="6" placeholder="••••" 
                                onfocus="onAuthPinFocus('AUDITOR')" 
                                onblur="onAuthPinBlur('AUDITOR')" 
                                onkeydown="onAuthPinKeyDown('AUDITOR', event)" 
                                class="w-full text-center bg-slate-950/90 border border-cyan-400/50 focus:border-cyan-300 rounded-xl py-2 px-2 text-lg font-black tracking-widest text-cyan-300 focus:outline-none shadow-inner">
-                        <p class="text-[8px] text-cyan-200/60 text-center font-bold">Wciśnij Enter lub kliknij poniżej</p>
                     </div>
 
                     <button type="button" onclick="event.stopPropagation(); submitAuthPin('AUDITOR');" class="w-full py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg border border-cyan-300/40 flex items-center justify-center gap-1.5 transition-transform active:scale-95">
