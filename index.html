@@ -1303,7 +1303,7 @@
                 </div>
 
                 <!-- GŁÓWNA SIATKA AUDYTORA (2 KOLUMNY NA KAFLE + 1 KOLUMNA NA NOTATKĘ) -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 items-stretch">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
                     <!-- LEWA STRONA (2 kolumny): 4 KAFLI 3D AUDYTORA -->
                     <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                         <!-- 1. MÓJ HARMONOGRAM -->
@@ -1525,22 +1525,25 @@
                         </div>
                     </div>
 
-                    <!-- PRAWA STRONA (1 kolumna): ORAMKOWANA SZYBKA NOTATKA DO KEY USERA -->
-                    <div class="lg:col-span-1 bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/20 rounded-2xl border-2 border-amber-500/50 hover:border-amber-400/80 p-3.5 shadow-2xl flex flex-col justify-between relative overflow-hidden transition-all duration-300 ring-1 ring-amber-500/20">
-                        <!-- Pasek statusu kanału -->
+                    <!-- PRAWA STRONA (1 kolumna): ORAMKOWANA SZYBKA NOTATKA DO KEY USERA (WYDŁUŻONA PIONOWO, ANIMOWANA I Z OPCJĄ POUFNĄ/ANONIMOWĄ) -->
+                    <div class="lg:col-span-1 bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/25 rounded-2xl border-2 border-amber-500/60 hover:border-amber-400 p-4 sm:p-4.5 shadow-2xl flex flex-col justify-between relative overflow-hidden transition-all duration-300 ring-1 ring-amber-500/30 bws-glow-amber-animated min-h-[480px] lg:min-h-[520px]">
+                        <!-- Górny pasek statusu kanału -->
                         <div>
-                            <div class="flex items-center justify-between border-b border-amber-500/30 pb-2 mb-2.5">
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                    <span class="text-[10px] font-black text-amber-300 uppercase tracking-wider">DO: KEY USER (MANAGER)</span>
+                            <div class="flex items-center justify-between border-b border-amber-500/30 pb-2 mb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="relative flex h-2.5 w-2.5">
+                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                                    </span>
+                                    <span id="quick-note-dest-badge" class="text-[10px] sm:text-[10.5px] font-black text-amber-300 uppercase tracking-wider">DO: KEY USER (MANAGER)</span>
                                 </div>
-                                <span class="text-[8px] font-extrabold bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">DIRECT LIVE</span>
+                                <span class="text-[8.5px] font-extrabold bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm bws-live-pulse">DIRECT LIVE</span>
                             </div>
 
-                            <div class="flex items-start gap-2.5 mb-2.5">
-                                <div class="w-7 h-7 rounded-xl bg-amber-500/10 border border-amber-400/30 flex items-center justify-center text-amber-400 shrink-0">
+                            <div class="flex items-start gap-2.5 mb-3">
+                                <div class="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
                                     <!-- Nowy wektor notatnika z ołówkiem ze zrzutu ekranu -->
-                                    <svg class="w-4 h-4 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <svg class="w-4.5 h-4.5 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3"/>
                                         <path d="M15 7V5a2 2 0 0 0-2-2"/>
                                         <line x1="6.5" y1="8" x2="11.5" y2="8"/>
@@ -1551,22 +1554,25 @@
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 class="text-xs font-black text-white leading-tight">Szybka Notatka z Hali</h3>
-                                    <p class="text-[9px] font-bold text-slate-400 mt-0.5">Zgłoszenie ad-hoc, wątpliwości IFS i uwagi do Key Usera</p>
+                                    <h3 class="text-xs font-black text-white leading-tight flex items-center gap-1.5">
+                                        <span>Szybka Notatka z Hali</span>
+                                        <span class="text-[8.5px] font-bold text-amber-400/90 bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-500/30">Ad-Hoc</span>
+                                    </h3>
+                                    <p class="text-[9.5px] font-medium text-slate-400 mt-0.5 leading-snug">Zgłoszenie operacyjne, wątpliwości IFS i uwagi do Key Usera</p>
                                 </div>
                             </div>
 
                             <!-- Wybór linii i priorytetu -->
-                            <div class="grid grid-cols-2 gap-2 mb-2 text-xs">
+                            <div class="grid grid-cols-2 gap-2 mb-2.5 text-xs">
                                 <div>
-                                    <label class="text-[8.5px] font-bold text-slate-400 block mb-1 uppercase tracking-wide">Dotyczy Linii:</label>
-                                    <select id="quick-note-line" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg p-1.5 text-[10px] font-bold text-white outline-none transition cursor-pointer">
+                                    <label class="text-[8.5px] font-black text-slate-400 block mb-1 uppercase tracking-wide">Dotyczy Linii:</label>
+                                    <select id="quick-note-line" class="w-full bg-slate-950 border border-slate-700/90 focus:border-amber-400 rounded-lg p-1.5 text-[10px] font-bold text-white outline-none transition cursor-pointer">
                                         <option value="">— Ogólna / Cała Hala —</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-[8.5px] font-bold text-slate-400 block mb-1 uppercase tracking-wide">Priorytet:</label>
-                                    <select id="quick-note-priority" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg p-1.5 text-[10px] font-black text-amber-300 outline-none transition cursor-pointer">
+                                    <label class="text-[8.5px] font-black text-slate-400 block mb-1 uppercase tracking-wide">Priorytet:</label>
+                                    <select id="quick-note-priority" class="w-full bg-slate-950 border border-slate-700/90 focus:border-amber-400 rounded-lg p-1.5 text-[10px] font-black text-amber-300 outline-none transition cursor-pointer">
                                         <option value="INFO">ℹ️ Informacja</option>
                                         <option value="WARNING">⚠️ Zwróć Uwagę</option>
                                         <option value="HOLD">🚨 Zagrożenie / HOLD</option>
@@ -1574,20 +1580,32 @@
                                 </div>
                             </div>
 
-                            <!-- Pole tekstowe notatki -->
-                            <div class="relative mb-2">
-                                <textarea id="quick-note-text" oninput="updateQuickNoteCounter(this)" rows="3" placeholder="Wpisz treść notatki dla Key Usera (np. Nieszczelność zaworu na pasteryzatorze L4454, brak plomby w stacji mycia)..." class="w-full bg-slate-950/90 border border-slate-700/80 focus:border-amber-400 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 font-medium outline-none resize-none transition shadow-inner"></textarea>
-                                <div class="flex items-center justify-between text-[8.5px] text-slate-500 mt-0.5">
+                            <!-- Przełącznik zgłoszenia anonimowego / poufnego (IFS Food v8 Culture) -->
+                            <div class="mb-2.5 p-2 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-amber-400/40 transition flex items-center justify-between shadow-inner">
+                                <label class="flex items-center gap-2 cursor-pointer select-none">
+                                    <input type="checkbox" id="quick-note-anonymous" onchange="toggleAnonymousNote(this.checked)" class="w-3.5 h-3.5 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-0 cursor-pointer">
+                                    <span class="text-[9.5px] font-bold text-slate-300 flex items-center gap-1.5">
+                                        <i class="fas fa-user-secret text-amber-400"></i>
+                                        <span>Wyślij anonimowo</span>
+                                    </span>
+                                </label>
+                                <span class="text-[8px] font-extrabold text-amber-400/90 bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-500/25 uppercase tracking-wider">IFS Culture</span>
+                            </div>
+
+                            <!-- Wydłużone pole tekstowe notatki -->
+                            <div class="relative mb-2 flex flex-col">
+                                <textarea id="quick-note-text" oninput="updateQuickNoteCounter(this)" rows="5" placeholder="Wpisz treść notatki dla Key Usera (np. Nieszczelność zaworu na pasteryzatorze L4454, brak plomby w stacji mycia, podejrzenie błędu detektora)..." class="w-full min-h-[135px] bg-slate-950/90 border border-slate-700/80 focus:border-amber-400 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 font-medium outline-none resize-none transition shadow-inner leading-relaxed"></textarea>
+                                <div class="flex items-center justify-between text-[8.5px] text-slate-500 mt-1">
                                     <span id="quick-note-feedback" class="text-amber-400 font-bold"></span>
-                                    <span id="quick-note-counter" class="font-mono">0 / 300</span>
+                                    <span id="quick-note-counter" class="font-mono">0 / 500</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Przycisk wysyłki do Key Usera -->
-                        <div>
-                            <button type="button" id="btn-send-quick-note" onclick="sendQuickAuditorNote()" class="w-full py-2 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg shadow-amber-950/40 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer">
-                                <svg class="w-3.5 h-3.5 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                        <!-- Przycisk wysyłki do Key Usera + sekcja ostatnich notatek -->
+                        <div class="pt-2">
+                            <button type="button" id="btn-send-quick-note" onclick="sendQuickAuditorNote()" class="w-full py-2.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg shadow-amber-950/40 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer border border-amber-300/40">
+                                <svg class="w-4 h-4 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="m22 2-7 20-4-9-9-4Z"/>
                                     <path d="M22 2 11 13"/>
                                 </svg>
@@ -1595,12 +1613,14 @@
                             </button>
 
                             <!-- Sekcja ostatniej wysłanej notatki w sesji -->
-                            <div id="quick-note-recent-box" class="mt-2 pt-1.5 border-t border-slate-800/80 hidden">
-                                <div class="flex items-center justify-between text-[8.5px] text-slate-400 mb-0.5">
-                                    <span class="font-bold uppercase tracking-wider">Ostatnio wysłana:</span>
-                                    <span id="quick-note-recent-time" class="font-mono text-emerald-400"></span>
+                            <div id="quick-note-recent-box" class="mt-2.5 pt-2 border-t border-slate-800/80 hidden">
+                                <div class="flex items-center justify-between text-[8.5px] text-slate-400 mb-1">
+                                    <span class="font-bold uppercase tracking-wider flex items-center gap-1">
+                                        <i class="fas fa-check-circle text-emerald-400"></i> Ostatnio wysłana:
+                                    </span>
+                                    <span id="quick-note-recent-time" class="font-mono text-emerald-400 font-bold"></span>
                                 </div>
-                                <div id="quick-note-recent-content" class="text-[9.5px] text-slate-300 bg-slate-950/60 p-1.5 rounded-lg border border-slate-800 truncate"></div>
+                                <div id="quick-note-recent-content" class="text-[9.5px] text-slate-200 bg-slate-950/70 p-2 rounded-lg border border-slate-800 break-words max-h-20 overflow-y-auto font-medium"></div>
                             </div>
                         </div>
                     </div>

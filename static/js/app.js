@@ -1408,10 +1408,15 @@
 
                     const rowBg = isUnread ? 'bg-amber-950/20 border-l-2 border-l-amber-400' : 'hover:bg-slate-900/50';
 
+                    const isAnon = (n.auditor_name && (n.auditor_name.includes('Anonimow') || n.auditor_name.includes('Poufne')));
+                    const auditorDisplay = isAnon 
+                        ? '<span class="inline-flex items-center gap-1.5 text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded-lg border border-amber-500/40 text-[9.5px] font-black"><i class="fas fa-user-secret text-amber-400"></i> Poufne (IFS Culture)</span>'
+                        : `<span class="text-white font-bold">${n.auditor_name || 'Audytor'}</span>`;
+
                     tbody.innerHTML += `
                     <tr class="border-b border-slate-800/80 text-xs ${rowBg} transition">
                         <td class="p-2.5 text-slate-400 font-mono text-[10px] whitespace-nowrap">${n.timestamp ? n.timestamp.substring(0, 16) : '—'}</td>
-                        <td class="p-2.5 font-bold text-white whitespace-nowrap">${n.auditor_name || 'Audytor'}</td>
+                        <td class="p-2.5 whitespace-nowrap">${auditorDisplay}</td>
                         <td class="p-2.5 text-cyan-300 font-semibold whitespace-nowrap">${n.line_name || 'Ogólna / Hala'}</td>
                         <td class="p-2.5 whitespace-nowrap">${prioBadge}</td>
                         <td class="p-2.5 text-slate-200 font-medium break-words max-w-xs" colspan="3">${n.content}</td>
@@ -2488,8 +2493,8 @@
             const counter = document.getElementById('quick-note-counter');
             if (counter) {
                 const len = (el.value || '').length;
-                counter.innerText = `${len} / 300`;
-                if (len > 300) {
+                counter.innerText = `${len} / 500`;
+                if (len > 500) {
                     counter.classList.add('text-rose-400');
                     counter.classList.remove('text-slate-500');
                 } else {
@@ -2499,11 +2504,33 @@
             }
         };
 
+        window.toggleAnonymousNote = function(isAnon) {
+            const feedback = document.getElementById('quick-note-feedback');
+            const destBadge = document.getElementById('quick-note-dest-badge');
+            if (isAnon) {
+                if (destBadge) {
+                    destBadge.innerHTML = `<i class="fas fa-user-secret text-amber-400 mr-1 animate-pulse"></i> TRYB POUFNY / ANONIMOWY`;
+                }
+                if (feedback) {
+                    feedback.innerText = "Tryb anonimowy (IFS Culture) — Twoje nazwisko NIE będzie widoczne.";
+                    feedback.className = "text-amber-300 font-bold";
+                }
+            } else {
+                if (destBadge) {
+                    destBadge.innerHTML = `DO: KEY USER (MANAGER)`;
+                }
+                if (feedback && feedback.innerText.includes("Tryb anonimowy")) {
+                    feedback.innerText = "";
+                }
+            }
+        };
+
         window.sendQuickAuditorNote = async function() {
             const textarea = document.getElementById('quick-note-text');
             const feedback = document.getElementById('quick-note-feedback');
             const lineSel = document.getElementById('quick-note-line');
             const prioSel = document.getElementById('quick-note-priority');
+            const anonCheck = document.getElementById('quick-note-anonymous');
             const btn = document.getElementById('btn-send-quick-note');
             if (!textarea) return;
 
@@ -2517,9 +2544,15 @@
                 return;
             }
 
+            const isAnonymous = Boolean(anonCheck && anonCheck.checked);
+            const auditorName = isAnonymous 
+                ? "Anonimowy Audytor (Poufne IFS Culture)" 
+                : (state.auditor || "Audytor Operacyjny");
+            const auditorId = isAnonymous ? null : (state.userId || null);
+
             const payload = {
-                auditor_id: state.userId || null,
-                auditor_name: state.auditor || "Audytor Operacyjny",
+                auditor_id: auditorId,
+                auditor_name: auditorName,
                 line_id: lineSel ? lineSel.value : "",
                 line_name: lineSel && lineSel.options[lineSel.selectedIndex] ? lineSel.options[lineSel.selectedIndex].text : "",
                 priority: prioSel ? prioSel.value : "INFO",
@@ -2544,9 +2577,15 @@
                     textarea.value = "";
                     window.updateQuickNoteCounter(textarea);
                     if (feedback) {
-                        feedback.innerText = "✓ Wysłano do Key Usera!";
+                        feedback.innerText = isAnonymous 
+                            ? "✓ Wysłano anonimowo (IFS Culture) do Key Usera!" 
+                            : "✓ Wysłano do Key Usera!";
                         feedback.className = "text-emerald-400 font-bold";
-                        setTimeout(() => { if (feedback) feedback.innerText = ""; }, 4000);
+                        setTimeout(() => { 
+                            if (feedback && feedback.innerText.includes("Wysłano")) {
+                                feedback.innerText = ""; 
+                            }
+                        }, 4000);
                     }
 
                     // Pokaż ostatnią wysłaną notatkę
@@ -2556,8 +2595,9 @@
                     if (recentBox && recentTime && recentContent) {
                         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         recentTime.innerText = now;
-                        const prefix = payload.line_id ? `[${payload.line_name}] ` : '';
-                        recentContent.innerText = `${prefix}${content}`;
+                        const prefixLine = payload.line_id ? `[${payload.line_name}] ` : '';
+                        const prefixAnon = isAnonymous ? `🔒 [Poufne IFS] ` : '';
+                        recentContent.innerText = `${prefixAnon}${prefixLine}${content}`;
                         recentBox.classList.remove('hidden');
                     }
                 } else {

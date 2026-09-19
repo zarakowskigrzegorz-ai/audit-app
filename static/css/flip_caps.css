@@ -211,3 +211,29 @@
     transform: scale(0.92);
 }
 
+/* Animowana pulsująca obwódka dla Szybkiej Notatki Audytora */
+@keyframes pulse-amber-glow {
+    0%, 100% {
+        box-shadow: 0 0 16px rgba(245, 158, 11, 0.22), 0 0 35px rgba(245, 158, 11, 0.08);
+        border-color: rgba(245, 158, 11, 0.55);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(245, 158, 11, 0.5), 0 0 55px rgba(245, 158, 11, 0.25);
+        border-color: rgba(251, 191, 36, 0.95);
+    }
+}
+
+.bws-glow-amber-animated {
+    animation: pulse-amber-glow 3.5s ease-in-out infinite;
+}
+
+@keyframes live-indicator-ping {
+    0% { transform: scale(0.95); opacity: 0.85; }
+    50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 6px #f59e0b); }
+    100% { transform: scale(0.95); opacity: 0.85; }
+}
+
+.bws-live-pulse {
+    animation: live-indicator-ping 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
