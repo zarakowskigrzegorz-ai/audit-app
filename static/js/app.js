@@ -76,22 +76,17 @@
         function showModule(modId, pushToHistory = true) {
             document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
             
-            // Jeśli rola to AUDYTOR i wywołano 'hub', domyślnie otwórz kalendarz
-            if (modId === 'hub' && state.role === 'AUDITOR') {
-                modId = 'calendar';
-            }
-
             let targetId = modId;
-            if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'view-calendar'; }
+            if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor'; }
             else if (modId === 'audit-main') { targetId = 'view-audit-main'; }
             else if (!modId.startsWith('view-') && !modId.startsWith('hub-')) { targetId = 'view-' + modId; }
 
             let target = document.getElementById(targetId);
             // Fallback zapobiegający czarnemu ekranowi:
             if (!target) {
-                targetId = state.role === 'MANAGER' ? 'hub-manager' : 'view-calendar';
+                targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor';
                 target = document.getElementById(targetId);
-                modId = state.role === 'MANAGER' ? 'hub' : 'calendar';
+                modId = 'hub';
             }
 
             if(target) {
@@ -114,27 +109,18 @@
             }
 
             updateDockButtons();
-            
-            // Obsługa pionowego menu audytora
-            const audSidebar = document.getElementById('auditor-sidebar-menu');
-            if (audSidebar) {
-                if (state.role === 'AUDITOR' && modId !== 'audit-main' && modId !== 'auth') {
-                    audSidebar.classList.remove('hidden');
-                    updateAuditorSidebarActiveTile(modId);
-                } else {
-                    audSidebar.classList.add('hidden');
-                }
-            }
 
             // Odświeżanie na żywo przy powrocie do Dashboardu / Hubu
-            if(modId === 'hub' && state.role === 'MANAGER') {
+            if(modId === 'hub') {
                 document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
-                const hubEl = document.getElementById('hub-manager');
+                const hubEl = document.getElementById(state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor');
                 if (hubEl) hubEl.classList.remove('hidden');
-                try {
-                    if (typeof updateKpiRibbon === 'function') updateKpiRibbon();
-                    if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
-                } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
+                if (state.role === 'MANAGER') {
+                    try {
+                        if (typeof updateKpiRibbon === 'function') updateKpiRibbon();
+                        if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
+                    } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
+                }
             }
             if(modId === 'calendar') loadScheduleAndRender();
             if(modId === 'auditors') renderAuditorsList();
@@ -434,15 +420,12 @@
             navHistory.push(currentModule);
             navForward = [];
             document.querySelectorAll('.view-layer').forEach(el => el.classList.add('hidden'));
-            if (state.role === 'AUDITOR') {
-                showModule('calendar', false);
-            } else {
-                const target = document.getElementById('hub-manager');
-                if (target) target.classList.remove('hidden');
-                currentModule = 'hub';
-                updateDockButtons();
-                updateTopNavActiveState('hub');
-            }
+            const targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor';
+            const target = document.getElementById(targetId);
+            if (target) target.classList.remove('hidden');
+            currentModule = 'hub';
+            updateDockButtons();
+            updateTopNavActiveState('hub');
         }
 
         function updateDockButtons() {
@@ -457,7 +440,7 @@
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('ios-tab-active');
             });
-            if (modId === 'hub' || (state.role === 'AUDITOR' && modId === 'calendar')) document.getElementById('tag-hub')?.classList.add('ios-tab-active');
+            if (modId === 'hub') document.getElementById('tag-hub')?.classList.add('ios-tab-active');
             if (modId === 'calendar') document.getElementById('tag-calendar')?.classList.add('ios-tab-active');
             if (modId === 'agent') document.getElementById('tag-agent')?.classList.add('ios-tab-active');
         }
