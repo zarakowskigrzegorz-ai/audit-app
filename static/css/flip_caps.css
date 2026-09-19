@@ -331,3 +331,59 @@
     z-index: 10;
 }
 
+/* =========================================================================
+   SZEROKI KAFEL 3D (sm:col-span-2) - AWERS: KOLOROWY HUMOR/CIEKAWOSTKI, 
+   REWERS (HOVER/TOUCH): POLE TEKSTOWE SZYBKIEJ NOTATKI Z HALI
+   ========================================================================= */
+.bws-cap-note {
+    min-height: 275px;
+    height: 100%;
+    border-radius: 20px;
+    perspective: 1200px;
+    -webkit-perspective: 1200px;
+    position: relative;
+    user-select: none;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+}
+@media (max-width: 640px) {
+    .bws-cap-note {
+        min-height: 380px;
+    }
+}
+.bws-cap-note .bws-cap-front,
+.bws-cap-note .bws-cap-back {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 20px;
+    overflow: hidden;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+}
+.bws-cap-note .bws-cap-front {
+    transform: rotateX(0deg) translateZ(0);
+    transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s, box-shadow 0.3s;
+}
+.bws-cap-note .bws-cap-back {
+    transform: rotateX(90deg) translateZ(0);
+    transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s, box-shadow 0.3s;
+}
+.bws-cap-note:hover .bws-cap-front,
+.bws-cap-note.bws-active .bws-cap-front,
+.bws-cap-note.bws-focused .bws-cap-front {
+    transform: rotateX(-90deg) translateZ(0);
+    filter: brightness(0.85);
+}
+.bws-cap-note:hover .bws-cap-back,
+.bws-cap-note.bws-active .bws-cap-back,
+.bws-cap-note.bws-focused .bws-cap-back {
+    transform: rotateX(0deg) translateZ(0);
+    filter: brightness(1.03);
+    z-index: 25;
+}
+
+

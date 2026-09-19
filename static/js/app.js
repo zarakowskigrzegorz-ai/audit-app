@@ -2659,6 +2659,15 @@
                         recentContent.innerText = `${prefixAnon}${prefixLine}${content}`;
                         recentBox.classList.remove('hidden');
                     }
+
+                    setTimeout(() => {
+                        if (typeof window.closeAuditorNoteCap === 'function') {
+                            window.closeAuditorNoteCap();
+                        }
+                        if (typeof window.nextAuditorTrivia === 'function') {
+                            window.nextAuditorTrivia();
+                        }
+                    }, 2200);
                 } else {
                     if (feedback) {
                         feedback.innerText = data.detail || "Błąd wysyłki notatki.";
@@ -2899,8 +2908,27 @@
             if (backCounter) backCounter.innerText = `${(currentTriviaJokeIndex % auditorJokes.length) + 1}/${auditorJokes.length}`;
         }
 
+        window.toggleNoteCap = function(el, ev) {
+            if (ev && ev.target && (ev.target.closest('button') || ev.target.closest('select') || ev.target.closest('textarea') || ev.target.closest('input') || ev.target.closest('label'))) {
+                return;
+            }
+            if (el) {
+                el.classList.toggle('bws-active');
+            }
+        };
+
+        window.closeAuditorNoteCap = function() {
+            const cap = document.getElementById('aud-tile-quicknote');
+            if (cap) {
+                cap.classList.remove('bws-active');
+                cap.classList.remove('bws-focused');
+                const txt = document.getElementById('quick-note-text');
+                if (txt) txt.blur();
+            }
+        };
+
         window.flipAuditorTrivia = function() {
-            const cap = document.getElementById('auditor-trivia-cap');
+            const cap = document.getElementById('aud-tile-quicknote');
             if (cap) {
                 cap.classList.toggle('bws-active');
             }
@@ -2913,32 +2941,42 @@
         };
 
         window.initAuditorTrivia = function() {
-            const cap = document.getElementById('auditor-trivia-cap');
+            const cap = document.getElementById('aud-tile-quicknote');
             if (!cap) return;
 
-            // Losowy startowy element, by za każdym odświeżeniem było coś świeżego
+            // Zabezpieczenie przed samoczynnym powrotem karty podczas pisania
+            const txt = document.getElementById('quick-note-text');
+            if (txt && !txt._focusWired) {
+                txt._focusWired = true;
+                txt.addEventListener('focus', () => {
+                    const c = document.getElementById('aud-tile-quicknote');
+                    if (c) c.classList.add('bws-focused');
+                });
+                txt.addEventListener('blur', () => {
+                    if (!txt.value.trim()) {
+                        const c = document.getElementById('aud-tile-quicknote');
+                        if (c && !c.classList.contains('bws-active')) {
+                            c.classList.remove('bws-focused');
+                        }
+                    }
+                });
+            }
+
+            // Losowy startowy element, by za każdym razem było coś świeżego
             currentTriviaCuriosityIndex = Math.floor(Math.random() * auditorCuriosities.length);
             currentTriviaJokeIndex = Math.floor(Math.random() * auditorJokes.length);
             renderAuditorTrivia();
 
             if (triviaIntervalId) clearInterval(triviaIntervalId);
-            // Automatyczna rotacja co 12 sekund, jeśli użytkownik nie najedzie myszką
+            // Automatyczna rotacja ciekawostek i żartów co 12 sekund, o ile użytkownik nie pisze notatki
             triviaIntervalId = setInterval(() => {
-                const liveCap = document.getElementById('auditor-trivia-cap');
+                const liveCap = document.getElementById('aud-tile-quicknote');
                 if (!liveCap) return;
-                // Jeśli kontener jest ukryty (np. inny moduł)
                 if (liveCap.offsetParent === null) return;
-                // Jeśli użytkownik najechał kursorem, nie obracaj automatycznie
-                if (liveCap.matches(':hover')) return;
+                // Jeśli użytkownik jest na rewersie (pisze notatkę), nie zmieniaj treści w tle
+                if (liveCap.classList.contains('bws-active') || liveCap.classList.contains('bws-focused') || liveCap.matches(':hover')) return;
 
-                if (liveCap.classList.contains('bws-active')) {
-                    // Aktualnie był na rewersie -> losuj następny i wróć do awersu
-                    window.nextAuditorTrivia();
-                    liveCap.classList.remove('bws-active');
-                } else {
-                    // Aktualnie był na awersie -> obróć na rewers (żart)
-                    liveCap.classList.add('bws-active');
-                }
+                window.nextAuditorTrivia();
             }, 12000);
         };
 
@@ -4734,8 +4772,12 @@
 
     // Automatyczne odwrócenie kapsla z powrotem przy dotknięciu poza nim (np. na tablecie)
     document.addEventListener('pointerdown', (e) => {
-        if (!e.target.closest('.bws-cap-viewport')) {
-            document.querySelectorAll('.bws-cap-viewport.bws-active').forEach(el => el.classList.remove('bws-active'));
+        if (!e.target.closest('.bws-cap-viewport') && !e.target.closest('.bws-cap-note')) {
+            document.querySelectorAll('.bws-cap-viewport.bws-active, .bws-cap-note.bws-active').forEach(el => {
+                const txt = el.querySelector('#quick-note-text');
+                if (txt && (document.activeElement === txt || txt.value.trim().length > 0)) return;
+                el.classList.remove('bws-active');
+            });
         }
     });
 
