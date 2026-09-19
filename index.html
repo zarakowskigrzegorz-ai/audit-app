@@ -13,11 +13,15 @@
     <style>
     body { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
-            background: #090d16; 
+            background-color: #090d16; 
             background-image: 
+                url('/static/img/bg_gears.svg?v=20260919_v3'),
                 radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.12) 0px, transparent 50%),
                 radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.08) 0px, transparent 50%),
                 radial-gradient(at 50% 50%, #0c1220 0%, #060910 100%);
+            background-repeat: no-repeat;
+            background-size: cover, auto, auto, auto;
+            background-position: center center;
             background-attachment: fixed;
             padding-bottom: 160px; 
         }  
@@ -49,13 +53,13 @@
 </head>
 <body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto relative">
 
-    <!-- Stałe tło z subtelnymi kołami zębatymi (Watermark Gears Background widoczny we wszystkich menu) -->
-    <div class="fixed inset-0 pointer-events-none -z-50 overflow-hidden select-none" aria-hidden="true">
-        <img src="/static/img/bg_gears.svg?v=20260919_v1" alt="" class="w-full h-full object-cover">
+    <!-- Stałe tło z kołami zębatymi na całym ekranie (widoczne we wszystkich menu) -->
+    <div id="bg-gears-backdrop" class="fixed inset-0 pointer-events-none overflow-hidden select-none" aria-hidden="true" style="z-index: 0;">
+        <img src="/static/img/bg_gears.svg?v=20260919_v3" alt="" class="w-full h-full object-cover">
     </div>
 
     <!-- EKRAN LOGOWANIA -->
-    <div id="view-auth" class="my-auto w-full max-w-xl mx-auto space-y-5 view-layer">
+    <div id="view-auth" class="my-auto w-full max-w-xl mx-auto space-y-5 view-layer relative z-10">
         <!-- Pasek górny: logo i nazwa w lewym górnym rogu -->
         <div class="flex items-center justify-between pb-2">
             <div class="flex items-center gap-2.5 select-none">
@@ -212,7 +216,7 @@
     </div>
 
     <!-- GŁÓWNA APLIKACJA -->
-    <div id="main-app" class="hidden flex-col w-full h-full">
+    <div id="main-app" class="hidden flex-col w-full h-full relative z-10">
         <header class="sticky top-2 z-40 space-y-2 mb-3">
             <div class="flex items-center justify-between px-3.5 py-2 bg-slate-900/90 rounded-2xl border border-slate-800 backdrop-blur-xl shadow-2xl">
                 <div onclick="handleLogoClick()" title="Kliknij, aby cofnąć się krok w tył / wyjść do logowania" class="flex items-center gap-2.5 cursor-pointer select-none hover:opacity-90 active:scale-95 transition-all">
