@@ -1210,6 +1210,24 @@
             renderManagerAuditsTable();
         };
 
+        function formatAuditorInitials(auditor) {
+            if (!auditor) return "—";
+            const clean = String(auditor).replace(/\s*\(.*?\)/g, "").trim();
+            if (!clean) return "—";
+            if (clean.toLowerCase().includes("administrator") || clean.toLowerCase() === "admin") return "Admin";
+            
+            const parts = clean.split(/\s+/).filter(Boolean);
+            if (parts.length === 0) return "—";
+            if (parts.length === 1) {
+                return parts[0].length > 3 ? `${parts[0].substring(0, 3)}...` : parts[0];
+            }
+            
+            const firstInitial = parts[0].charAt(0).toUpperCase() + '.';
+            const lastName = parts[parts.length - 1];
+            const surLetters = lastName.substring(0, 3);
+            return `${firstInitial} ${surLetters}...`;
+        }
+
         function renderManagerAuditsTable() {
             const tbody = document.getElementById('manager-results-table');
             const heading = document.getElementById('manager-audits-heading');
@@ -1301,7 +1319,7 @@
                         <button onclick="handleAuditAction('reject', ${a.id})" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[9px] font-black cursor-pointer shadow-sm transition active:scale-95">Odrzuć</button>
                       `;
 
-                const audName = (a.auditor_id || 'Audytor').split(' ')[0];
+                const audName = formatAuditorInitials(a.auditor_id);
                 const dateShort = a.timestamp ? a.timestamp.substring(5, 16) : 'Brak daty';
 
                 tbody.innerHTML += `
@@ -1310,7 +1328,7 @@
                         <td class="py-2.5 px-3 border-b border-white/5 text-[9px] text-slate-400 whitespace-nowrap">${dateShort}</td>
                         <td class="py-2.5 px-3 border-b border-white/5 font-bold text-[10px] text-white truncate max-w-[200px]" title="${a.line}">${a.line}</td>
                         <td class="py-2.5 px-3 border-b border-white/5 text-[10px] text-slate-300 whitespace-nowrap font-medium">${a.shift || '—'}</td>
-                        <td class="py-2.5 px-3 border-b border-white/5 text-[9px] text-slate-400 whitespace-nowrap">${audName}</td>
+                        <td class="py-2.5 px-3 border-b border-white/5 text-[9px] text-slate-400 whitespace-nowrap font-semibold" title="${a.auditor_id || 'Audytor'}">${audName}</td>
                         <td id="status-${a.id}" class="py-2.5 px-3 border-b border-white/5 text-[8px] font-black whitespace-nowrap ${statusColor}">
                             ${a.record_status}${isApproved ? ' <span class="text-emerald-400">(✓)</span>' : isRejected ? ' <span class="text-rose-500">(✕)</span>' : ''}
                         </td>
