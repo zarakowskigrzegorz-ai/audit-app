@@ -119,25 +119,55 @@ function ensureReportsViewExists() {
             </div>
         </div>
 
-        <!-- TABELA ROZKŁADU LINII -->
-        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-            <div class="p-4 border-b border-slate-800 flex items-center justify-between">
-                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                    <i class="fa-solid fa-table-list text-cyan-400"></i> Zestawienie Telemetryczne Linii Produkcyjnych
-                </h3>
+        <!-- TABELE TELEMETRII: LINIE PRODUKCYJNE & AUDYTORZY -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- TABELA ROZKŁADU LINII -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-industry text-cyan-400"></i> Zestawienie Linii Produkcyjnych
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-950/60 text-cyan-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-800">
+                                <tr>
+                                    <th class="p-3">Linia</th>
+                                    <th class="p-3 text-center">Audyty</th>
+                                    <th class="p-3 text-center">Incydenty</th>
+                                    <th class="p-3 text-right">Zgodność</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reports-table-body" class="divide-y divide-slate-800/60"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs text-slate-300">
-                    <thead class="bg-slate-950/60 text-cyan-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-800">
-                        <tr>
-                            <th class="p-3.5">Linia Produkcyjna</th>
-                            <th class="p-3.5">Audyty Zrealizowane</th>
-                            <th class="p-3.5">Incydenty / NOK</th>
-                            <th class="p-3.5">Wskaźnik Zgodności</th>
-                        </tr>
-                    </thead>
-                    <tbody id="reports-table-body" class="divide-y divide-slate-800/60"></tbody>
-                </table>
+
+            <!-- TABELA ROZKŁADU AUDYTORÓW -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-users text-amber-400"></i> Zestawienie Aktywności Audytorów
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-950/60 text-amber-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-800">
+                                <tr>
+                                    <th class="p-3">Audytor</th>
+                                    <th class="p-3 text-center">Audyty</th>
+                                    <th class="p-3 text-center">Incydenty</th>
+                                    <th class="p-3 text-center">Zgodność</th>
+                                    <th class="p-3 text-right">Ostatni</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reports-auditors-table-body" class="divide-y divide-slate-800/60"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -212,8 +242,9 @@ function renderReportsUI() {
     if (elRadial) elRadial.setAttribute('stroke-dasharray', `${Math.min(rate, 100)}, 100`);
     if (elTotal) elTotal.innerText = filteredAudits.length;
 
-    // Statystyki per linia i werdykty jakościowe
+    // Statystyki per linia i audytor oraz werdykty jakościowe
     const lineStats = {};
+    const auditorStats = {};
     const statusCounts = {
         'ZGODNY (OK)': 0,
         'NIEZGODNY (NOK)': 0,
@@ -223,6 +254,7 @@ function renderReportsUI() {
 
     filteredAudits.forEach(a => {
         const line = a.line || 'Linia nieprzypisana';
+        const aud = a.auditor_id || 'Nieprzypisany';
         const isHold = a.compliance_verdict === 'HOLD_LOT' || (a.risk_level && a.risk_level.includes('HOLD'));
         const isNok = a.slm_verdict === 'NOK' || a.compliance_verdict === 'ODRZUCONY' || a.ko_failed == 1;
 
@@ -240,6 +272,18 @@ function renderReportsUI() {
         lineStats[line].total += 1;
         if (isHold || isNok) {
             lineStats[line].incidents += 1;
+        }
+
+        if (!auditorStats[aud]) {
+            auditorStats[aud] = { total: 0, incidents: 0, lastDate: null };
+        }
+        auditorStats[aud].total += 1;
+        if (isHold || isNok) {
+            auditorStats[aud].incidents += 1;
+        }
+        const d = parseItemDate(a, 'timestamp');
+        if (d && (!auditorStats[aud].lastDate || d > auditorStats[aud].lastDate)) {
+            auditorStats[aud].lastDate = d;
         }
     });
 
@@ -269,6 +313,42 @@ function renderReportsUI() {
                         <td class="p-3.5 font-bold">${row.total}</td>
                         <td class="p-3.5 ${row.incidents > 0 ? 'text-rose-400 font-bold' : 'text-slate-400'}">${row.incidents}</td>
                         <td class="p-3.5 text-emerald-400 font-bold">${lineRate}</td>
+                    </tr>
+                `;
+            });
+        }
+    }
+
+    // Tabela aktywności audytorów
+    const tbodyAud = document.getElementById('reports-auditors-table-body');
+    if (tbodyAud) {
+        tbodyAud.innerHTML = '';
+        const auditors = Object.keys(auditorStats).sort((a, b) => auditorStats[b].total - auditorStats[a].total);
+        if (auditors.length === 0) {
+            tbodyAud.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">Brak zarejestrowanych audytów dla wybranego zakresu</td></tr>`;
+        } else {
+            auditors.forEach(aud => {
+                const row = auditorStats[aud];
+                const audRate = row.total > 0 
+                    ? (((row.total - row.incidents) / row.total) * 100).toFixed(1) + '%' 
+                    : '100%';
+                let lastDateStr = '—';
+                if (row.lastDate) {
+                    const pad = n => String(n).padStart(2, '0');
+                    lastDateStr = `${pad(row.lastDate.getDate())}.${pad(row.lastDate.getMonth()+1)} ${pad(row.lastDate.getHours())}:${pad(row.lastDate.getMinutes())}`;
+                }
+                tbodyAud.innerHTML += `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-3 font-semibold text-white flex items-center gap-2">
+                            <span class="w-5 h-5 rounded-full bg-amber-950 border border-amber-400/40 text-amber-300 flex items-center justify-center text-[9px] font-bold shrink-0">
+                                ${aud.charAt(0).toUpperCase()}
+                            </span>
+                            <span class="truncate max-w-[140px]" title="${aud}">${aud}</span>
+                        </td>
+                        <td class="p-3 font-bold text-center">${row.total}</td>
+                        <td class="p-3 text-center ${row.incidents > 0 ? 'text-rose-400 font-bold' : 'text-slate-400'}">${row.incidents}</td>
+                        <td class="p-3 text-center text-emerald-400 font-bold">${audRate}</td>
+                        <td class="p-3 text-right font-mono text-[10px] text-slate-400 whitespace-nowrap">${lastDateStr}</td>
                     </tr>
                 `;
             });
