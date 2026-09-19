@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from database import get_db
 from datetime import timedelta, datetime
+import calendar
 from security import require_manager
 
 router = APIRouter(prefix="/api/schedule", tags=["Schedule"])
@@ -27,7 +28,8 @@ class ScheduleUpdateModel(BaseModel):
 class AutoPlanModel(BaseModel):
     start_year: int
     start_month: int
-    period_months: int
+    start_day: Optional[int] = 1
+    period_months: int = 1
     lines: List[str]
     audit_types: List[str]
     include_weekends: bool = False
@@ -142,37 +144,73 @@ async def clear_range(payload: Dict[str, int], manager: dict = Depends(require_m
 
 @router.post("/auto")
 async def auto_plan_audits(payload: AutoPlanModel, manager: dict = Depends(require_manager)):
-    async with get_db() as conn:
-        # Usuń absolutnie wszystkie audyty w zadanym zakresie miesięcy
-        for m_offset in range(payload.period_months):
-            cur_m = payload.start_month + m_offset
-            yr = payload.start_year + ((cur_m - 1) // 12)
-            mo = ((cur_m - 1) % 12) + 1
-            prefix_match = f"{yr:04d}-{mo:02d}%"
-            await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix_match,))
+    today = datetime.now().date()
+    start_day = payload.start_day or 1
+    
+    try:
+        start_date = datetime(payload.start_year, payload.start_month, start_day).date()
+    except ValueError:
+        start_date = datetime(payload.start_year, payload.start_month, 1).date()
         
-        current_date = datetime(payload.start_year, payload.start_month, 1)
-        end_date = current_date + timedelta(days=30 * payload.period_months)
+    if start_date < today:
+        start_date = today
+
+    end_total_m = payload.start_month + payload.period_months - 1
+    end_year = payload.start_year + ((end_total_m - 1) // 12)
+    end_month = ((end_total_m - 1) % 12) + 1
+    
+    _, last_day_of_month = calendar.monthrange(end_year, end_month)
+    end_date = datetime(end_year, end_month, last_day_of_month).date()
+
+    async with get_db() as conn:
+        cursor = await conn.execute(
+            "SELECT full_name FROM users WHERE is_active = 1 AND role IN ('AUDITOR', 'MANAGER') ORDER BY id ASC"
+        )
+        auditor_rows = await cursor.fetchall()
+        auditor_names = [r["full_name"] for r in auditor_rows] if auditor_rows else ["Audytor Jakości"]
+
+        await conn.execute(
+            """
+            DELETE FROM audit_schedules 
+            WHERE scheduled_date >= ? AND scheduled_date <= ? AND status != 'ZAKOŃCZONY'
+            """,
+            (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+        )
 
         scheduled_audits = []
-        while current_date < end_date:
-            if not payload.include_weekends and current_date.weekday() >= 5:
-                current_date += timedelta(days=1)
+        cur_date = start_date
+        aud_idx = 0
+
+        while cur_date <= end_date:
+            if not payload.include_weekends and cur_date.weekday() >= 5:
+                cur_date += timedelta(days=1)
                 continue
 
             for line in payload.lines:
                 for audit_type in payload.audit_types:
-                    lead_auditor = "Grzegorz Zarakowski (Lead Auditor)"
-                    backup_auditor = "Piotr Kowalski (Audytor)"
-                    s_date = current_date.strftime("%Y-%m-%d")
-                    scheduled_audits.append({"scheduled_date": s_date, "line": line})
+                    lead_aud = auditor_names[aud_idx % len(auditor_names)]
+                    backup_aud = auditor_names[(aud_idx + 1) % len(auditor_names)] if len(auditor_names) > 1 else lead_aud
+                    aud_idx += 1
+                    
+                    s_date_str = cur_date.strftime("%Y-%m-%d")
+                    scheduled_audits.append({"scheduled_date": s_date_str, "line": line, "audit_type": audit_type})
                     await conn.execute(
-                        "INSERT INTO audit_schedules (scheduled_date, line, audit_type, lead_auditor, backup_auditor, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (s_date, line, audit_type, lead_auditor, backup_auditor, "PLANOWANY", "Wygenerowano automatycznie")
+                        """
+                        INSERT INTO audit_schedules (scheduled_date, line, audit_type, lead_auditor, backup_auditor, status, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (s_date_str, line, audit_type, lead_aud, backup_aud, "PLANOWANY", "Wygenerowano automatycznie")
                     )
-            current_date += timedelta(days=1)
+            cur_date += timedelta(days=1)
+        
         await conn.commit()
-    return {"status": "success", "count": len(scheduled_audits), "scheduled_audits_count": len(scheduled_audits)}
+
+    return {
+        "status": "success",
+        "count": len(scheduled_audits),
+        "start_date": start_date.strftime("%d.%m.%Y"),
+        "end_date": end_date.strftime("%d.%m.%Y")
+    }
 
 
 class ClearMonthModel(BaseModel):

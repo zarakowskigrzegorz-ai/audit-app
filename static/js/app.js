@@ -1025,7 +1025,7 @@
             }
 
             try {
-                const res = await fetch(`/api/schedule/${auditId}/reschedule`, {
+                const res = await apiFetch(`/api/schedule/${auditId}/reschedule`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ new_date: targetDate })
@@ -1098,8 +1098,12 @@
                 backup_auditor: backupAuditor,
                 notes: document.getElementById('plan-notes').value
             };
-            const res = await fetch('/api/schedule', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const res = await apiFetch('/api/schedule', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             if (res.ok) { alert("✅ Audyt zaplanowany!"); closePlanModal(); await loadScheduleAndRender(); }
+            else {
+                const err = await res.json().catch(() => ({}));
+                alert("❌ Błąd planowania: " + (err.detail || "Nie udało się zapisać audytu."));
+            }
         }
 
         function updateAutoPlanPreview() {
@@ -1136,46 +1140,98 @@
             txtEl.textContent = `${pad(startDay)}.${pad(startM)}.${startY} – ${pad(lastDay)}.${pad(endM)}.${endY}`;
         }
 
-        function openAutoPlanModal() { 
+        async function openAutoPlanModal() { 
             document.getElementById('modal-autoplan').classList.remove('hidden'); 
             const today = new Date();
             const mEl = document.getElementById('autoplan-month');
             const yEl = document.getElementById('autoplan-year');
-            if (mEl && !mEl.value) mEl.value = today.getMonth() + 1;
-            if (yEl && !yEl.value) yEl.value = today.getFullYear();
+            if (mEl) mEl.value = today.getMonth() + 1;
+            if (yEl) yEl.value = today.getFullYear();
+
+            const autoLines = document.getElementById('autoplan-lines-container');
+            if (!autoLines || autoLines.children.length === 0) {
+                await loadProductionLines();
+            }
+
+            const btn1 = document.querySelector('.btn-period');
+            setPlanPeriod(1, btn1);
             updateAutoPlanPreview();
         }
+
         function closeAutoPlanModal() { document.getElementById('modal-autoplan').classList.add('hidden'); }
+
         function setPlanPeriod(m, btn) {
             state.selected_period_months = m;
-            document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('tile-selected'));
-            btn.classList.add('tile-selected');
+            document.querySelectorAll('.btn-period').forEach(b => {
+                b.classList.remove('tile-selected', 'bg-purple-600', 'text-white', 'border-purple-400');
+                b.classList.add('bg-slate-800', 'text-slate-300');
+            });
+            if (btn) {
+                btn.classList.remove('bg-slate-800', 'text-slate-300');
+                btn.classList.add('tile-selected', 'bg-purple-600', 'text-white', 'border-purple-400');
+            }
+            const runBtn = document.getElementById('btn-run-auto-schedule');
+            if (runBtn) {
+                const label = m === 1 ? '1 miesiąc' : (m < 5 ? `${m} miesiące` : `${m} miesięcy`);
+                runBtn.innerHTML = `🚀 Generuj audyty na ${label}`;
+            }
             updateAutoPlanPreview();
         }
 
         async function runAutoSchedule() {
+            const btn = document.getElementById('btn-run-auto-schedule');
+            const origHtml = btn ? btn.innerHTML : '';
+
             const lines = [];
             document.querySelectorAll('.auto-line-chk:checked').forEach(c => lines.push(c.value));
-            if (!lines.length) return alert("Wybierz linie produkcyjne!");
+            if (!lines.length) return alert("Wybierz przynajmniej jedną linię produkcyjną!");
 
             const types = [];
             if (document.getElementById('auto-type-haccp').checked) types.push('HACCP');
             if (document.getElementById('auto-type-gmp').checked) types.push('GMP');
             if (document.getElementById('auto-type-ghp').checked) types.push('GHP');
+            if (!types.length) return alert("Wybierz przynajmniej jeden typ audytu (HACCP, GMP, GHP)!");
 
             const payload = {
-                start_year: parseInt(document.getElementById('autoplan-year').value),
-                start_month: parseInt(document.getElementById('autoplan-month').value),
+                start_year: parseInt(document.getElementById('autoplan-year').value) || new Date().getFullYear(),
+                start_month: parseInt(document.getElementById('autoplan-month').value) || (new Date().getMonth() + 1),
                 start_day: new Date().getDate(),
                 period_months: state.selected_period_months || 1,
-                lines: lines, audit_types: types,
+                lines: lines,
+                audit_types: types,
                 include_weekends: document.getElementById('auto-include-weekends').checked
             };
-            const res = await fetch('/api/schedule/auto', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-            if (res.ok) {
-                const d = await res.json();
-                alert(`✨ Wygenerowano plan: ${d.count} audytów w zakresie ${d.start_date} – ${d.end_date} (bez dat wstecznych).`);
-                closeAutoPlanModal(); showModule('calendar'); await loadScheduleAndRender();
+
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generowanie audytów...';
+                }
+
+                const res = await apiFetch('/api/schedule/auto', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    const d = await res.json();
+                    alert(`✨ Wygenerowano plan audytów: ${d.count} audytów w zakresie ${d.start_date} – ${d.end_date} (bez dat wstecznych).`);
+                    closeAutoPlanModal();
+                    showModule('calendar');
+                    await loadScheduleAndRender();
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    alert(`❌ Błąd generowania harmonogramu: ${errData.detail || 'Wystąpił błąd podczas generowania audytów.'}`);
+                }
+            } catch (err) {
+                console.error("Auto plan error:", err);
+                alert("❌ Błąd połączenia z serwerem podczas generowania harmonogramu.");
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
             }
         }
 
@@ -3118,15 +3174,23 @@
                 status: document.getElementById('mgr-edit-status').value,
                 notes: document.getElementById('mgr-edit-notes').value
             };
-            const res = await fetch(`/api/schedule/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const res = await apiFetch(`/api/schedule/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             if (res.ok) { closeMgrModal(); await loadScheduleAndRender(); }
+            else {
+                const err = await res.json().catch(() => ({}));
+                alert("❌ Błąd zapisu zmian: " + (err.detail || "Nie udało się zaktualizować audytu."));
+            }
         }
 
         async function deleteMgrSchedule() {
             const id = document.getElementById('mgr-edit-id').value;
             if (!confirm("Usunąć zlecenie?")) return;
-            const res = await fetch(`/api/schedule/${id}`, { method: 'DELETE' });
+            const res = await apiFetch(`/api/schedule/${id}`, { method: 'DELETE' });
             if (res.ok) { closeMgrModal(); await loadScheduleAndRender(); }
+            else {
+                const err = await res.json().catch(() => ({}));
+                alert("❌ Błąd usuwania: " + (err.detail || "Nie udało się usunąć audytu."));
+            }
         }
 
         async function openAudModal(id) {
@@ -3902,7 +3966,7 @@
         const yearSelect = document.getElementById('autoplan-year');
         const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex]?.text : 'wybranego miesiąca';
         
-        if (!confirm()) {
+        if (!confirm(`Czy na pewno chcesz usunąć zaplanowane audyty dla miesiąca: ${monthName}?`)) {
             return;
         }
 
@@ -3911,7 +3975,7 @@
                 month: monthSelect ? parseInt(monthSelect.value) : new Date().getMonth() + 1,
                 year: yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear()
             };
-            const res = await fetch('/api/schedule/clear-month', {
+            const res = await apiFetch('/api/schedule/clear-month', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
