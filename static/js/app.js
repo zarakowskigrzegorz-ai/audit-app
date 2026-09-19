@@ -691,62 +691,27 @@
         let currentPromptRole = null;
 
         function openPinPrompt(role) {
-            currentPromptRole = role;
-            const container = document.getElementById('pin-container');
-            const label = document.getElementById('pin-role-label');
-            const desc = document.getElementById('pin-role-desc');
-            const quickSelect = document.getElementById('auditor-quick-select');
-
-            container.classList.remove('hidden');
-            if (role === 'MANAGER') {
-                label.innerText = 'Logowanie Key User (Kierownik Jakości)';
-                desc.innerText = 'Wprowadź PIN Key Usera';
-                quickSelect.classList.add('hidden');
-                document.getElementById('input-pin').value = '';
-            } else {
-                label.innerText = 'Logowanie Audytora';
-                desc.innerText = 'Wprowadź swój kod PIN audytora';
-                quickSelect.classList.remove('hidden');
-                document.getElementById('input-pin').value = '';
+            if (typeof window.toggleAuthCap === 'function') {
+                window.toggleAuthCap(role);
             }
-            document.getElementById('input-pin').focus();
         }
 
-        function setQuickPin(v) { document.getElementById('input-pin').value = v; submitLogin(); }
         function closePinPrompt() { 
-            currentPromptRole = null;
-            document.getElementById('pin-container').classList.add('hidden'); 
+            if (typeof window.closePinPrompt === 'function') {
+                window.closePinPrompt();
+            }
         }
+
         function switchUserPrompt() {
             document.getElementById('main-app').classList.add('hidden');
             document.getElementById('bottom-dock').classList.add('hidden');
             document.getElementById('view-auth').classList.remove('hidden');
-            openPinPrompt(state.role === "MANAGER" ? "AUDITOR" : "MANAGER");
-        }
-
-        async function submitLogin() {
-            const pin = document.getElementById('input-pin').value.trim();
-            if (!pin) return alert("Wprowadź PIN!");
-            try {
-                const payload = { pin };
-                if (currentPromptRole) {
-                    payload.expected_role = currentPromptRole;
-                }
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    return alert("❌ " + (err.detail || "Nieprawidłowy kod PIN!"));
-                }
-                const user = await res.json();
-                applyLoginUser(user);
-            } catch(e) { 
-                console.error("Login connection error:", e);
-                alert("Błąd połączenia z serwerem."); 
+            const nextRole = state.role === "MANAGER" ? "AUDITOR" : "MANAGER";
+            if (typeof window.toggleAuthCap === 'function') {
+                window.toggleAuthCap(nextRole);
             }
         }
+
 
         async function applyLoginUser(user) {
             state.user_id = user.id;
@@ -778,6 +743,7 @@
             formHistory.saveState('view-audit-form');
             formHistory.saveState('modal-plan-form');
         }
+        window.applyLoginUser = applyLoginUser;
 
         function logout() {
             state.user_id = 0;

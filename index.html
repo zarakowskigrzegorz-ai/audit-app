@@ -43,51 +43,8 @@
         .ios-tab-active { background: rgba(30, 41, 59, 0.95) !important; border: 1px solid rgba(56, 189, 248, 0.5) !important; color: #38bdf8 !important; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        /* Styl kapsla 3D na wzór browarwielkasowa.pl */
-        .bws-cap-viewport {
-            perspective: 1100px;
-            height: 8rem;
-            position: relative;
-            border-radius: 20px;
-        }
-        .bws-cap-front,
-        .bws-cap-back {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            border-radius: 20px;
-            overflow: hidden;
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
-            transform-style: preserve-3d;
-            -webkit-transform-style: preserve-3d;
-            transition: transform 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15), box-shadow 0.4s ease, filter 0.35s ease;
-            user-select: none;
-            box-shadow: 0 14px 24px -6px rgba(0, 0, 0, 0.75), inset 0 1px 2px rgba(255, 255, 255, 0.25), inset 0 -3px 6px rgba(0, 0, 0, 0.5);
-        }
-        .bws-cap-front {
-            transform: rotateX(0deg) translateZ(64px);
-            z-index: 2;
-        }
-        .bws-cap-back {
-            transform: rotateX(90deg) translateZ(64px);
-            z-index: 1;
-        }
-        .bws-cap-viewport:hover .bws-cap-front,
-        .bws-cap-viewport.bws-active .bws-cap-front {
-            transform: rotateX(-90deg) translateZ(64px);
-            filter: brightness(0.85);
-        }
-        .bws-cap-viewport:hover .bws-cap-back,
-        .bws-cap-viewport.bws-active .bws-cap-back {
-            transform: rotateX(0deg) translateZ(64px);
-            box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(168, 85, 247, 0.45);
-            filter: brightness(1.05);
-            z-index: 3;
-        }
     </style>
+    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v1">
 </head>
 <body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto">
 
@@ -120,38 +77,89 @@
         </button>
 
         <div class="grid grid-cols-2 gap-4">
-            <div onclick="openPinPrompt('MANAGER')" class="tile-3d relative aspect-square bg-gradient-to-br from-amber-600 via-yellow-600 to-amber-700 flex flex-col items-center justify-center p-3 cursor-pointer border border-amber-300/40">
-                <div class="animate-float mb-2 p-2.5 rounded-2xl bg-amber-950/50 border border-amber-300/30">
-                    <svg class="w-10 h-10 text-white drop-shadow-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            <!-- KAFEL 3D: KEY USER (MANAGER) -->
+            <div id="cap-auth-manager" class="bws-cap-viewport bws-cap-auth bws-cap-auth-manager relative select-none" onclick="toggleAuthCap('MANAGER', event)">
+                <!-- Awers: front kafelka -->
+                <div class="bws-cap-front bg-gradient-to-br from-amber-600 via-yellow-600 to-amber-700 flex flex-col items-center justify-between p-3.5 border border-amber-300/40 shadow-xl text-center">
+                    <div class="animate-float p-2.5 rounded-2xl bg-amber-950/50 border border-amber-300/30">
+                        <svg class="w-9 h-9 text-white drop-shadow-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                    </div>
+                    <div>
+                        <span class="text-xs font-black text-white tracking-wider drop-shadow block">KEY USER (MANAGER)</span>
+                        <span class="text-[9px] font-bold text-amber-200/90 text-center block mt-0.5">Kierownik Jakości & Nadzór</span>
+                    </div>
+                    <span class="text-[8px] bg-amber-950/80 text-amber-300 font-black px-2.5 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
+                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> Wprowadź PIN ▾
+                    </span>
                 </div>
-                <span class="text-xs font-black text-white tracking-wider drop-shadow">KEY USER (MANAGER)</span>
-                <span class="text-[9px] font-bold text-amber-200/90 text-center mt-0.5">Kierownik Jakości & Nadzór</span>
-                <span class="text-[8px] bg-amber-950/80 text-amber-300 font-black px-2.5 py-0.5 rounded-full border border-amber-400/40 mt-2">Wprowadź PIN</span>
+
+                <!-- Rewers: spód kapsla 3D z polem PIN -->
+                <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-amber-950/70 to-slate-900 flex flex-col justify-between p-3.5 border border-amber-400/60 shadow-2xl text-left">
+                    <div class="flex items-center justify-between border-b border-amber-500/20 pb-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            <span class="text-[10px] font-black text-amber-300 uppercase tracking-wide">PIN Key Usera</span>
+                        </div>
+                        <button type="button" onclick="event.stopPropagation(); toggleAuthCap('MANAGER', event);" class="text-slate-400 hover:text-white text-xs font-bold px-1">&times;</button>
+                    </div>
+
+                    <div class="my-auto space-y-1.5">
+                        <input type="password" id="auth-pin-manager" maxlength="6" placeholder="Wpisz PIN ••••" 
+                               onfocus="onAuthPinFocus('MANAGER')" 
+                               onblur="onAuthPinBlur('MANAGER')" 
+                               onkeydown="onAuthPinKeyDown('MANAGER', event)" 
+                               class="w-full text-center bg-slate-950/90 border border-amber-400/50 focus:border-amber-300 rounded-xl py-2 px-2 text-lg font-black tracking-widest text-amber-300 focus:outline-none shadow-inner">
+                        <p class="text-[8px] text-amber-200/60 text-center font-bold">Wciśnij Enter lub kliknij poniżej</p>
+                    </div>
+
+                    <button type="button" onclick="event.stopPropagation(); submitAuthPin('MANAGER');" class="w-full py-2 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg border border-amber-300/40 flex items-center justify-center gap-1.5 transition-transform active:scale-95">
+                        <span>Zaloguj</span>
+                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                    </button>
+                </div>
             </div>
 
-            <div onclick="openPinPrompt('AUDITOR')" class="tile-3d relative aspect-square bg-gradient-to-br from-blue-600 via-cyan-600 to-cyan-500 flex flex-col items-center justify-center p-3 cursor-pointer border border-cyan-300/40">
-                <div class="animate-float mb-2 p-2.5 rounded-2xl bg-cyan-950/50 border border-cyan-300/30" style="animation-delay: 1.5s;">
-                    <svg class="w-10 h-10 text-white drop-shadow-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="m9 14 2 2 4-4"/></svg>
+            <!-- KAFEL 3D: AUDYTOR OPERACYJNY -->
+            <div id="cap-auth-auditor" class="bws-cap-viewport bws-cap-auth bws-cap-auth-auditor relative select-none" onclick="toggleAuthCap('AUDITOR', event)">
+                <!-- Awers: front kafelka -->
+                <div class="bws-cap-front bg-gradient-to-br from-blue-600 via-cyan-600 to-cyan-500 flex flex-col items-center justify-between p-3.5 border border-cyan-300/40 shadow-xl text-center">
+                    <div class="animate-float p-2.5 rounded-2xl bg-cyan-950/50 border border-cyan-300/30" style="animation-delay: 1.5s;">
+                        <svg class="w-9 h-9 text-white drop-shadow-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="m9 14 2 2 4-4"/></svg>
+                    </div>
+                    <div>
+                        <span class="text-xs font-black text-white tracking-wider drop-shadow block">AUDYTOR OPERACYJNY</span>
+                        <span class="text-[9px] font-bold text-cyan-200/90 text-center block mt-0.5">Inspekcja Stanowiskowa</span>
+                    </div>
+                    <span class="text-[8px] bg-cyan-950/80 text-cyan-300 font-black px-2.5 py-1 rounded-full border border-cyan-400/40 flex items-center gap-1">
+                        <i class="fa-solid fa-arrows-rotate text-[7px]"></i> Wprowadź PIN ▾
+                    </span>
                 </div>
-                <span class="text-xs font-black text-white tracking-wider drop-shadow">AUDYTOR OPERACYJNY</span>
-                <span class="text-[9px] font-bold text-cyan-200/90 text-center mt-0.5">Inspekcja Stanowiskowa</span>
-                <span class="text-[8px] bg-cyan-950/80 text-cyan-300 font-black px-2.5 py-0.5 rounded-full border border-cyan-400/40 mt-2">Wprowadź PIN</span>
-            </div>
-        </div>
 
-        <div id="pin-container" class="hidden glass-card p-4 space-y-3 border border-cyan-500/40 shadow-2xl">
-            <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
-                <div>
-                    <span id="pin-role-label" class="text-xs font-black text-cyan-400 uppercase tracking-wider block">Autoryzacja</span>
-                    <span id="pin-role-desc" class="text-[10px] text-slate-300 font-medium"></span>
+                <!-- Rewers: spód kapsla 3D z polem PIN -->
+                <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-cyan-950/70 to-slate-900 flex flex-col justify-between p-3.5 border border-cyan-400/60 shadow-2xl text-left">
+                    <div class="flex items-center justify-between border-b border-cyan-500/20 pb-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                            <span class="text-[10px] font-black text-cyan-300 uppercase tracking-wide">PIN Audytora</span>
+                        </div>
+                        <button type="button" onclick="event.stopPropagation(); toggleAuthCap('AUDITOR', event);" class="text-slate-400 hover:text-white text-xs font-bold px-1">&times;</button>
+                    </div>
+
+                    <div class="my-auto space-y-1.5">
+                        <input type="password" id="auth-pin-auditor" maxlength="6" placeholder="Wpisz PIN ••••" 
+                               onfocus="onAuthPinFocus('AUDITOR')" 
+                               onblur="onAuthPinBlur('AUDITOR')" 
+                               onkeydown="onAuthPinKeyDown('AUDITOR', event)" 
+                               class="w-full text-center bg-slate-950/90 border border-cyan-400/50 focus:border-cyan-300 rounded-xl py-2 px-2 text-lg font-black tracking-widest text-cyan-300 focus:outline-none shadow-inner">
+                        <p class="text-[8px] text-cyan-200/60 text-center font-bold">Wciśnij Enter lub kliknij poniżej</p>
+                    </div>
+
+                    <button type="button" onclick="event.stopPropagation(); submitAuthPin('AUDITOR');" class="w-full py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg border border-cyan-300/40 flex items-center justify-center gap-1.5 transition-transform active:scale-95">
+                        <span>Zaloguj</span>
+                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                    </button>
                 </div>
-                <button onclick="closePinPrompt()" class="text-slate-400 hover:text-white font-bold text-lg leading-none">&times;</button>
             </div>
-            <div id="auditor-quick-select" class="hidden grid grid-cols-3 gap-2"></div>
-            <input type="password" id="input-pin" maxlength="6" placeholder="Wpisz PIN ••••" onkeydown="if(event.key === 'Enter') submitLogin()" class="w-full text-center bg-slate-950/90 border border-slate-700 rounded-xl p-2.5 text-xl font-black tracking-widest text-cyan-400 focus:outline-none focus:border-cyan-400 shadow-inner">
-            <button onclick="submitLogin()" class="w-full tile-3d h-12 bg-gradient-to-br from-cyan-600 to-blue-600 font-black text-xs uppercase tracking-wider text-white flex items-center justify-center gap-2 shadow-lg">
-                <span>Zaloguj do Panelu</span>
-            </button>
         </div>
     </div>
 
@@ -242,7 +250,7 @@
                     </div>
 
                     <!-- Kafel 3 z obracającym się kapslem 3D (inspirowane Browar Wielka Sowa) -->
-                    <div class="bws-cap-viewport relative h-32 cursor-pointer select-none" onclick="toggleCapFlip(this, event)">
+                    <div class="bws-cap-viewport bws-cap-h32 relative cursor-pointer select-none" onclick="toggleCapFlip(this, event)">
                         <!-- Awers: front kafelka -->
                         <div class="bws-cap-front bg-gradient-to-br from-purple-600 via-indigo-600 to-violet-700 flex flex-col justify-between p-3.5 border border-purple-400/40 shadow-xl">
                             <div class="flex items-center justify-between">
@@ -1605,7 +1613,8 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260919_v17"></script>
+    <script src="/static/js/app.js?v=20260919_v18"></script>
+    <script src="/static/js/auth_caps.js?v=20260919_v1"></script>
 
 <div id="auditor-profile-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
        <div class="glass-card bg-slate-900 border border-cyan-500/30 p-6 rounded-2xl w-full max-w-md shadow-2xl relative text-left">

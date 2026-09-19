@@ -1,0 +1,100 @@
+/**
+ * flip_caps.css - Mechanika obracających się kapsli 3D (Browar Wielka Sowa style)
+ * Food Safety & Quality System
+ */
+
+/* Kontener perspektywy 3D */
+.bws-cap-viewport {
+    perspective: 1200px;
+    position: relative;
+    border-radius: 20px;
+    user-select: none;
+}
+
+/* Wariant wysokości i promienia osi 3D dla kafelka w menu Key Usera */
+.bws-cap-h32 {
+    height: 8rem; /* 128px */
+}
+.bws-cap-h32 .bws-cap-front {
+    transform: rotateX(0deg) translateZ(64px);
+}
+.bws-cap-h32 .bws-cap-back {
+    transform: rotateX(90deg) translateZ(64px);
+}
+.bws-cap-h32:hover .bws-cap-front,
+.bws-cap-h32.bws-active .bws-cap-front,
+.bws-cap-h32.bws-focused .bws-cap-front {
+    transform: rotateX(-90deg) translateZ(64px);
+    filter: brightness(0.85);
+}
+.bws-cap-h32:hover .bws-cap-back,
+.bws-cap-h32.bws-active .bws-cap-back,
+.bws-cap-h32.bws-focused .bws-cap-back {
+    transform: rotateX(0deg) translateZ(64px);
+    box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.95), 0 0 25px rgba(168, 85, 247, 0.45);
+    filter: brightness(1.05);
+    z-index: 10;
+}
+
+/* Wariant ekranu logowania (wysokość 220px, promień translateZ = 110px) */
+.bws-cap-auth {
+    height: 13.75rem; /* 220px */
+}
+.bws-cap-auth .bws-cap-front {
+    transform: rotateX(0deg) translateZ(110px);
+}
+.bws-cap-auth .bws-cap-back {
+    transform: rotateX(90deg) translateZ(110px);
+}
+.bws-cap-auth:hover .bws-cap-front,
+.bws-cap-auth.bws-active .bws-cap-front,
+.bws-cap-auth.bws-focused .bws-cap-front {
+    transform: rotateX(-90deg) translateZ(110px);
+    filter: brightness(0.85);
+}
+.bws-cap-auth:hover .bws-cap-back,
+.bws-cap-auth.bws-active .bws-cap-back,
+.bws-cap-auth.bws-focused .bws-cap-back {
+    transform: rotateX(0deg) translateZ(110px);
+    filter: brightness(1.05);
+    z-index: 10;
+}
+
+/* Specyficzne podświetlenie dla Key Usera */
+.bws-cap-auth-manager:hover .bws-cap-back,
+.bws-cap-auth-manager.bws-active .bws-cap-back,
+.bws-cap-auth-manager.bws-focused .bws-cap-back {
+    box-shadow: 0 24px 40px -8px rgba(0, 0, 0, 0.95), 0 0 30px rgba(245, 158, 11, 0.35);
+}
+
+/* Specyficzne podświetlenie dla Audytora */
+.bws-cap-auth-auditor:hover .bws-cap-back,
+.bws-cap-auth-auditor.bws-active .bws-cap-back,
+.bws-cap-auth-auditor.bws-focused .bws-cap-back {
+    box-shadow: 0 24px 40px -8px rgba(0, 0, 0, 0.95), 0 0 30px rgba(14, 165, 233, 0.35);
+}
+
+/* Ścianki awers i rewers */
+.bws-cap-front,
+.bws-cap-back {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 20px;
+    overflow: hidden;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+    transition: transform 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15), box-shadow 0.4s ease, filter 0.35s ease;
+    box-shadow: 0 14px 24px -6px rgba(0, 0, 0, 0.75), inset 0 1px 2px rgba(255, 255, 255, 0.25), inset 0 -3px 6px rgba(0, 0, 0, 0.5);
+}
+
+.bws-cap-front {
+    z-index: 2;
+}
+
+.bws-cap-back {
+    z-index: 1;
+}
