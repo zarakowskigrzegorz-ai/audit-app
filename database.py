@@ -76,6 +76,30 @@ async def run_migrations_engine(conn):
             [
                 "CREATE INDEX IF NOT EXISTS idx_guidelines_category ON checklist_guidelines(category, id)"
             ]
+        ),
+        (
+            4,
+            "auditor_quick_notes_v1",
+            "Tabela szybkich notatek audytora do Key Usera",
+            [
+                """
+                CREATE TABLE IF NOT EXISTS auditor_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    auditor_id INTEGER,
+                    auditor_name TEXT NOT NULL,
+                    line_id TEXT,
+                    line_name TEXT,
+                    priority TEXT DEFAULT 'INFO',
+                    content TEXT NOT NULL,
+                    is_read INTEGER DEFAULT 0,
+                    read_at TEXT,
+                    manager_response TEXT
+                )
+                """,
+                "CREATE INDEX IF NOT EXISTS idx_notes_ts ON auditor_notes(timestamp DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_notes_read ON auditor_notes(is_read)"
+            ]
         )
     ]
 

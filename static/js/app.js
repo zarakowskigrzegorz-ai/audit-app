@@ -120,6 +120,8 @@
                         if (typeof updateKpiRibbon === 'function') updateKpiRibbon();
                         if (typeof loadManagerEditRequests === 'function') loadManagerEditRequests();
                     } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
+                } else {
+                    if (typeof loadProductionLines === 'function') loadProductionLines();
                 }
             }
             if(modId === 'calendar') loadScheduleAndRender();
@@ -1277,19 +1279,22 @@
             }
         }
 
-        let activeManagerResultsTab = 'pending'; // 'pending' (oczekujące w oknie głównym), 'approved' (zatwierdzone), 'rejected' (odrzucone)
+        let activeManagerResultsTab = 'pending'; // 'pending' (oczekujące), 'approved' (zatwierdzone), 'rejected' (odrzucone), 'notes' (notatki z hali)
         let cachedManagerAudits = [];
+        let cachedManagerNotes = [];
 
         window.setManagerResultsTab = function(tab) {
             activeManagerResultsTab = tab;
             const btnPending = document.getElementById('tab-btn-manager-pending');
             const btnApproved = document.getElementById('tab-btn-manager-approved');
             const btnRejected = document.getElementById('tab-btn-manager-rejected');
+            const btnNotes = document.getElementById('tab-btn-manager-notes');
 
             const inactiveClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/80 flex items-center gap-1.5 transition cursor-pointer';
             if (btnPending) btnPending.className = inactiveClass;
             if (btnApproved) btnApproved.className = inactiveClass;
             if (btnRejected) btnRejected.className = inactiveClass;
+            if (btnNotes) btnNotes.className = inactiveClass;
 
             if (tab === 'pending') {
                 if (btnPending) {
@@ -1302,6 +1307,10 @@
             } else if (tab === 'rejected') {
                 if (btnRejected) {
                     btnRejected.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-rose-500 text-white shadow-md shadow-rose-500/20 flex items-center gap-1.5 transition cursor-pointer';
+                }
+            } else if (tab === 'notes') {
+                if (btnNotes) {
+                    btnNotes.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer';
                 }
             }
 
@@ -1327,11 +1336,90 @@
             return `${firstInitial} ${surLetters}...`;
         }
 
+        async function loadManagerAuditorNotes() {
+            try {
+                const res = await fetch('/api/auditor-notes?limit=100');
+                if (!res.ok) return;
+                cachedManagerNotes = await res.json();
+                
+                const badgeNotes = document.getElementById('badge-count-manager-notes');
+                if (badgeNotes && Array.isArray(cachedManagerNotes)) {
+                    const unread = cachedManagerNotes.filter(n => !n.is_read).length;
+                    badgeNotes.textContent = unread;
+                    if (unread > 0) {
+                        badgeNotes.className = 'bg-amber-500 text-slate-950 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black animate-pulse';
+                    } else {
+                        badgeNotes.className = 'bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold';
+                    }
+                }
+                if (activeManagerResultsTab === 'notes') {
+                    renderManagerAuditsTable();
+                }
+            } catch(e) {
+                console.warn("Błąd ładowania notatek audytorów:", e);
+            }
+        }
+
+        window.markAuditorNoteAsRead = async function(noteId) {
+            try {
+                const res = await fetch(`/api/auditor-notes/${noteId}/read`, { method: 'PATCH' });
+                if (res.ok) {
+                    await loadManagerAuditorNotes();
+                }
+            } catch(e) {
+                console.error("Błąd oznaczania notatki jako przeczytana:", e);
+            }
+        };
+
         function renderManagerAuditsTable() {
             const tbody = document.getElementById('manager-results-table');
             const heading = document.getElementById('manager-audits-heading');
             const badgeCount = document.getElementById('manager-audits-counter-badge');
             if (!tbody) return;
+
+            // OBSŁUGA ZAKŁADKI NOTATEK Z HALI
+            if (activeManagerResultsTab === 'notes') {
+                if (heading) {
+                    heading.textContent = 'Notatki i uwagi audytorów z hali produkcyjnej:';
+                    heading.className = 'text-[10px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5';
+                }
+                if (badgeCount) {
+                    const unreadCount = cachedManagerNotes.filter(n => !n.is_read).length;
+                    badgeCount.textContent = `${cachedManagerNotes.length} notatek (${unreadCount} nowych)`;
+                }
+
+                tbody.innerHTML = '';
+                if (!cachedManagerNotes || cachedManagerNotes.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-400 italic">Brak notatek od audytorów. Gdy audytor wyśle uwagę z menu operacyjnego, pojawi się tutaj natychmiast.</td></tr>';
+                    return;
+                }
+
+                cachedManagerNotes.forEach(n => {
+                    const isUnread = !n.is_read;
+                    const prioBadge = n.priority === 'HOLD' 
+                        ? '<span class="bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">🚨 Wstrzymanie</span>'
+                        : n.priority === 'WARNING'
+                        ? '<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">⚠️ Uwaga</span>'
+                        : '<span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">ℹ️ Informacja</span>';
+                    
+                    const readBtn = isUnread 
+                        ? `<button onclick="markAuditorNoteAsRead(${n.id})" class="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap">✓ Oznacz jako przeczytane</button>`
+                        : `<span class="text-[9px] text-slate-500 italic">Przeczytano (${n.read_at ? n.read_at.substring(11, 16) : '—'})</span>`;
+
+                    const rowBg = isUnread ? 'bg-amber-950/20 border-l-2 border-l-amber-400' : 'hover:bg-slate-900/50';
+
+                    tbody.innerHTML += `
+                    <tr class="border-b border-slate-800/80 text-xs ${rowBg} transition">
+                        <td class="p-2.5 text-slate-400 font-mono text-[10px] whitespace-nowrap">${n.timestamp ? n.timestamp.substring(0, 16) : '—'}</td>
+                        <td class="p-2.5 font-bold text-white whitespace-nowrap">${n.auditor_name || 'Audytor'}</td>
+                        <td class="p-2.5 text-cyan-300 font-semibold whitespace-nowrap">${n.line_name || 'Ogólna / Hala'}</td>
+                        <td class="p-2.5 whitespace-nowrap">${prioBadge}</td>
+                        <td class="p-2.5 text-slate-200 font-medium break-words max-w-xs" colspan="3">${n.content}</td>
+                        <td class="p-2.5 text-right whitespace-nowrap">${readBtn}</td>
+                    </tr>`;
+                });
+                return;
+            }
 
             const pendingAudits = [];
             const approvedAudits = [];
@@ -1454,6 +1542,7 @@
                 const data = await res.json();
                 cachedManagerAudits = Array.isArray(data) ? data : [];
                 renderManagerAuditsTable();
+                await loadManagerAuditorNotes();
             } catch(e) { 
                 console.error(e); 
                 if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-xs text-rose-400">Błąd ładowania danych audytów.</td></tr>';
@@ -2383,7 +2472,114 @@
                 }).join('');
             }
             syncAgentLineSelector();
+
+            // Zasilenie listy linii w formularzu Szybkiej Notatki Audytora
+            const qnLine = document.getElementById('quick-note-line');
+            if (qnLine && Array.isArray(productionLinesData)) {
+                const curVal = qnLine.value;
+                qnLine.innerHTML = `<option value="">— Ogólna / Cała Hala —</option>` + 
+                    productionLinesData.map(l => `<option value="${l.name}">${l.name}${l.code ? ' (' + l.code + ')' : ''}</option>`).join('');
+                if (curVal) qnLine.value = curVal;
+            }
         }
+
+        // --- OBSŁUGA SZYBKIEJ NOTATKI AUDYTORA DO KEY USERA ---
+        window.updateQuickNoteCounter = function(el) {
+            const counter = document.getElementById('quick-note-counter');
+            if (counter) {
+                const len = (el.value || '').length;
+                counter.innerText = `${len} / 300`;
+                if (len > 300) {
+                    counter.classList.add('text-rose-400');
+                    counter.classList.remove('text-slate-500');
+                } else {
+                    counter.classList.remove('text-rose-400');
+                    counter.classList.add('text-slate-500');
+                }
+            }
+        };
+
+        window.sendQuickAuditorNote = async function() {
+            const textarea = document.getElementById('quick-note-text');
+            const feedback = document.getElementById('quick-note-feedback');
+            const lineSel = document.getElementById('quick-note-line');
+            const prioSel = document.getElementById('quick-note-priority');
+            const btn = document.getElementById('btn-send-quick-note');
+            if (!textarea) return;
+
+            const content = textarea.value.trim();
+            if (!content) {
+                if (feedback) {
+                    feedback.innerText = "Wpisz treść notatki przed wysłaniem.";
+                    feedback.className = "text-rose-400 font-bold";
+                }
+                textarea.focus();
+                return;
+            }
+
+            const payload = {
+                auditor_id: state.userId || null,
+                auditor_name: state.auditor || "Audytor Operacyjny",
+                line_id: lineSel ? lineSel.value : "",
+                line_name: lineSel && lineSel.options[lineSel.selectedIndex] ? lineSel.options[lineSel.selectedIndex].text : "",
+                priority: prioSel ? prioSel.value : "INFO",
+                content: content
+            };
+
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-70');
+                btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin mr-1 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="4" stroke-dasharray="32" stroke-linecap="round"/></svg><span>Wysyłanie...</span>`;
+            }
+
+            try {
+                const res = await fetch('/api/auditor-notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    textarea.value = "";
+                    window.updateQuickNoteCounter(textarea);
+                    if (feedback) {
+                        feedback.innerText = "✓ Wysłano do Key Usera!";
+                        feedback.className = "text-emerald-400 font-bold";
+                        setTimeout(() => { if (feedback) feedback.innerText = ""; }, 4000);
+                    }
+
+                    // Pokaż ostatnią wysłaną notatkę
+                    const recentBox = document.getElementById('quick-note-recent-box');
+                    const recentTime = document.getElementById('quick-note-recent-time');
+                    const recentContent = document.getElementById('quick-note-recent-content');
+                    if (recentBox && recentTime && recentContent) {
+                        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        recentTime.innerText = now;
+                        const prefix = payload.line_id ? `[${payload.line_name}] ` : '';
+                        recentContent.innerText = `${prefix}${content}`;
+                        recentBox.classList.remove('hidden');
+                    }
+                } else {
+                    if (feedback) {
+                        feedback.innerText = data.detail || "Błąd wysyłki notatki.";
+                        feedback.className = "text-rose-400 font-bold";
+                    }
+                }
+            } catch (e) {
+                console.error("Błąd wysyłania notatki:", e);
+                if (feedback) {
+                    feedback.innerText = "Błąd sieci przy wysyłce notatki.";
+                    feedback.className = "text-rose-400 font-bold";
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-70');
+                    btn.innerHTML = `<svg class="w-3.5 h-3.5 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg><span>Wyślij do Key Usera</span>`;
+                }
+            }
+        };
 
         function selectTile(cat, val, btn) {
             document.querySelectorAll(`.tile-${cat}`).forEach(b => b.classList.remove('tile-selected'));

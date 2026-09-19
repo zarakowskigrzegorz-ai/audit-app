@@ -18,6 +18,7 @@ from routers.audits import router as audits_router
 from routers.reports import router as reports_router
 from routers.agent import router as agent_router
 from routers.guidelines import router as guidelines_router
+from routers.notes import router as notes_router
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -53,6 +54,7 @@ app.include_router(audits_router)
 app.include_router(reports_router)
 app.include_router(agent_router)
 app.include_router(guidelines_router)
+app.include_router(notes_router)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(response: Response):
