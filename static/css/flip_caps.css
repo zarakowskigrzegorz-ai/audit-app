@@ -36,26 +36,26 @@
     z-index: 10;
 }
 
-/* Wariant ekranu logowania (wysokość 220px, promień translateZ = 110px) */
+/* Wariant ekranu logowania (wysokość 220px) */
 .bws-cap-auth {
     height: 13.75rem; /* 220px */
 }
 .bws-cap-auth .bws-cap-front {
-    transform: rotateX(0deg) translateZ(110px);
+    transform: rotateX(0deg) translateZ(0);
 }
 .bws-cap-auth .bws-cap-back {
-    transform: rotateX(90deg) translateZ(110px);
+    transform: rotateX(90deg) translateZ(0);
 }
 .bws-cap-auth:hover .bws-cap-front,
 .bws-cap-auth.bws-active .bws-cap-front,
 .bws-cap-auth.bws-focused .bws-cap-front {
-    transform: rotateX(-90deg) translateZ(110px);
+    transform: rotateX(-90deg) translateZ(0);
     filter: brightness(0.85);
 }
 .bws-cap-auth:hover .bws-cap-back,
 .bws-cap-auth.bws-active .bws-cap-back,
 .bws-cap-auth.bws-focused .bws-cap-back {
-    transform: rotateX(0deg) translateZ(110px);
+    transform: rotateX(0deg) translateZ(0);
     filter: brightness(1.05);
     z-index: 10;
 }
