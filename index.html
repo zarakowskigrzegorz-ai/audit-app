@@ -2478,54 +2478,54 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260920_v37"></script>
+    <script src="/static/js/app.js?v=20260920_v38"></script>
     <script src="/static/js/auth_caps.js?v=20260920_v4"></script>
 
     <!-- MODAL: SZYBKA WIADOMOŚĆ DO KEY USERA -->
-    <div id="modal-quick-note" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden">
-        <div class="glass-card bg-slate-900/95 border border-amber-500/40 rounded-2xl w-full max-w-lg shadow-2xl p-4 sm:p-5 relative text-left">
+    <div id="modal-quick-note" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 hidden">
+        <div class="glass-card bg-slate-900/95 border border-amber-500/40 rounded-2xl w-full max-w-2xl sm:max-w-3xl shadow-2xl p-5 sm:p-7 relative text-left">
             <!-- Nagłówek modalu -->
-            <div class="flex items-center justify-between border-b border-amber-500/30 pb-2.5 mb-3">
-                <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 rounded-xl bg-amber-950/80 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm">
-                        <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <div class="flex items-center justify-between border-b border-amber-500/30 pb-3 sm:pb-4 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-950/80 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm">
+                        <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="m22 2-7 20-4-9-9-4Z"/>
                             <path d="M22 2 11 13"/>
                         </svg>
                     </div>
                     <div>
-                        <h3 class="text-sm font-black text-white flex items-center gap-2">
+                        <h3 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
                             <span>Szybka Wiadomość</span>
-                            <span class="text-[8px] font-black bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 uppercase tracking-wide">DO: KEY USER</span>
+                            <span class="text-[9px] sm:text-[10px] font-black bg-amber-950/90 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/40 uppercase tracking-wide">DO: KEY USER</span>
                         </h3>
-                        <p class="text-[9.5px] text-slate-400 font-medium">Bieżące zgłoszenie, uwaga lub odchylenie z hali produkcyjnej</p>
+                        <p class="text-xs sm:text-sm text-slate-400 font-medium">Bieżące zgłoszenie, uwaga lub odchylenie z hali produkcyjnej</p>
                     </div>
                 </div>
-                <button type="button" onclick="closeQuickNoteModal()" class="text-slate-400 hover:text-white font-bold text-base px-1.5 py-0.5 rounded-lg hover:bg-white/10 transition">✕</button>
+                <button type="button" onclick="closeQuickNoteModal()" class="text-slate-400 hover:text-white font-bold text-lg sm:text-xl px-2 py-1 rounded-lg hover:bg-white/10 transition">✕</button>
             </div>
 
             <!-- Pasek wyboru: Linia + 3 Priorytety + Poufność -->
-            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 mb-4 text-xs sm:text-sm">
                 <!-- Wybór linii -->
                 <div class="sm:col-span-4">
-                    <label class="text-[8.5px] font-black text-slate-400 block mb-1 uppercase tracking-wide flex items-center gap-1">
+                    <label class="text-[10px] sm:text-xs font-black text-slate-400 block mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
                         <i class="fas fa-industry text-amber-400/80"></i> Linia:
                     </label>
-                    <select id="quick-note-line" class="w-full bg-slate-950 border border-slate-700/90 focus:border-amber-400 rounded-xl p-2 text-[10px] font-bold text-white outline-none transition cursor-pointer">
+                    <select id="quick-note-line" class="w-full bg-slate-950 border border-slate-700/90 focus:border-amber-400 rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-bold text-white outline-none transition cursor-pointer">
                         <option value="">— Ogólna / Cała Hala —</option>
                     </select>
                 </div>
 
                 <!-- Segmentowy pasek 3 priorytetów z wektorami -->
                 <div class="sm:col-span-5">
-                    <label class="text-[8.5px] font-black text-slate-400 block mb-1 uppercase tracking-wide flex items-center justify-between">
+                    <label class="text-[10px] sm:text-xs font-black text-slate-400 block mb-1.5 uppercase tracking-wide flex items-center justify-between">
                         <span>Priorytet:</span>
-                        <span id="prio-selected-label" class="text-[8.5px] font-bold text-cyan-300">Rutynowy</span>
+                        <span id="prio-selected-label" class="text-[10px] sm:text-xs font-bold text-cyan-300">Rutynowy</span>
                     </label>
                     <input type="hidden" id="quick-note-priority" value="INFO">
-                    <div class="grid grid-cols-3 gap-1 p-0.5 bg-slate-950 rounded-xl border border-slate-800 shadow-inner">
-                        <button type="button" id="prio-btn-INFO" onclick="setQuickNotePriority('INFO')" title="Priorytet Rutynowy: Standardowa notatka lub uwaga z inspekcji" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-cyan-950/90 text-cyan-300 border-cyan-500/50 shadow-sm cursor-pointer">
-                            <svg class="w-2.5 h-2.5 text-cyan-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 shadow-inner">
+                        <button type="button" id="prio-btn-INFO" onclick="setQuickNotePriority('INFO')" title="Priorytet Rutynowy: Standardowa notatka lub uwaga z inspekcji" class="prio-pill py-2 sm:py-2.5 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-black transition border bg-cyan-950/90 text-cyan-300 border-cyan-500/50 shadow-sm cursor-pointer">
+                            <svg class="w-3.5 h-3.5 text-cyan-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
                                 <rect x="8" y="2" width="8" height="4" rx="1.5" ry="1.5"/>
                                 <path d="m9 14 2 2 4-4"/>
@@ -2533,16 +2533,16 @@
                             <span class="truncate">Info</span>
                         </button>
 
-                        <button type="button" id="prio-btn-WARNING" onclick="setQuickNotePriority('WARNING')" title="Priorytet Ostrzegawczy: Odchylenie CP / Niezgodność Dobrych Praktyk Higienicznych (GMP)" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-amber-300 hover:bg-amber-950/30 cursor-pointer">
-                            <svg class="w-2.5 h-2.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <button type="button" id="prio-btn-WARNING" onclick="setQuickNotePriority('WARNING')" title="Priorytet Ostrzegawczy: Odchylenie CP / Niezgodność Dobrych Praktyk Higienicznych (GMP)" class="prio-pill py-2 sm:py-2.5 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-amber-300 hover:bg-amber-950/30 cursor-pointer">
+                            <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                                 <path d="m13 7-3 5h4l-2 5"/>
                             </svg>
                             <span class="truncate">Uwaga</span>
                         </button>
 
-                        <button type="button" id="prio-btn-HOLD" onclick="setQuickNotePriority('HOLD')" title="Priorytet Krytyczny: Zagrożenie CCP / Natychmiastowe Wstrzymanie Procesu Produkcyjnego" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer">
-                            <svg class="w-2.5 h-2.5 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <button type="button" id="prio-btn-HOLD" onclick="setQuickNotePriority('HOLD')" title="Priorytet Krytyczny: Zagrożenie CCP / Natychmiastowe Wstrzymanie Procesu Produkcyjnego" class="prio-pill py-2 sm:py-2.5 px-2 rounded-lg flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer">
+                            <svg class="w-3.5 h-3.5 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                 <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/>
                                 <line x1="12" y1="8" x2="12" y2="12"/>
                                 <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -2554,43 +2554,43 @@
 
                 <!-- Poufność / Anonimowość IFS Culture -->
                 <div class="sm:col-span-3">
-                    <label class="text-[8.5px] font-black text-slate-400 block mb-1 uppercase tracking-wide">Poufność:</label>
-                    <div class="p-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-400/40 transition flex items-center justify-between shadow-inner">
-                        <label class="flex items-center gap-1.5 cursor-pointer select-none">
-                            <input type="checkbox" id="quick-note-anonymous" onchange="toggleAnonymousNote(this.checked)" class="w-3.5 h-3.5 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-0 cursor-pointer">
-                            <span class="text-[9px] font-bold text-slate-300 flex items-center gap-1">
-                                <i class="fas fa-user-secret text-amber-400 text-[9.5px]"></i>
+                    <label class="text-[10px] sm:text-xs font-black text-slate-400 block mb-1.5 uppercase tracking-wide">Poufność:</label>
+                    <div class="p-2 sm:p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-400/40 transition flex items-center justify-between shadow-inner">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="quick-note-anonymous" onchange="toggleAnonymousNote(this.checked)" class="w-4 h-4 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-0 cursor-pointer">
+                            <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                <i class="fas fa-user-secret text-amber-400 text-xs"></i>
                                 <span>Anonimowo</span>
                             </span>
                         </label>
-                        <span class="text-[7px] font-extrabold text-amber-400 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/25 uppercase">IFS</span>
+                        <span class="text-[8px] font-extrabold text-amber-400 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/25 uppercase">IFS</span>
                     </div>
                 </div>
             </div>
 
             <!-- Pole tekstowe notatki -->
-            <div class="mb-3">
-                <textarea id="quick-note-text" oninput="updateQuickNoteCounter(this)" rows="4" placeholder="Wpisz treść notatki dla Key Usera (np. Nieszczelność zaworu na pasteryzatorze L4454, brak plomby w stacji mycia, podejrzenie błędu detektora)..." class="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-400 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 font-medium outline-none resize-none transition shadow-inner leading-relaxed"></textarea>
-                <div class="flex items-center justify-between text-[8.5px] text-slate-400 mt-1 px-1">
+            <div class="mb-4">
+                <textarea id="quick-note-text" oninput="updateQuickNoteCounter(this)" rows="6" placeholder="Wpisz treść notatki dla Key Usera (np. Nieszczelność zaworu na pasteryzatorze L4454, brak plomby w stacji mycia, podejrzenie błędu detektora)..." class="w-full min-h-[140px] sm:min-h-[180px] bg-slate-950 border border-slate-700/80 focus:border-amber-400 rounded-xl p-3.5 sm:p-4 text-xs sm:text-sm text-white placeholder:text-slate-500 font-medium outline-none resize-none transition shadow-inner leading-relaxed"></textarea>
+                <div class="flex items-center justify-between text-[9.5px] sm:text-xs text-slate-400 mt-1.5 px-1">
                     <span id="quick-note-feedback" class="font-bold"></span>
                     <span id="quick-note-counter" class="font-mono text-amber-400/90 font-bold ml-auto">0 / 500</span>
                 </div>
             </div>
 
             <!-- Pasek dolny: Przycisk wyślij + anuluj -->
-            <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+            <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-800">
                 <div id="quick-note-recent-box" class="flex-1 hidden">
-                    <div class="flex items-center gap-1.5 text-[8px] text-emerald-400 bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-500/30 truncate">
+                    <div class="flex items-center gap-2 text-[9.5px] sm:text-xs text-emerald-400 bg-emerald-950/60 px-3 py-1.5 rounded-lg border border-emerald-500/30 truncate">
                         <i class="fas fa-check-circle text-emerald-400 shrink-0"></i>
                         <span class="font-bold">Wysłano (<span id="quick-note-recent-time"></span>):</span>
                         <span id="quick-note-recent-content" class="truncate text-slate-200"></span>
                     </div>
                 </div>
-                <button type="button" onclick="closeQuickNoteModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition">
+                <button type="button" onclick="closeQuickNoteModal()" class="px-5 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs sm:text-sm rounded-xl transition cursor-pointer">
                     Anuluj
                 </button>
-                <button type="button" id="btn-send-quick-note" onclick="sendQuickAuditorNote();" class="py-2 px-5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-amber-950/40 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer border border-amber-300/40">
-                    <svg class="w-3.5 h-3.5 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <button type="button" id="btn-send-quick-note" onclick="sendQuickAuditorNote();" class="py-2.5 sm:py-3 px-6 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl shadow-lg shadow-amber-950/40 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer border border-amber-300/40">
+                    <svg class="w-4 h-4 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
                         <path d="m22 2-7 20-4-9-9-4Z"/>
                         <path d="M22 2 11 13"/>
                     </svg>
