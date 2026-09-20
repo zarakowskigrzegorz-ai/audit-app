@@ -360,11 +360,10 @@
                     </button>
                     <button id="tag-quick-note" onclick="openQuickNoteModal()" class="ios-tab-btn px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm text-slate-300 hover:text-white flex items-center gap-2 border border-transparent cursor-pointer group relative">
                         <svg class="w-4 h-4 shrink-0 text-amber-400 group-hover:text-amber-300 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M7 20V4m0 0L3 8m4-4l4 4"/>
-                            <path d="M17 4v16m0 0l4-4m-4 4l-4-4"/>
+                            <rect width="20" height="16" x="2" y="4" rx="2"/>
+                            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                         </svg>
-                        <span class="hidden sm:inline">Skrzynka (Wyślij / Odbierz)</span>
-                        <span class="sm:hidden">Wiadomości</span>
+                        <span>Skrzynka odbiorcza</span>
                         <span id="badge-dock-notes" class="hidden absolute -top-1.5 -right-1 min-w-[19px] h-[19px] px-1 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-[9.5px] rounded-full flex items-center justify-center shadow-md border border-white/50 animate-pulse pointer-events-none">0</span>
                     </button>
                 </div>
@@ -2540,7 +2539,7 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260920_v42"></script>
+    <script src="/static/js/app.js?v=20260920_v43"></script>
     <script src="/static/js/auth_caps.js?v=20260920_v4"></script>
 
     <!-- MODAL: SKRZYNKA WIADOMOŚCI AUDYTORA (WYŚLIJ & ODBIERZ) -->
@@ -2551,14 +2550,14 @@
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-950/80 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm">
                         <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M7 20V4m0 0L3 8m4-4l4 4"/>
-                            <path d="M17 4v16m0 0l4-4m-4 4l-4-4"/>
+                            <rect width="20" height="16" x="2" y="4" rx="2"/>
+                            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                         </svg>
                     </div>
                     <div>
                         <h3 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                            <span>Skrzynka Wiadomości</span>
-                            <span class="text-[9px] sm:text-[10px] font-black bg-amber-950/90 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/40 uppercase tracking-wide">WYŚLIJ &amp; ODBIERZ</span>
+                            <span>Skrzynka Odbiorcza</span>
+                            <span class="text-[9px] sm:text-[10px] font-black bg-amber-950/90 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/40 uppercase tracking-wide">WIADOMOŚCI</span>
                         </h3>
                         <p class="text-xs text-slate-400 font-medium">Dwukierunkowa komunikacja: Audytor ↔ Key User (Manager)</p>
                     </div>
