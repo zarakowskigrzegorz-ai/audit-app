@@ -59,7 +59,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
-    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260919_v12">
+    <link rel="stylesheet" href="/static/css/flip_caps.css?v=20260920_v13">
 </head>
 <body class="text-white min-h-screen flex flex-col justify-between p-3 sm:p-4 md:p-5 max-w-[1440px] w-full mx-auto relative">
 
@@ -355,6 +355,13 @@
                             <line x1="18" y1="15" x2="22" y2="15"/>
                         </svg>
                         <span>AI Support</span>
+                    </button>
+                    <button id="tag-quick-note" onclick="openQuickNoteModal()" class="ios-tab-btn px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm text-slate-300 hover:text-white flex items-center gap-2 border border-transparent cursor-pointer group">
+                        <svg class="w-4 h-4 shrink-0 text-amber-400 group-hover:text-amber-300 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m22 2-7 20-4-9-9-4Z"/>
+                            <path d="M22 2 11 13"/>
+                        </svg>
+                        <span>Szybka wiadomość</span>
                     </button>
                 </div>
             </div>
@@ -1429,8 +1436,8 @@
             </div>
 
 
-            <!-- PANEL AUDYTORA OPERACYJNEGO (3 KOLUMNY: 4 KAFLI 3D + ORAMKOWANA SZYBKA NOTATKA DO KEY USERA) -->
-            <div id="hub-auditor" class="hidden space-y-4 view-layer max-w-2xl sm:max-w-3xl lg:max-w-4xl mx-auto w-full">
+            <!-- PANEL AUDYTORA OPERACYJNEGO (4 KAFLE 3D SCENTROWANE I ZWĘŻONE) -->
+            <div id="hub-auditor" class="hidden space-y-4 view-layer max-w-xl sm:max-w-2xl mx-auto w-full">
                 <!-- Pasek statusu audytora -->
                 <div class="bg-gradient-to-r from-slate-900 via-blue-950/60 to-slate-900 p-2.5 rounded-2xl border border-blue-500/30 flex items-center justify-between text-[10px] font-black shadow-lg">
                     <div class="flex items-center gap-1.5 text-blue-400">
@@ -1664,223 +1671,6 @@
                                 </button>
                             </div>
                         </div>
-
-                    <!-- SZEROKI KAFEL 3D (sm:col-span-2) - AWERS: BOGATY KOLOROWY HUMOR & CIEKAWOSTKI, REWERS: SZYBKA NOTATKA Z HALI -->
-                    <div id="aud-tile-quicknote" class="sm:col-span-2 bws-cap-note bws-glow-amber-animated cursor-pointer select-none" onclick="toggleNoteCap(this, event)">
-                        <!-- AWERS: CAŁY KOLOROWY KAFEL (CIEKAWOSTKI ZE ŚWIATA & HUMOR AUDYTORA) -->
-                        <div class="bws-cap-front bg-gradient-to-br from-amber-500 via-orange-600 to-amber-700 text-white border-2 border-amber-300/90 shadow-2xl shadow-amber-500/30 ring-2 ring-amber-400/50 p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden">
-                            <!-- Promień animacji -->
-                            <div class="notebook-sheen-bar pointer-events-none"></div>
-
-                            <!-- Górny pasek awersu -->
-                            <div class="flex items-center justify-between border-b border-white/20 pb-2 relative z-10">
-                                <div class="flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-xl bg-black/40 border border-white/25 flex items-center justify-center text-amber-200 shadow-inner shrink-0">
-                                        <svg class="w-4.5 h-4.5 text-amber-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 2v2M12 20v2m10-10h-2M4 12H2m15.07-7.07-1.41 1.41M8.34 15.66l-1.41 1.41m0-11.32 1.41 1.41m8.73 8.73 1.41 1.41"/>
-                                            <circle cx="12" cy="12" r="4"/>
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 class="text-xs sm:text-sm font-black text-white drop-shadow flex items-center gap-2">
-                                            <span>Kącik Wiedzy & Humor Audytora</span>
-                                            <span class="text-[8px] font-black bg-black/40 text-amber-200 px-2 py-0.5 rounded-full border border-white/20 uppercase tracking-wide">Live 3D</span>
-                                        </h3>
-                                        <p class="text-[9.5px] font-bold text-amber-100/90 drop-shadow-sm">Fakty jakościowe IFS/HACCP oraz autentyczny humor z hal produkcyjnych</p>
-                                    </div>
-                                </div>
-                                <div class="hidden sm:flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/25 text-white shadow-lg">
-                                    <span class="w-2 h-2 rounded-full bg-amber-300 animate-ping"></span>
-                                    <span class="text-[9.5px] font-black text-amber-100 tracking-wide flex items-center gap-1">
-                                        <span>Najedź lub dotknij, aby napisać Notatkę</span>
-                                        <svg class="w-3.5 h-3.5 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="m14 13.5 4.5-4.5a1.8 1.8 0 0 1 2.5 2.5l-4.5 4.5-3 0.5 0.5-3Z"/>
-                                            <path d="m17.5 10 2 2"/>
-                                        </svg>
-                                    </span>
-                                </div>
-                            </div>
-
-                            <!-- Środek awersu: 2 kolumny (Ciekawostka ze Świata + Humor z Hali) -->
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 my-2 relative z-10">
-                                <!-- Karta 1: Ciekawostka ze Świata -->
-                                <div class="bg-black/35 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/20 flex flex-col justify-between shadow-inner">
-                                    <div>
-                                        <div class="flex items-center justify-between mb-1.5">
-                                            <span class="text-[8px] font-black bg-cyan-950/80 text-cyan-200 px-2 py-0.5 rounded-full border border-cyan-400/40 flex items-center gap-1 uppercase tracking-wider">
-                                                <i class="fas fa-globe text-cyan-300 text-[9px]"></i>
-                                                <span id="trivia-front-badge">Historia Jakości</span>
-                                            </span>
-                                            <span id="trivia-counter-front" class="text-[8.5px] font-mono text-cyan-200/90 font-bold bg-black/40 px-1.5 py-0.2 rounded border border-white/10">1/14</span>
-                                        </div>
-                                        <h4 class="text-xs font-black text-white flex items-center gap-1.5 mb-1 drop-shadow-sm">
-                                            <i id="trivia-front-icon" class="fas fa-rocket text-cyan-300 text-xs"></i>
-                                            <span id="trivia-front-heading">HACCP w Kosmosie (NASA)</span>
-                                        </h4>
-                                        <p id="trivia-front-text" class="text-[10px] sm:text-[10.5px] text-white/95 font-medium leading-relaxed italic drop-shadow-sm line-clamp-3">
-                                            System HACCP powstał w latach 60. XX w. w firmie Pillsbury na zlecenie NASA...
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <!-- Karta 2: Humor i Żarty z Hali -->
-                                <div class="bg-black/35 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/20 flex flex-col justify-between shadow-inner">
-                                    <div>
-                                        <div class="flex items-center justify-between mb-1.5">
-                                            <span class="text-[8px] font-black bg-amber-950/80 text-amber-200 px-2 py-0.5 rounded-full border border-amber-400/40 flex items-center gap-1 uppercase tracking-wider">
-                                                <i class="fas fa-face-laugh-beam text-amber-300 text-[9px]"></i>
-                                                <span id="trivia-back-badge">Humor z Hali</span>
-                                            </span>
-                                            <span id="trivia-counter-back" class="text-[8.5px] font-mono text-amber-200/90 font-bold bg-black/40 px-1.5 py-0.2 rounded border border-white/10">1/15</span>
-                                        </div>
-                                        <h4 class="text-xs font-black text-white flex items-center gap-1.5 mb-1 drop-shadow-sm">
-                                            <i id="trivia-back-icon" class="fas fa-face-laugh-squint text-amber-300 text-xs"></i>
-                                            <span id="trivia-back-heading">Procedura na wypadek pożaru</span>
-                                        </h4>
-                                        <p id="trivia-back-text" class="text-[10px] sm:text-[10.5px] text-white/95 font-medium leading-relaxed italic drop-shadow-sm line-clamp-3">
-                                            – Czy macie procedurę na wypadek pożaru? – Mamy, ale nie możemy jej pokazać, bo leży w szafie pancernej...
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Dolny pasek awersu -->
-                            <div class="flex items-center justify-between pt-1 border-t border-white/20 text-[9px] relative z-10">
-                                <button type="button" onclick="event.stopPropagation(); nextAuditorTrivia();" class="py-1 px-2.5 bg-black/40 hover:bg-black/60 text-amber-200 hover:text-white border border-white/25 rounded-xl text-[9px] font-black transition active:scale-95 flex items-center gap-1.5 shadow cursor-pointer">
-                                    <i class="fas fa-dice text-amber-300"></i>
-                                    <span>Losuj inny zestaw</span>
-                                </button>
-                                <div class="flex items-center gap-2 text-amber-100 font-bold">
-                                    <span class="animate-pulse flex items-center gap-1">
-                                        <i class="fas fa-hand-pointer text-amber-300"></i>
-                                        <span>Najedź lub dotknij, aby wysłać Szybką Notatkę</span>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- REWERS: POLE TEKSTOWE SZYBKIEJ NOTATKI Z HALI + CAŁA RESZTA -->
-                        <div class="bws-cap-back bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/40 text-white border-2 border-amber-400/80 shadow-2xl p-3.5 sm:p-4 flex flex-col justify-between relative overflow-hidden">
-                            <!-- Płynny promień świetlny -->
-                            <div class="notebook-sheen-bar pointer-events-none"></div>
-
-                            <!-- Górny pasek rewersu -->
-                            <div class="flex items-center justify-between border-b border-amber-500/30 pb-1.5 mb-2 relative z-10">
-                                <div class="flex items-center gap-2">
-                                    <span class="relative flex h-2 w-2">
-                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                        <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                    </span>
-                                    <span id="quick-note-dest-badge" class="text-[10px] font-black text-amber-300 uppercase tracking-wider">DO: KEY USER (MANAGER)</span>
-                                    <span class="text-[7.5px] font-extrabold bg-amber-950/90 text-amber-300 px-1.5 py-0.2 rounded border border-amber-500/40 uppercase tracking-wider">Direct Live</span>
-                                </div>
-
-                                <div class="flex items-center gap-2">
-                                    <span id="quick-note-feedback" class="text-[9.5px] font-bold text-amber-400"></span>
-                                    <button type="button" onclick="event.stopPropagation(); closeAuditorNoteCap();" title="Wróć do ciekawostek i humoru" class="py-1 px-2.5 bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-white border border-amber-500/40 rounded-lg text-[9px] font-black transition active:scale-95 flex items-center gap-1 cursor-pointer">
-                                        <i class="fas fa-rotate-left text-amber-400"></i>
-                                        <span>Ciekawostki</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Pasek wyboru: Linia + 3 Priorytety + Anonimowość -->
-                            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-2 text-xs relative z-10 items-center">
-                                <!-- Wybór linii -->
-                                <div class="sm:col-span-4">
-                                    <label class="text-[8px] font-black text-slate-400 block mb-0.5 uppercase tracking-wide flex items-center gap-1">
-                                        <i class="fas fa-industry text-amber-400/80"></i> Linia produkcyjna:
-                                    </label>
-                                    <select id="quick-note-line" onclick="event.stopPropagation();" class="w-full bg-slate-950 border border-slate-700/90 focus:border-amber-400 rounded-lg p-1 text-[9.5px] font-bold text-white outline-none transition cursor-pointer">
-                                        <option value="">— Ogólna / Cała Hala —</option>
-                                    </select>
-                                </div>
-
-                                <!-- Segmentowy pasek 3 priorytetów z wektorami -->
-                                <div class="sm:col-span-5">
-                                    <label class="text-[8px] font-black text-slate-400 block mb-0.5 uppercase tracking-wide flex items-center justify-between">
-                                        <span>Priorytet zgłoszenia:</span>
-                                        <span id="prio-selected-label" class="text-[8px] font-bold text-cyan-300">Rutynowy</span>
-                                    </label>
-                                    <input type="hidden" id="quick-note-priority" value="INFO">
-                                    <div class="grid grid-cols-3 gap-1 p-0.5 bg-slate-950 rounded-xl border border-slate-800 shadow-inner">
-                                        <button type="button" id="prio-btn-INFO" onclick="event.stopPropagation(); setQuickNotePriority('INFO')" title="Priorytet Rutynowy: Standardowa notatka lub uwaga z inspekcji" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-cyan-950/90 text-cyan-300 border-cyan-500/50 shadow-sm cursor-pointer">
-                                            <svg class="w-2.5 h-2.5 text-cyan-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                                                <rect x="8" y="2" width="8" height="4" rx="1.5" ry="1.5"/>
-                                                <path d="m9 14 2 2 4-4"/>
-                                            </svg>
-                                            <span class="truncate">Info</span>
-                                        </button>
-
-                                        <button type="button" id="prio-btn-WARNING" onclick="event.stopPropagation(); setQuickNotePriority('WARNING')" title="Priorytet Ostrzegawczy: Odchylenie CP / Niezgodność Dobrych Praktyk Higienicznych (GMP)" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-amber-300 hover:bg-amber-950/30 cursor-pointer">
-                                            <svg class="w-2.5 h-2.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                                <path d="m13 7-3 5h4l-2 5"/>
-                                            </svg>
-                                            <span class="truncate">Uwaga</span>
-                                        </button>
-
-                                        <button type="button" id="prio-btn-HOLD" onclick="event.stopPropagation(); setQuickNotePriority('HOLD')" title="Priorytet Krytyczny: Zagrożenie CCP / Natychmiastowe Wstrzymanie Procesu Produkcyjnego" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer">
-                                            <svg class="w-2.5 h-2.5 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                                                <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/>
-                                                <line x1="12" y1="8" x2="12" y2="12"/>
-                                                <line x1="12" y1="16" x2="12.01" y2="16"/>
-                                            </svg>
-                                            <span class="truncate">HOLD</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <!-- Anonimowość IFS Culture -->
-                                <div class="sm:col-span-3">
-                                    <label class="text-[8px] font-black text-slate-400 block mb-0.5 uppercase tracking-wide">Poufność:</label>
-                                    <div class="p-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-amber-400/40 transition flex items-center justify-between shadow-inner">
-                                        <label class="flex items-center gap-1.5 cursor-pointer select-none" onclick="event.stopPropagation();">
-                                            <input type="checkbox" id="quick-note-anonymous" onchange="toggleAnonymousNote(this.checked)" class="w-3 h-3 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-0 cursor-pointer">
-                                            <span class="text-[8.5px] font-bold text-slate-300 flex items-center gap-1">
-                                                <i class="fas fa-user-secret text-amber-400 text-[9px]"></i>
-                                                <span>Anonimowo</span>
-                                            </span>
-                                        </label>
-                                        <span class="text-[7px] font-extrabold text-amber-400 bg-amber-950/80 px-1 py-0.1 rounded border border-amber-500/25 uppercase">IFS</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Pole tekstowe notatki z linijkami i licznikiem -->
-                            <div class="relative mb-2 relative z-10">
-                                <textarea id="quick-note-text" onclick="event.stopPropagation();" oninput="updateQuickNoteCounter(this)" rows="2" placeholder="Wpisz treść notatki dla Key Usera (np. Nieszczelność zaworu na pasteryzatorze L4454, brak plomby w stacji mycia, podejrzenie błędu detektora)..." class="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-400 rounded-xl p-2 text-xs text-white placeholder:text-slate-500 font-medium outline-none resize-none transition shadow-inner leading-relaxed notebook-textarea"></textarea>
-                                <div class="flex items-center justify-between text-[8px] text-slate-500 mt-0.5 px-0.5">
-                                    <span class="flex items-center gap-1 text-slate-400">
-                                        <i class="fas fa-pen-nib text-amber-400/80"></i>
-                                        <span>Notatka trafi natychmiast do panelu nadzorczego Key Usera</span>
-                                    </span>
-                                    <span id="quick-note-counter" class="font-mono text-amber-400/90 font-bold">0 / 500</span>
-                                </div>
-                            </div>
-
-                            <!-- Pasek dolny: Przycisk wyślij + podgląd ostatniej notatki -->
-                            <div class="flex items-center justify-between gap-3 relative z-10">
-                                <!-- Ostatnio wysłana notatka (podgląd) -->
-                                <div id="quick-note-recent-box" class="flex-1 hidden">
-                                    <div class="flex items-center gap-1.5 text-[8px] text-emerald-400 bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-500/30 truncate">
-                                        <i class="fas fa-check-circle text-emerald-400 shrink-0"></i>
-                                        <span class="font-bold">Wysłano (<span id="quick-note-recent-time"></span>):</span>
-                                        <span id="quick-note-recent-content" class="truncate text-slate-200"></span>
-                                    </div>
-                                </div>
-
-                                <button type="button" id="btn-send-quick-note" onclick="event.stopPropagation(); sendQuickAuditorNote();" class="py-2 px-5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg shadow-amber-950/40 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer border border-amber-300/40 shrink-0 ml-auto">
-                                    <svg class="w-3.5 h-3.5 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="m22 2-7 20-4-9-9-4Z"/>
-                                        <path d="M22 2 11 13"/>
-                                    </svg>
-                                    <span>Wyślij do Key Usera</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -2688,8 +2478,127 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260919_v36"></script>
-    <script src="/static/js/auth_caps.js?v=20260919_v3"></script>
+    <script src="/static/js/app.js?v=20260920_v37"></script>
+    <script src="/static/js/auth_caps.js?v=20260920_v4"></script>
+
+    <!-- MODAL: SZYBKA WIADOMOŚĆ DO KEY USERA -->
+    <div id="modal-quick-note" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden">
+        <div class="glass-card bg-slate-900/95 border border-amber-500/40 rounded-2xl w-full max-w-lg shadow-2xl p-4 sm:p-5 relative text-left">
+            <!-- Nagłówek modalu -->
+            <div class="flex items-center justify-between border-b border-amber-500/30 pb-2.5 mb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-xl bg-amber-950/80 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm">
+                        <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m22 2-7 20-4-9-9-4Z"/>
+                            <path d="M22 2 11 13"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-black text-white flex items-center gap-2">
+                            <span>Szybka Wiadomość</span>
+                            <span class="text-[8px] font-black bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 uppercase tracking-wide">DO: KEY USER</span>
+                        </h3>
+                        <p class="text-[9.5px] text-slate-400 font-medium">Bieżące zgłoszenie, uwaga lub odchylenie z hali produkcyjnej</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeQuickNoteModal()" class="text-slate-400 hover:text-white font-bold text-base px-1.5 py-0.5 rounded-lg hover:bg-white/10 transition">✕</button>
+            </div>
+
+            <!-- Pasek wyboru: Linia + 3 Priorytety + Poufność -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-3 text-xs">
+                <!-- Wybór linii -->
+                <div class="sm:col-span-4">
+                    <label class="text-[8.5px] font-black text-slate-400 block mb-1 uppercase tracking-wide flex items-center gap-1">
+                        <i class="fas fa-industry text-amber-400/80"></i> Linia:
+                    </label>
+                    <select id="quick-note-line" class="w-full bg-slate-950 border border-slate-700/90 focus:border-amber-400 rounded-xl p-2 text-[10px] font-bold text-white outline-none transition cursor-pointer">
+                        <option value="">— Ogólna / Cała Hala —</option>
+                    </select>
+                </div>
+
+                <!-- Segmentowy pasek 3 priorytetów z wektorami -->
+                <div class="sm:col-span-5">
+                    <label class="text-[8.5px] font-black text-slate-400 block mb-1 uppercase tracking-wide flex items-center justify-between">
+                        <span>Priorytet:</span>
+                        <span id="prio-selected-label" class="text-[8.5px] font-bold text-cyan-300">Rutynowy</span>
+                    </label>
+                    <input type="hidden" id="quick-note-priority" value="INFO">
+                    <div class="grid grid-cols-3 gap-1 p-0.5 bg-slate-950 rounded-xl border border-slate-800 shadow-inner">
+                        <button type="button" id="prio-btn-INFO" onclick="setQuickNotePriority('INFO')" title="Priorytet Rutynowy: Standardowa notatka lub uwaga z inspekcji" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-cyan-950/90 text-cyan-300 border-cyan-500/50 shadow-sm cursor-pointer">
+                            <svg class="w-2.5 h-2.5 text-cyan-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                <rect x="8" y="2" width="8" height="4" rx="1.5" ry="1.5"/>
+                                <path d="m9 14 2 2 4-4"/>
+                            </svg>
+                            <span class="truncate">Info</span>
+                        </button>
+
+                        <button type="button" id="prio-btn-WARNING" onclick="setQuickNotePriority('WARNING')" title="Priorytet Ostrzegawczy: Odchylenie CP / Niezgodność Dobrych Praktyk Higienicznych (GMP)" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-amber-300 hover:bg-amber-950/30 cursor-pointer">
+                            <svg class="w-2.5 h-2.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                <path d="m13 7-3 5h4l-2 5"/>
+                            </svg>
+                            <span class="truncate">Uwaga</span>
+                        </button>
+
+                        <button type="button" id="prio-btn-HOLD" onclick="setQuickNotePriority('HOLD')" title="Priorytet Krytyczny: Zagrożenie CCP / Natychmiastowe Wstrzymanie Procesu Produkcyjnego" class="prio-pill py-1 px-1 rounded-lg flex items-center justify-center gap-1 text-[8.5px] font-black transition border bg-slate-900/60 text-slate-400 border-transparent hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer">
+                            <svg class="w-2.5 h-2.5 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            <span class="truncate">HOLD</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Poufność / Anonimowość IFS Culture -->
+                <div class="sm:col-span-3">
+                    <label class="text-[8.5px] font-black text-slate-400 block mb-1 uppercase tracking-wide">Poufność:</label>
+                    <div class="p-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-400/40 transition flex items-center justify-between shadow-inner">
+                        <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="checkbox" id="quick-note-anonymous" onchange="toggleAnonymousNote(this.checked)" class="w-3.5 h-3.5 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-0 cursor-pointer">
+                            <span class="text-[9px] font-bold text-slate-300 flex items-center gap-1">
+                                <i class="fas fa-user-secret text-amber-400 text-[9.5px]"></i>
+                                <span>Anonimowo</span>
+                            </span>
+                        </label>
+                        <span class="text-[7px] font-extrabold text-amber-400 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/25 uppercase">IFS</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pole tekstowe notatki -->
+            <div class="mb-3">
+                <textarea id="quick-note-text" oninput="updateQuickNoteCounter(this)" rows="4" placeholder="Wpisz treść notatki dla Key Usera (np. Nieszczelność zaworu na pasteryzatorze L4454, brak plomby w stacji mycia, podejrzenie błędu detektora)..." class="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-400 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 font-medium outline-none resize-none transition shadow-inner leading-relaxed"></textarea>
+                <div class="flex items-center justify-between text-[8.5px] text-slate-400 mt-1 px-1">
+                    <span id="quick-note-feedback" class="font-bold"></span>
+                    <span id="quick-note-counter" class="font-mono text-amber-400/90 font-bold ml-auto">0 / 500</span>
+                </div>
+            </div>
+
+            <!-- Pasek dolny: Przycisk wyślij + anuluj -->
+            <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                <div id="quick-note-recent-box" class="flex-1 hidden">
+                    <div class="flex items-center gap-1.5 text-[8px] text-emerald-400 bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-500/30 truncate">
+                        <i class="fas fa-check-circle text-emerald-400 shrink-0"></i>
+                        <span class="font-bold">Wysłano (<span id="quick-note-recent-time"></span>):</span>
+                        <span id="quick-note-recent-content" class="truncate text-slate-200"></span>
+                    </div>
+                </div>
+                <button type="button" onclick="closeQuickNoteModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition">
+                    Anuluj
+                </button>
+                <button type="button" id="btn-send-quick-note" onclick="sendQuickAuditorNote();" class="py-2 px-5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-amber-950/40 transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer border border-amber-300/40">
+                    <svg class="w-3.5 h-3.5 shrink-0 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m22 2-7 20-4-9-9-4Z"/>
+                        <path d="M22 2 11 13"/>
+                    </svg>
+                    <span>Wyślij do Key Usera</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
 <div id="auditor-profile-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
        <div class="glass-card bg-slate-900 border border-cyan-500/30 p-6 rounded-2xl w-full max-w-md shadow-2xl relative text-left">

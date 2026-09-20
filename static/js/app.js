@@ -123,7 +123,6 @@
                     } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
                 } else {
                     if (typeof loadProductionLines === 'function') loadProductionLines();
-                    if (typeof initAuditorTrivia === 'function') initAuditorTrivia();
                 }
             }
             if(modId === 'calendar') loadScheduleAndRender();
@@ -2773,13 +2772,10 @@
                     }
 
                     setTimeout(() => {
-                        if (typeof window.closeAuditorNoteCap === 'function') {
-                            window.closeAuditorNoteCap();
+                        if (typeof window.closeQuickNoteModal === 'function') {
+                            window.closeQuickNoteModal();
                         }
-                        if (typeof window.nextAuditorTrivia === 'function') {
-                            window.nextAuditorTrivia();
-                        }
-                    }, 2200);
+                    }, 1200);
                 } else {
                     if (feedback) {
                         feedback.innerText = data.detail || "Błąd wysyłki notatki.";
@@ -2801,305 +2797,24 @@
             }
         };
 
-        // =========================================================================
-        // --- BAZA CIEKAWOSTEK I ŻARTÓW AUDYTORA (3D FLIP CAP VIEWPORT) ---
-        // =========================================================================
-        const auditorCuriosities = [
-            {
-                heading: "HACCP w Kosmosie (NASA)",
-                badge: "Historia HACCP",
-                icon: "fas fa-rocket",
-                text: "System HACCP powstał w latach 60. XX wieku w firmie Pillsbury specjalnie dla załogowych misji kosmicznych NASA (Apollo), by wykluczyć zatrucie pokarmowe astronautów w stanie nieważkości!"
-            },
-            {
-                heading: "Miód nie ma daty ważności",
-                badge: "Biochemia Żywności",
-                icon: "fas fa-jar",
-                text: "W egipskich grobowcach archeolodzy odnajdują naczynia z miodem sprzed 3000 lat – miód jest nadal w 100% zdatny do spożycia dzięki naturalnie niskiej aktywności wody (aw < 0.6) i niskiemu pH."
-            },
-            {
-                heading: "Dlaczego czepki i plastry są niebieskie?",
-                badge: "Detekcja Ciał Obcych",
-                icon: "fas fa-shield-halved",
-                text: "Niebieski to kolor z wyboru w zakładach spożywczych, ponieważ jest to jedyny barwnik praktycznie niewystępujący w naturalnych surowcach spożywczych i doskonale widoczny optycznie."
-            },
-            {
-                heading: "Klauzula Knock-Out (KO) w IFS",
-                badge: "Standardy IFS Food",
-                icon: "fas fa-certificate",
-                text: "W standardzie IFS Food niezgodność typu KO (Knock-Out) natychmiast blokuje certyfikację na poziomie wyższym – nawet jeśli ogólny wynik audytu przekracza 95%!"
-            },
-            {
-                heading: "Pasteuryzacja zrodzona z piwa i wina",
-                badge: "Historia Nauki",
-                icon: "fas fa-flask-vial",
-                text: "Ludwik Pasteur w 1864 roku opracował metodę obróbki termicznej wcale nie dla mleka, lecz na zamówienie francuskich winiarzy i piwowarów, by powstrzymać kwaśnienie trunków."
-            },
-            {
-                heading: "Czułość detektorów metali",
-                badge: "Inżynieria CCP",
-                icon: "fas fa-magnet",
-                text: "Nowoczesne detektory wieloczęstotliwościowe potrafią zidentyfikować kulkę ze stali kwasoodpornej (AISI 316) o średnicy zaledwie 1.2 mm wewnątrz gorącego, przewodzącego bochenka pieczywa lub sera!"
-            },
-            {
-                heading: "Kultura Bezpieczeństwa Żywności",
-                badge: "Food Safety Culture",
-                icon: "fas fa-heart-pulse",
-                text: "Prawdziwa kultura bezpieczeństwa żywności w IFS nie opiera się na segregatorach z procedurami, lecz na tym, co operator robi na linii, gdy nikt na niego nie patrzy."
-            },
-            {
-                heading: "Pierwszy kod kreskowy w historii",
-                badge: "Traceability",
-                icon: "fas fa-barcode",
-                text: "Pierwszym produktem w historii handlu zeskanowanym przy kasie kodem kreskowym UPC (26 czerwca 1974 r. w stanie Ohio) była paczka gumy do żucia Wrigley's Juicy Fruit."
-            },
-            {
-                heading: "Listeria monocytogenes – chłodolubna",
-                badge: "Mikrobiologia CCP",
-                icon: "fas fa-bacterium",
-                text: "Listeria potrafi powoli namnażać się nawet w temperaturze +2°C w komorach chłodniczych i tworzyć odporne biofilmy na stali, dlatego kluczem jest rotacyjna dezynfekcja chemiczna."
-            },
-            {
-                heading: "Szóste 'S' w metodologii 5S",
-                badge: "Lean & Higiena",
-                icon: "fas fa-broom",
-                text: "W przemyśle spożywczym klasyczną japońską metodologię 5S z Toyoty rozszerzono o kluczowe szóste 'S' – Safety & Sanitization (Bezpieczeństwo i Higiena Sanitarna)!"
-            },
-            {
-                heading: "Inspekcja luminescencyjna UV",
-                badge: "Audyt Optyczny",
-                icon: "fas fa-lightbulb",
-                text: "Światło UV o długości fali 365 nm pozwala audytorowi w zaciemnieniu bezbłędnie dostrzec niewidoczne gołym okiem pozostałości tłuszczów, zanieczyszczeń organicznych oraz ślady gryzoni."
-            },
-            {
-                heading: "Stal kwasoodporna 316L i molibden",
-                badge: "Hygienic Design",
-                icon: "fas fa-industry",
-                text: "Dodatek 2-3% molibdenu w stopie stali AISI 316L chroni zbiorniki i rurociągi procesowe przed agresywną korozją wżerową wywoływaną przez chlorki z soli i kwaśne środki myjące CIP."
-            },
-            {
-                heading: "Higiena kratek ściekowych",
-                badge: "Strefy High Risk",
-                icon: "fas fa-faucet-drip",
-                text: "Badania mikrobiologiczne dowodzą, że aż do 70% aerozoli ze skażeniem w strefach czystych może pochodzić z niewłaściwie mytych lub źle zaprojektowanych kratek ściekowych."
-            },
-            {
-                heading: "Próbki archiwalne (referencyjne)",
-                badge: "Zapewnienie Jakości",
-                icon: "fas fa-clock-rotate-left",
-                text: "Wzorcowa próba archiwalna każdej partii produkcyjnej musi być przechowywana w kontrolowanych warunkach przez pełny okres przydatności + zdefiniowany margines na ewentualne reklamacje konsumenckie."
-            }
-        ];
-
-        const auditorJokes = [
-            {
-                heading: "Procedura na wypadek pożaru",
-                badge: "Humor z Hali",
-                icon: "fas fa-face-laugh-squint",
-                text: "– Czy macie procedurę na wypadek pożaru? – Mamy, ale nie możemy jej pokazać, bo leży w szafie pancernej, do której klucz ma tylko strażak!"
-            },
-            {
-                heading: "Kąt widzenia audytora",
-                badge: "Dobre Praktyki",
-                icon: "fas fa-ruler-combined",
-                text: "– Panie Audytorze, dlaczego patrzy Pan na paletę pod kątem 45 stopni? – Żeby sprawdzić, czy odchylenie od pionu jest zgodne z normą, czy tylko z prawem powszechnego ciążenia!"
-            },
-            {
-                heading: "Szczypta miłości w składzie",
-                badge: "Alergeny & Etykiety",
-                icon: "fas fa-clipboard-check",
-                text: "– Skład: mąka, woda, sól i szczypta miłości. – Audytor: Poproszę o kartę charakterystyki MSDS, specyfikację alergenową i atest dostawcy dla tej 'miłości'!"
-            },
-            {
-                heading: "Czystość wg operatora",
-                badge: "CIP & Mycie",
-                icon: "fas fa-soap",
-                text: "– Maszyna wyczyszczona przed audytem? – Oczywiście! Przetarłem kurz z tabliczki znamionowej, żeby audytor widział, że maszyna jest z tego stulecia!"
-            },
-            {
-                heading: "Polityka Jakości na pamięć",
-                badge: "Kultura Jakości",
-                icon: "fas fa-pen-nib",
-                text: "Audytor notuje w raporcie: 'Wszyscy pracownicy na zmianie znają politykę jakości na pamięć. W szczególności fragment, że o 14:00 kończy się zmiana'."
-            },
-            {
-                heading: "Główny Punkt Krytyczny (CCP)",
-                badge: "CCP Reality",
-                icon: "fas fa-triangle-exclamation",
-                text: "– Jaki jest wasz najważniejszy punkt krytyczny w zakładzie? – Moment, gdy audytor wysiada z samochodu na parkingu i kieruje się w stronę szatni!"
-            },
-            {
-                heading: "Niebieski długopis detekcyjny",
-                badge: "Z życia Audytora",
-                icon: "fas fa-pen",
-                text: "Koszmar audytora IFS: upuścić niebieski, atestowany długopis detekcyjny do leja zasypowego... i 30 sekund później usłyszeć syrenę detektora metali!"
-            },
-            {
-                heading: "Pomiary temperatury w chłodni",
-                badge: "Kalibracja",
-                icon: "fas fa-temperature-low",
-                text: "– Czy monitorujecie temperaturę w chłodni co 2 godziny? – Jak najbardziej! Wskazuje równe 4.0°C bez zmian od 2019 roku, wyjątkowo stabilny termometr!"
-            },
-            {
-                heading: "Zasada 5 sekund w audycie",
-                badge: "Zasady IFS",
-                icon: "fas fa-stopwatch",
-                text: "– Panie Audytorze, a co z 'zasadą 5 sekund'? – W audycie ta zasada oznacza: masz 5 sekund na zgłoszenie niezgodności, zanim sam zostaniesz wpisany do raportu!"
-            },
-            {
-                heading: "Podpis na liście obecności",
-                badge: "Dokumentacja",
-                icon: "fas fa-users-gear",
-                text: "– Wszyscy pracownicy odbyli coroczne szkolenie z higieny? – Wszyscy! Nawet ci przebywający na urlopie podpisali listę obecności siłą woli!"
-            },
-            {
-                heading: "Reakcja na niezgodność",
-                badge: "Dialogi z Hali",
-                icon: "fas fa-hands-praying",
-                text: "Audytor pyta operatora: 'Co pan robi natychmiast po wykryciu niezgodności na linii?' Operator: 'Modlę się, żeby pan nie podszedł bliżej'."
-            },
-            {
-                heading: "Sprint olimpijski na zakładzie",
-                badge: "Stan Gotowości",
-                icon: "fas fa-person-running",
-                text: "Rekord sprintu na 100 metrów w fabryce nie należy do sportowców, lecz do mistrza zmiany biegnącego z portierni na halę po haśle: 'AUDYTOR JEST PRZY BRAMIE!'."
-            },
-            {
-                heading: "Higiena rąk z podkładką",
-                badge: "Higiena Osobista",
-                icon: "fas fa-hands-bubbles",
-                text: "– Kiedy myje pan ręce? – Zawsze przed wejściem na halę, po zakończeniu pracy i za każdym razem, gdy w zasięgu wzroku pojawia się ktoś z podkładką z klipsem!"
-            },
-            {
-                heading: "Rejestr szkła i tworzyw",
-                badge: "Polityka Szkła",
-                icon: "fas fa-glasses",
-                text: "– Czy na halę można wnosić szkło? – Wykluczone! Dlatego okulary korekcyjne audytora wpisaliśmy natychmiast do rejestru jako 'ryzyko optyczne kategorii I'."
-            },
-            {
-                heading: "Udany dzień audytora",
-                badge: "Pasja Jakości",
-                icon: "fas fa-heart",
-                text: "– Jak było dziś w pracy, kochanie? – Cudownie! Wystawiłem 8 niezgodności, zatrzymałem 2 palety i zepsułem dzień 15 kierownikom. Pełen sukces!"
-            }
-        ];
-
-        let currentTriviaCuriosityIndex = 0;
-        let currentTriviaJokeIndex = 0;
-        let triviaIntervalId = null;
-
-        function renderAuditorTrivia() {
-            if (!auditorCuriosities.length || !auditorJokes.length) return;
-            const c = auditorCuriosities[currentTriviaCuriosityIndex % auditorCuriosities.length];
-            const j = auditorJokes[currentTriviaJokeIndex % auditorJokes.length];
-
-            // Awers (Ciekawostka ze świata)
-            const frontHeading = document.getElementById('trivia-front-heading');
-            const frontText = document.getElementById('trivia-front-text');
-            const frontIcon = document.getElementById('trivia-front-icon');
-            const frontBadge = document.getElementById('trivia-front-badge');
-            const frontCounter = document.getElementById('trivia-counter-front');
-
-            if (frontHeading) frontHeading.innerText = c.heading;
-            if (frontText) frontText.innerText = `„${c.text}”`;
-            if (frontBadge) frontBadge.innerText = c.badge;
-            if (frontIcon) frontIcon.className = `${c.icon} text-cyan-400 text-xs`;
-            if (frontCounter) frontCounter.innerText = `${(currentTriviaCuriosityIndex % auditorCuriosities.length) + 1}/${auditorCuriosities.length}`;
-
-            // Rewers (Humor i Żart Audytora)
-            const backHeading = document.getElementById('trivia-back-heading');
-            const backText = document.getElementById('trivia-back-text');
-            const backIcon = document.getElementById('trivia-back-icon');
-            const backBadge = document.getElementById('trivia-back-badge');
-            const backCounter = document.getElementById('trivia-counter-back');
-
-            if (backHeading) backHeading.innerText = j.heading;
-            if (backText) backText.innerText = `„${j.text}”`;
-            if (backBadge) backBadge.innerText = j.badge;
-            if (backIcon) backIcon.className = `${j.icon} text-amber-400 text-xs`;
-            if (backCounter) backCounter.innerText = `${(currentTriviaJokeIndex % auditorJokes.length) + 1}/${auditorJokes.length}`;
-        }
-
-        window.toggleNoteCap = function(el, ev) {
-            if (ev && ev.target && (ev.target.closest('button') || ev.target.closest('select') || ev.target.closest('textarea') || ev.target.closest('input') || ev.target.closest('label'))) {
-                return;
-            }
-            if (el) {
-                el.classList.toggle('bws-active');
+        window.openQuickNoteModal = function() {
+            const modal = document.getElementById('modal-quick-note');
+            if (modal) {
+                modal.classList.remove('hidden');
+                if (typeof loadProductionLines === 'function') loadProductionLines();
+                setTimeout(() => {
+                    const txt = document.getElementById('quick-note-text');
+                    if (txt) txt.focus();
+                }, 100);
             }
         };
 
-        window.closeAuditorNoteCap = function() {
-            const cap = document.getElementById('aud-tile-quicknote');
-            if (cap) {
-                cap.classList.remove('bws-active');
-                cap.classList.remove('bws-focused');
-                const txt = document.getElementById('quick-note-text');
-                if (txt) txt.blur();
+        window.closeQuickNoteModal = function() {
+            const modal = document.getElementById('modal-quick-note');
+            if (modal) {
+                modal.classList.add('hidden');
             }
         };
-
-        window.flipAuditorTrivia = function() {
-            const cap = document.getElementById('aud-tile-quicknote');
-            if (cap) {
-                cap.classList.toggle('bws-active');
-            }
-        };
-
-        window.nextAuditorTrivia = function() {
-            currentTriviaCuriosityIndex = (currentTriviaCuriosityIndex + 1) % auditorCuriosities.length;
-            currentTriviaJokeIndex = (currentTriviaJokeIndex + 1) % auditorJokes.length;
-            renderAuditorTrivia();
-        };
-
-        window.initAuditorTrivia = function() {
-            const cap = document.getElementById('aud-tile-quicknote');
-            if (!cap) return;
-
-            // Zabezpieczenie przed samoczynnym powrotem karty podczas pisania
-            const txt = document.getElementById('quick-note-text');
-            if (txt && !txt._focusWired) {
-                txt._focusWired = true;
-                txt.addEventListener('focus', () => {
-                    const c = document.getElementById('aud-tile-quicknote');
-                    if (c) c.classList.add('bws-focused');
-                });
-                txt.addEventListener('blur', () => {
-                    if (!txt.value.trim()) {
-                        const c = document.getElementById('aud-tile-quicknote');
-                        if (c && !c.classList.contains('bws-active')) {
-                            c.classList.remove('bws-focused');
-                        }
-                    }
-                });
-            }
-
-            // Losowy startowy element, by za każdym razem było coś świeżego
-            currentTriviaCuriosityIndex = Math.floor(Math.random() * auditorCuriosities.length);
-            currentTriviaJokeIndex = Math.floor(Math.random() * auditorJokes.length);
-            renderAuditorTrivia();
-
-            if (triviaIntervalId) clearInterval(triviaIntervalId);
-            // Automatyczna rotacja ciekawostek i żartów co 12 sekund, o ile użytkownik nie pisze notatki
-            triviaIntervalId = setInterval(() => {
-                const liveCap = document.getElementById('aud-tile-quicknote');
-                if (!liveCap) return;
-                if (liveCap.offsetParent === null) return;
-                // Jeśli użytkownik jest na rewersie (pisze notatkę), nie zmieniaj treści w tle
-                if (liveCap.classList.contains('bws-active') || liveCap.classList.contains('bws-focused') || liveCap.matches(':hover')) return;
-
-                window.nextAuditorTrivia();
-            }, 12000);
-        };
-
-        // Automatyczna inicjalizacja kapsla po załadowaniu drzewa DOM
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                setTimeout(() => { if (typeof window.initAuditorTrivia === 'function') window.initAuditorTrivia(); }, 400);
-            });
-        } else {
-            setTimeout(() => { if (typeof window.initAuditorTrivia === 'function') window.initAuditorTrivia(); }, 400);
-        }
 
         function selectTile(cat, val, btn) {
             document.querySelectorAll(`.tile-${cat}`).forEach(b => b.classList.remove('tile-selected'));
@@ -4884,10 +4599,8 @@
 
     // Automatyczne odwrócenie kapsla z powrotem przy dotknięciu poza nim (np. na tablecie)
     document.addEventListener('pointerdown', (e) => {
-        if (!e.target.closest('.bws-cap-viewport') && !e.target.closest('.bws-cap-note')) {
-            document.querySelectorAll('.bws-cap-viewport.bws-active, .bws-cap-note.bws-active').forEach(el => {
-                const txt = el.querySelector('#quick-note-text');
-                if (txt && (document.activeElement === txt || txt.value.trim().length > 0)) return;
+        if (!e.target.closest('.bws-cap-viewport')) {
+            document.querySelectorAll('.bws-cap-viewport.bws-active').forEach(el => {
                 el.classList.remove('bws-active');
             });
         }

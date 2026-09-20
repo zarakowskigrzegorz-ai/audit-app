@@ -2088,6 +2088,25 @@ function updateAuditHud(step, title, desc, mode) {
             }
         };
 
+        window.openQuickNoteModal = function() {
+            const modal = document.getElementById('modal-quick-note');
+            if (modal) {
+                modal.classList.remove('hidden');
+                if (typeof loadProductionLines === 'function') loadProductionLines();
+                setTimeout(() => {
+                    const txt = document.getElementById('quick-note-text');
+                    if (txt) txt.focus();
+                }, 100);
+            }
+        };
+
+        window.closeQuickNoteModal = function() {
+            const modal = document.getElementById('modal-quick-note');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        };
+
         window.enforceBiometricHeaderIcon = function() {
             const btn = document.getElementById('btn-bind-biometrics') || document.querySelector('button[onclick*="registerCurrentDeviceBiometrics"]');
             if (btn) {
