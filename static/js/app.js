@@ -748,6 +748,8 @@
                         roleEl.innerText = "👤 AUDYTOR";
                         roleEl.className = "text-[8.5px] font-black text-emerald-400 uppercase block tracking-wider";
                     }
+                }
+
                 // U Key Usera skrzynka odbiorcza pozostaje w Kaflu 8; tag w górnym doku jest ukrywany
                 const quickNoteTag = document.getElementById('tag-quick-note');
                 if (quickNoteTag) {
