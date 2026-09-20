@@ -1492,6 +1492,8 @@
                     ? `<button onclick="markAuditorNoteAsRead(${n.id})" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap">✓ Oznacz przeczytane</button>`
                     : `<span class="text-[9px] text-slate-500 italic">Przeczytano (${n.read_at ? n.read_at.substring(11, 16) : '—'})</span>`;
 
+                const replyBtn = `<button onclick="openManagerReplyModal(${n.id})" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap ml-1.5"><i class="fas fa-reply mr-1"></i>Odpowiedz</button>`;
+
                 const rowBg = isUnread ? 'bg-amber-950/25 border-l-2 border-l-amber-400 font-semibold' : 'hover:bg-slate-900/50';
 
                 const isAnon = (n.auditor_name && (n.auditor_name.includes('Anonimow') || n.auditor_name.includes('Poufne')));
@@ -1499,14 +1501,26 @@
                     ? '<span class="inline-flex items-center gap-1 text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded-lg border border-amber-500/40 text-[9.5px] font-black"><i class="fas fa-user-secret text-amber-400"></i> Poufne (IFS Culture)</span>'
                     : `<span class="text-white font-bold">${n.auditor_name || 'Audytor'}</span>`;
 
+                const responseBox = n.manager_response ? `
+                    <div class="mt-1.5 p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-[11px] text-cyan-200">
+                        <div class="flex items-center gap-1.5 text-[9.5px] font-black text-cyan-400 mb-0.5">
+                            <i class="fas fa-reply"></i>
+                            <span>Odpowiedź Key Usera (${n.manager_response_at ? n.manager_response_at.substring(0, 16) : ''}):</span>
+                        </div>
+                        <div class="italic">${n.manager_response}</div>
+                    </div>` : '';
+
                 tbody.innerHTML += `
                 <tr class="border-b border-slate-800/80 text-xs ${rowBg} transition">
                     <td class="p-2.5 text-slate-400 font-mono text-[10px] whitespace-nowrap">${n.timestamp ? n.timestamp.substring(0, 16) : '—'}</td>
                     <td class="p-2.5 whitespace-nowrap">${auditorDisplay}</td>
                     <td class="p-2.5 text-cyan-300 font-bold whitespace-nowrap">${n.line_name || 'Ogólna / Cała Hala'}</td>
                     <td class="p-2.5 whitespace-nowrap">${prioBadge}</td>
-                    <td class="p-2.5 text-slate-200 font-medium break-words max-w-md">${n.content}</td>
-                    <td class="p-2.5 text-right whitespace-nowrap">${readBtn}</td>
+                    <td class="p-2.5 text-slate-200 font-medium break-words max-w-md">
+                        <div>${n.content}</div>
+                        ${responseBox}
+                    </td>
+                    <td class="p-2.5 text-right whitespace-nowrap">${readBtn}${replyBtn}</td>
                 </tr>`;
             });
         }
@@ -1553,6 +1567,80 @@
                 }
             } catch(e) {
                 console.error("Błąd oznaczania notatki jako przeczytana:", e);
+            }
+        };
+
+        let activeReplyNoteId = null;
+
+        window.openManagerReplyModal = function(noteId) {
+            activeReplyNoteId = noteId;
+            const note = Array.isArray(cachedManagerNotes) ? cachedManagerNotes.find(n => n.id === noteId) : null;
+            const modal = document.getElementById('modal-manager-reply-note');
+            if (!modal) return;
+
+            const audEl = document.getElementById('mgr-reply-auditor');
+            const tsEl = document.getElementById('mgr-reply-timestamp');
+            const lineEl = document.getElementById('mgr-reply-line');
+            const origEl = document.getElementById('mgr-reply-original');
+            const textEl = document.getElementById('mgr-reply-text');
+
+            if (note) {
+                if (audEl) audEl.textContent = note.auditor_name || 'Audytor';
+                if (tsEl) tsEl.textContent = note.timestamp ? note.timestamp.substring(0, 16) : '';
+                if (lineEl) lineEl.textContent = `Linia: ${note.line_name || 'Ogólna / Cała Hala'}`;
+                if (origEl) origEl.textContent = note.content || '';
+                if (textEl) {
+                    textEl.value = note.manager_response || '';
+                    setTimeout(() => textEl.focus(), 100);
+                }
+            }
+            modal.classList.remove('hidden');
+        };
+
+        window.closeManagerReplyModal = function() {
+            const modal = document.getElementById('modal-manager-reply-note');
+            if (modal) modal.classList.add('hidden');
+            activeReplyNoteId = null;
+        };
+
+        window.submitManagerReply = async function() {
+            if (!activeReplyNoteId) return;
+            const textEl = document.getElementById('mgr-reply-text');
+            const btn = document.getElementById('btn-submit-mgr-reply');
+            if (!textEl || !textEl.value.trim()) {
+                alert("Wpisz treść odpowiedzi dla audytora.");
+                return;
+            }
+
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = "Wysyłanie...";
+            }
+
+            try {
+                const res = await fetch(`/api/auditor-notes/${activeReplyNoteId}/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        manager_response: textEl.value.trim(),
+                        manager_name: state.auditor || 'Key User (Manager)'
+                    })
+                });
+                if (res.ok) {
+                    closeManagerReplyModal();
+                    await loadManagerAuditorNotes();
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || "Błąd wysyłania odpowiedzi.");
+                }
+            } catch(e) {
+                console.error("Błąd wysyłania odpowiedzi menedżera:", e);
+                alert("Błąd połączenia z serwerem.");
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "Wyślij odpowiedź";
+                }
             }
         };
 
@@ -2806,9 +2894,10 @@
                         recentBox.classList.remove('hidden');
                     }
 
+                    if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
                     setTimeout(() => {
-                        if (typeof window.closeQuickNoteModal === 'function') {
-                            window.closeQuickNoteModal();
+                        if (typeof window.switchQuickNoteTab === 'function') {
+                            window.switchQuickNoteTab('sent');
                         }
                     }, 1200);
                 } else {
@@ -2832,11 +2921,34 @@
             }
         };
 
-        window.openQuickNoteModal = function() {
-            const modal = document.getElementById('modal-quick-note');
-            if (modal) {
-                modal.classList.remove('hidden');
-                if (typeof loadProductionLines === 'function') loadProductionLines();
+        let currentQuickNoteTab = 'inbox';
+
+        window.switchQuickNoteTab = function(tab) {
+            currentQuickNoteTab = tab;
+            const btnInbox = document.getElementById('qn-tab-btn-inbox');
+            const btnSend = document.getElementById('qn-tab-btn-send');
+            const btnSent = document.getElementById('qn-tab-btn-sent');
+
+            const viewInbox = document.getElementById('qn-view-inbox');
+            const viewSend = document.getElementById('qn-view-send');
+            const viewSent = document.getElementById('qn-view-sent');
+
+            const activeClass = "flex-1 py-2 px-2.5 rounded-lg text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition bg-amber-500 text-slate-950 shadow cursor-pointer";
+            const inactiveClass = "flex-1 py-2 px-2.5 rounded-lg text-xs sm:text-sm font-bold text-slate-400 hover:text-slate-200 flex items-center justify-center gap-2 transition cursor-pointer";
+
+            if (btnInbox) btnInbox.className = (tab === 'inbox') ? activeClass : inactiveClass;
+            if (btnSend) btnSend.className = (tab === 'send') ? activeClass : inactiveClass;
+            if (btnSent) btnSent.className = (tab === 'sent') ? activeClass : inactiveClass;
+
+            if (viewInbox) viewInbox.classList.toggle('hidden', tab !== 'inbox');
+            if (viewSend) viewSend.classList.toggle('hidden', tab !== 'send');
+            if (viewSent) viewSent.classList.toggle('hidden', tab !== 'sent');
+
+            if (tab === 'inbox') {
+                window.loadAuditorInboxMessages();
+            } else if (tab === 'sent') {
+                window.loadAuditorSentMessages();
+            } else if (tab === 'send') {
                 setTimeout(() => {
                     const txt = document.getElementById('quick-note-text');
                     if (txt) txt.focus();
@@ -2844,10 +2956,249 @@
             }
         };
 
+        window.openQuickNoteModal = function(initialTab) {
+            const modal = document.getElementById('modal-quick-note');
+            if (modal) {
+                modal.classList.remove('hidden');
+                if (typeof loadProductionLines === 'function') loadProductionLines();
+                
+                // Sprawdź czy jest wskazana zakładka, lub czy są nieprzeczytane odpowiedzi
+                const tabToOpen = initialTab || currentQuickNoteTab || 'inbox';
+                window.switchQuickNoteTab(tabToOpen);
+                if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
+            }
+        };
+
         window.closeQuickNoteModal = function() {
             const modal = document.getElementById('modal-quick-note');
             if (modal) {
                 modal.classList.add('hidden');
+            }
+        };
+
+        window.loadAuditorInboxMessages = async function() {
+            const listEl = document.getElementById('auditor-inbox-list');
+            if (!listEl) return;
+            try {
+                listEl.innerHTML = '<div class="text-center py-6 text-xs text-slate-500 italic">Odświeżanie skrzynki odbiorczej...</div>';
+                const audParam = (state.auditor_id || state.auditor || '').trim();
+                const res = await fetch(`/api/auditor-notes?mode=inbox&auditor=${encodeURIComponent(audParam)}&limit=50`);
+                if (!res.ok) throw new Error("Błąd ładowania wiadomości");
+                const notes = await res.json();
+
+                if (!notes || notes.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="text-center py-10 px-4 bg-slate-950/60 rounded-xl border border-slate-800">
+                            <svg class="w-10 h-10 mx-auto text-slate-600 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+                                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+                            </svg>
+                            <h4 class="text-xs font-bold text-slate-300">Skrzynka odbiorcza jest pusta</h4>
+                            <p class="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto">Gdy Key User odpowie na Twoją notatkę lub nada ogłoszenie do audytorów, odpowiedź pojawi się w tym miejscu.</p>
+                            <button type="button" onclick="switchQuickNoteTab('send')" class="mt-3 px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition cursor-pointer">
+                                ✉️ Wyślij nową wiadomość
+                            </button>
+                        </div>
+                    `;
+                    if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
+                    return;
+                }
+
+                listEl.innerHTML = notes.map(n => {
+                    const isUnreadByAuditor = !n.auditor_read_response;
+                    const unreadBadge = isUnreadByAuditor 
+                        ? `<span class="bg-rose-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full border border-rose-400 animate-pulse">NOWA ODPOWIEDŹ</span>` 
+                        : `<span class="text-slate-500 text-[9.5px]">Przeczytana</span>`;
+                    const prioColor = n.priority === 'HOLD' 
+                        ? 'text-rose-400 bg-rose-950/60 border-rose-500/50' 
+                        : (n.priority === 'WARNING' ? 'text-amber-300 bg-amber-950/60 border-amber-500/50' : 'text-cyan-300 bg-cyan-950/60 border-cyan-500/50');
+
+                    return `
+                        <div class="p-3.5 rounded-xl ${isUnreadByAuditor ? 'bg-amber-950/20 border border-amber-500/50 shadow-md' : 'bg-slate-950/70 border border-slate-800'} transition space-y-2 text-left">
+                            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="text-xs font-black text-amber-400 flex items-center gap-1">
+                                        <i class="fas fa-user-shield text-xs"></i> ${n.manager_name || 'Key User (Manager)'}
+                                    </span>
+                                    <span class="text-[10px] font-mono text-slate-400">${n.manager_response_at || n.timestamp}</span>
+                                    <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded border ${prioColor}">${n.priority || 'INFO'}</span>
+                                    ${n.line_name ? `<span class="text-[9.5px] font-bold text-cyan-300 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/30">${n.line_name}</span>` : ''}
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    ${unreadBadge}
+                                </div>
+                            </div>
+
+                            <div class="bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 p-3 rounded-xl border border-amber-500/30 text-xs sm:text-sm text-amber-100 font-medium leading-relaxed shadow-sm">
+                                <div class="text-[9.5px] font-bold text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                    <i class="fas fa-comment-dots text-amber-400"></i> Odpowiedź z Działu Jakości / Key Usera:
+                                </div>
+                                <p class="whitespace-pre-line">${n.manager_response || n.content}</p>
+                            </div>
+
+                            <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800 text-[11px] text-slate-400">
+                                <span class="font-bold text-slate-300">Twoje zgłoszenie:</span> "${n.content}"
+                            </div>
+
+                            <div class="flex items-center justify-between pt-1">
+                                <span class="text-[10px] text-slate-500 font-mono">Wiadomość #${n.id}</span>
+                                <div class="flex items-center gap-2">
+                                    ${isUnreadByAuditor ? `
+                                        <button type="button" onclick="markAuditorResponseAsRead(${n.id})" class="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-lg transition active:scale-95 shadow cursor-pointer">
+                                            ✓ Oznacz jako przeczytane
+                                        </button>
+                                    ` : ''}
+                                    <button type="button" onclick="replyBackToManager('${n.line_name || ''}', ${n.id})" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+                                        <i class="fas fa-reply text-xs"></i> Odpowiedz
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
+            } catch(e) {
+                console.warn("Błąd renderowania skrzynki audytora:", e);
+                listEl.innerHTML = '<div class="text-center py-6 text-xs text-rose-400 italic">Błąd pobierania wiadomości ze skrzynki.</div>';
+            }
+        };
+
+        window.loadAuditorSentMessages = async function() {
+            const listEl = document.getElementById('auditor-sent-list');
+            const badgeSent = document.getElementById('qn-badge-sent');
+            if (!listEl) return;
+            try {
+                listEl.innerHTML = '<div class="text-center py-6 text-xs text-slate-500 italic">Ładowanie historii wysłanych...</div>';
+                const audParam = (state.auditor_id || state.auditor || '').trim();
+                const res = await fetch(`/api/auditor-notes?mode=sent&auditor=${encodeURIComponent(audParam)}&limit=50`);
+                if (!res.ok) throw new Error("Błąd ładowania wysłanych");
+                const notes = await res.json();
+
+                if (badgeSent) badgeSent.textContent = notes.length;
+
+                if (!notes || notes.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="text-center py-10 px-4 bg-slate-950/60 rounded-xl border border-slate-800">
+                            <i class="fas fa-paper-plane text-2xl text-slate-600 mb-2"></i>
+                            <h4 class="text-xs font-bold text-slate-300">Brak wysłanych notatek</h4>
+                            <p class="text-[11px] text-slate-500 mt-1">Nie wysłałeś jeszcze żadnej szybkiej notatki z hali.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                listEl.innerHTML = notes.map(n => {
+                    const hasReply = Boolean(n.manager_response && n.manager_response.trim());
+                    const isReadByMgr = Boolean(n.is_read);
+
+                    const statusBadge = hasReply 
+                        ? `<span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer" onclick="switchQuickNoteTab('inbox')"><i class="fas fa-comment-dots"></i> Odpowiedziano</span>`
+                        : (isReadByMgr 
+                            ? `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full">✓ Przeczytana przez Key Usera</span>`
+                            : `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full">⏳ Oczekuje na odczyt</span>`
+                        );
+
+                    return `
+                        <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-left space-y-2">
+                            <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-[10px] text-slate-400">${n.timestamp}</span>
+                                    <span class="font-bold text-cyan-300">${n.line_name || 'Ogólna / Cała Hala'}</span>
+                                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">${n.priority || 'INFO'}</span>
+                                </div>
+                                <div>${statusBadge}</div>
+                            </div>
+                            <div class="text-xs text-slate-200">${n.content}</div>
+                            ${hasReply ? `
+                                <div class="p-2 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-[11px] text-cyan-200">
+                                    <b class="text-cyan-400">Odpowiedź Key Usera:</b> ${n.manager_response}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch(e) {
+                console.warn("Błąd renderowania wysłanych audytora:", e);
+                listEl.innerHTML = '<div class="text-center py-6 text-xs text-rose-400 italic">Błąd pobierania historii wysłanych.</div>';
+            }
+        };
+
+        window.replyBackToManager = function(lineName, originalNoteId) {
+            window.switchQuickNoteTab('send');
+            const qnLine = document.getElementById('quick-note-line');
+            if (qnLine && lineName) {
+                for (let i = 0; i < qnLine.options.length; i++) {
+                    if (qnLine.options[i].text.includes(lineName) || qnLine.options[i].value.includes(lineName)) {
+                        qnLine.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            const textarea = document.getElementById('quick-note-text');
+            if (textarea) {
+                textarea.value = `Odp. do notatki #${originalNoteId}: `;
+                textarea.focus();
+                window.updateQuickNoteCounter(textarea);
+            }
+        };
+
+        window.markAuditorResponseAsRead = async function(noteId) {
+            try {
+                const res = await fetch(`/api/auditor-notes/${noteId}/auditor-read`, { method: 'PATCH' });
+                if (res.ok) {
+                    await window.loadAuditorInboxMessages();
+                    if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
+                }
+            } catch(e) {
+                console.error("Błąd oznaczania odpowiedzi jako przeczytana:", e);
+            }
+        };
+
+        window.markAllAuditorInboxAsRead = async function() {
+            try {
+                const audParam = (state.auditor_id || state.auditor || '').trim();
+                const res = await fetch(`/api/auditor-notes/auditor-mark-all-read?auditor=${encodeURIComponent(audParam)}`, { method: 'POST' });
+                if (res.ok) {
+                    await window.loadAuditorInboxMessages();
+                    if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
+                }
+            } catch(e) {
+                console.error("Błąd oznaczania wszystkich jako przeczytane:", e);
+            }
+        };
+
+        window.updateAuditorNotesBadge = async function() {
+            try {
+                const audParam = (state.auditor_id || state.auditor || '').trim();
+                const res = await fetch(`/api/auditor-notes/counts?auditor=${encodeURIComponent(audParam)}`);
+                if (!res.ok) return;
+                const counts = await res.json();
+                
+                // 1. Plakietka na tagu w górnym doku (#badge-dock-notes):
+                const dockBadge = document.getElementById('badge-dock-notes');
+                if (dockBadge) {
+                    const countToShow = (state.role === 'MANAGER') ? counts.manager_unread : counts.auditor_unread;
+                    if (countToShow > 0) {
+                        dockBadge.textContent = countToShow > 99 ? '99+' : countToShow;
+                        dockBadge.classList.remove('hidden');
+                    } else {
+                        dockBadge.classList.add('hidden');
+                    }
+                }
+
+                // 2. Plakietka w modalu na zakładce "Odbierz / Odpowiedzi" (#qn-badge-inbox):
+                const modalInboxBadge = document.getElementById('qn-badge-inbox');
+                if (modalInboxBadge) {
+                    if (counts.auditor_unread > 0) {
+                        modalInboxBadge.textContent = counts.auditor_unread;
+                        modalInboxBadge.classList.remove('hidden');
+                    } else {
+                        modalInboxBadge.classList.add('hidden');
+                    }
+                }
+            } catch(e) {
+                console.warn("Błąd pobierania licznika wiadomości:", e);
             }
         };
 
@@ -4698,9 +5049,17 @@
         });
     }
 
-    // Okresowe ciche odświeżanie zaplanowanych audytów i plakietki powiadomień iPhone (co 15 sekund)
+    // Okresowe ciche odświeżanie zaplanowanych audytów i plakietek powiadomień iPhone (co 15 sekund)
     setInterval(() => {
         if (state && state.token && state.auditor_id && typeof loadScheduleAndRender === 'function') {
             loadScheduleAndRender().catch(() => {});
         }
+        if (typeof updateAuditorNotesBadge === 'function') {
+            updateAuditorNotesBadge().catch(() => {});
+        }
     }, 15000);
+
+    // Wywołanie startowe dla plakietek wiadomości
+    if (typeof updateAuditorNotesBadge === 'function') {
+        setTimeout(() => updateAuditorNotesBadge().catch(() => {}), 1000);
+    }
