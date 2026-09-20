@@ -451,6 +451,14 @@
         }
 
         function updateTopNavActiveState(modId) {
+            const quickNoteTag = document.getElementById('tag-quick-note');
+            if (quickNoteTag) {
+                if (state.role === 'MANAGER') {
+                    quickNoteTag.classList.add('hidden');
+                } else {
+                    quickNoteTag.classList.remove('hidden');
+                }
+            }
             ['tag-hub', 'tag-calendar', 'tag-agent'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('ios-tab-active');
@@ -739,6 +747,14 @@
                     } else {
                         roleEl.innerText = "👤 AUDYTOR";
                         roleEl.className = "text-[8.5px] font-black text-emerald-400 uppercase block tracking-wider";
+                    }
+                // U Key Usera skrzynka odbiorcza pozostaje w Kaflu 8; tag w górnym doku jest ukrywany
+                const quickNoteTag = document.getElementById('tag-quick-note');
+                if (quickNoteTag) {
+                    if (state.role === "MANAGER") {
+                        quickNoteTag.classList.add('hidden');
+                    } else {
+                        quickNoteTag.classList.remove('hidden');
                     }
                 }
 
@@ -3170,15 +3186,29 @@
 
         window.updateAuditorNotesBadge = async function() {
             try {
+                const quickNoteTag = document.getElementById('tag-quick-note');
+                if (quickNoteTag) {
+                    if (state.role === 'MANAGER') {
+                        quickNoteTag.classList.add('hidden');
+                    } else {
+                        quickNoteTag.classList.remove('hidden');
+                    }
+                }
+
+                if (state.role === 'MANAGER') {
+                    // U Key Usera nie ma tagu w górnym doku - skrzynka odbiorcza pozostaje w Kaflu 8
+                    return;
+                }
+
                 const audParam = (state.auditor_id || state.auditor || '').trim();
                 const res = await fetch(`/api/auditor-notes/counts?auditor=${encodeURIComponent(audParam)}`);
                 if (!res.ok) return;
                 const counts = await res.json();
                 
-                // 1. Plakietka na tagu w górnym doku (#badge-dock-notes):
+                // 1. Plakietka na tagu w górnym doku (#badge-dock-notes) tylko dla Audytora:
                 const dockBadge = document.getElementById('badge-dock-notes');
                 if (dockBadge) {
-                    const countToShow = (state.role === 'MANAGER') ? counts.manager_unread : counts.auditor_unread;
+                    const countToShow = counts.auditor_unread || 0;
                     if (countToShow > 0) {
                         dockBadge.textContent = countToShow > 99 ? '99+' : countToShow;
                         dockBadge.classList.remove('hidden');
