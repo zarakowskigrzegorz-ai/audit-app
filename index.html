@@ -1697,10 +1697,14 @@
                                         <span>Czat AI</span>
                                     </button>
                                     <button onclick="event.stopPropagation(); showModule('agent'); setTimeout(() => sendQuickPrompt('HACCP: Jakie są kluczowe punkty krytyczne (CCP1-CCP3) i limity na tej linii?'), 200);" class="px-2 py-1.5 bg-slate-900 hover:bg-purple-900/50 rounded-xl text-[10px] font-black text-purple-300 border border-purple-400/40 hover:border-purple-300 transition-transform active:scale-95 flex items-center justify-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" stroke="none"/>
+                                        <svg class="w-3.5 h-3.5 text-amber-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                                            <path d="M5 3v4"/>
+                                            <path d="M19 17v4"/>
+                                            <path d="M3 5h4"/>
+                                            <path d="M17 19h4"/>
                                         </svg>
-                                        <span>Briefing</span>
+                                        <span>Odprawa CCP</span>
                                     </button>
                                 </div>
                                 <button onclick="event.stopPropagation(); showModule('agent');" class="w-full py-1 px-2 bg-slate-900/90 hover:bg-purple-900/50 rounded-lg text-[9px] font-black text-purple-200 border border-purple-400/40 hover:border-purple-300 transition-colors flex items-center justify-center gap-1.5">
@@ -2527,7 +2531,7 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260920_v39"></script>
+    <script src="/static/js/app.js?v=20260920_v40"></script>
     <script src="/static/js/auth_caps.js?v=20260920_v4"></script>
 
     <!-- MODAL: SZYBKA WIADOMOŚĆ DO KEY USERA -->
