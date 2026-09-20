@@ -135,7 +135,16 @@ async def save_audit(
             bhp_evac_ppoz_ok, bhp_status, initial_analysis, initial_verdict, initial_risk, checklist_results, photo_path, full_notes, ko_failed_flag
         ))
         audit_id = cursor.lastrowid
-        await db.execute("UPDATE audit_schedules SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP WHERE line = ? AND status = 'PLANOWANY'", (line,))
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        await db.execute("""
+            UPDATE audit_schedules 
+            SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP 
+            WHERE id = (
+                SELECT id FROM audit_schedules 
+                WHERE line = ? AND status = 'PLANOWANY' AND scheduled_date <= ? 
+                ORDER BY scheduled_date ASC LIMIT 1
+            )
+        """, (line, today_str))
         await db.commit()
 
     # ASYNCHRONICZNE TŁO (BACKGROUND TASK): Uruchomienie modelu SLM AI bez blokowania odpowiedzi HTTP

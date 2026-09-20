@@ -45,18 +45,28 @@ async def list_schedules(auditor: Optional[str] = None, role: Optional[str] = "M
             else:
                 await c.execute("SELECT * FROM audit_schedules ORDER BY scheduled_date ASC")
         else:
+            clean_aud = auditor.strip()
+            # Wyodrębnienie nazwiska i inicjałów, aby dopasować warianty: "Grzegorz Zarakowski", "G. Zarakowski", "Grzegorz Zarakowski (Lead Auditor)"
+            parts = [p.strip() for p in clean_aud.replace("(", " ").replace(")", " ").split() if p.strip()]
+            last_name = parts[-1] if parts else clean_aud
+            first_init = (parts[0][0] + ".") if parts else ""
+
+            query_conditions = """
+                (
+                    lead_auditor LIKE ? OR backup_auditor LIKE ?
+                    OR lead_auditor LIKE ? OR backup_auditor LIKE ?
+                    OR lead_auditor LIKE ? OR backup_auditor LIKE ?
+                )
+            """
+            params = [
+                f"%{clean_aud}%", f"%{clean_aud}%",
+                f"%{last_name}%", f"%{last_name}%",
+                f"%{first_init}%{last_name}%", f"%{first_init}%{last_name}%"
+            ]
             if status:
-                await c.execute("""
-                    SELECT * FROM audit_schedules 
-                    WHERE (lead_auditor LIKE ? OR backup_auditor LIKE ?) AND status = ?
-                    ORDER BY scheduled_date ASC
-                """, (f"%{auditor}%", f"%{auditor}%", status))
+                await c.execute(f"SELECT * FROM audit_schedules WHERE {query_conditions} AND status = ? ORDER BY scheduled_date ASC", (*params, status))
             else:
-                await c.execute("""
-                    SELECT * FROM audit_schedules 
-                    WHERE lead_auditor LIKE ? OR backup_auditor LIKE ?
-                    ORDER BY scheduled_date ASC
-                """, (f"%{auditor}%", f"%{auditor}%"))
+                await c.execute(f"SELECT * FROM audit_schedules WHERE {query_conditions} ORDER BY scheduled_date ASC", tuple(params))
         rows = [dict(r) for r in await c.fetchall()]
     return rows
 

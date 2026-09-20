@@ -332,7 +332,7 @@
                         </svg>
                         <span>Menu</span>
                     </button>
-                    <button id="tag-calendar" onclick="showModule('calendar')" class="ios-tab-btn px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm text-slate-300 hover:text-white flex items-center gap-2 border border-transparent cursor-pointer">
+                    <button id="tag-calendar" onclick="showModule('calendar')" class="ios-tab-btn px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm text-slate-300 hover:text-white flex items-center gap-2 border border-transparent cursor-pointer relative">
                         <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M3 5v14"/>
                             <path d="M8 6h11"/>
@@ -340,6 +340,8 @@
                             <path d="M8 18h12"/>
                         </svg>
                         <span>Harmonogram</span>
+                        <!-- iPhone-style notification badge -->
+                        <span id="badge-dock-schedule" class="hidden absolute -top-1.5 -right-1 min-w-[19px] h-[19px] px-1 bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-[9.5px] rounded-full flex items-center justify-center shadow-md shadow-rose-950/80 border border-white/50 animate-pulse pointer-events-none">0</span>
                     </button>
                     <button id="tag-agent" onclick="showModule('agent')" class="ios-tab-btn px-3.5 sm:px-4 py-2 rounded-full text-xs sm:text-sm text-slate-300 hover:text-white flex items-center gap-2 border border-transparent cursor-pointer group">
                         <svg class="w-4 h-4 shrink-0 text-purple-400 group-hover:text-purple-300 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1459,7 +1461,7 @@
                             <!-- Awers -->
                             <div class="bws-cap-front flex flex-col justify-between p-3.5 border shadow-xl bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 border-blue-400/60 shadow-blue-500/25 ring-2 ring-blue-400/50 text-white">
                                 <div class="flex justify-between items-start">
-                                    <div class="p-2.5 rounded-2xl bg-black/40 border border-white/10 w-fit text-white">
+                                    <div class="p-2.5 rounded-2xl bg-black/40 border border-white/10 w-fit text-white relative">
                                         <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <rect width="18" height="18" x="3" y="4" rx="2"/>
                                             <line x1="16" x2="16" y1="2" y2="6"/>
@@ -1472,8 +1474,13 @@
                                             <circle cx="12" cy="18" r="0.8" fill="currentColor"/>
                                             <circle cx="16" cy="18" r="0.8" fill="currentColor"/>
                                         </svg>
+                                        <!-- iPhone-style notification badge na ikonie kafla -->
+                                        <span id="badge-tile-auditor-schedule" class="hidden absolute -top-1.5 -right-1.5 min-w-[19px] h-[19px] px-1 bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-[9.5px] rounded-full flex items-center justify-center shadow-md shadow-rose-950/80 border border-white/50 animate-pulse pointer-events-none">0</span>
                                     </div>
-                                    <span class="text-[8px] font-black bg-blue-950/80 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-400/40 uppercase tracking-wider">Operacyjny</span>
+                                    <div class="flex items-center gap-1.5">
+                                        <span id="pill-tile-auditor-schedule" class="hidden text-[8px] font-black bg-rose-950 text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/40 animate-pulse">0 ZAPLANOWANYCH</span>
+                                        <span class="text-[8px] font-black bg-blue-950/80 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-400/40 uppercase tracking-wider">Operacyjny</span>
+                                    </div>
                                 </div>
                                 <div>
                                     <h3 class="text-xs font-black text-white drop-shadow mb-0.5">1. Mój Harmonogram</h3>
@@ -2531,7 +2538,7 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="/static/js/app.js?v=20260920_v40"></script>
+    <script src="/static/js/app.js?v=20260920_v41"></script>
     <script src="/static/js/auth_caps.js?v=20260920_v4"></script>
 
     <!-- MODAL: SZYBKA WIADOMOŚĆ DO KEY USERA -->

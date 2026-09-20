@@ -123,6 +123,7 @@
                     } catch(e) { console.warn('Błąd cichego odświeżania:', e); }
                 } else {
                     if (typeof loadProductionLines === 'function') loadProductionLines();
+                    if (typeof loadScheduleAndRender === 'function') loadScheduleAndRender();
                 }
             }
             if(modId === 'calendar') loadScheduleAndRender();
@@ -878,16 +879,50 @@
             };
         }
 
+        function updateAuditorScheduleBadges(schedules) {
+            if (!Array.isArray(schedules)) return;
+            // Zaplanowane audyty ze statusem PLANOWANY
+            const plannedAudits = schedules.filter(s => s.status === 'PLANOWANY');
+            const count = plannedAudits.length;
+
+            // 1. Mała plakietka w stylu iPhone na tagu "Harmonogram" w górnym doku (#tag-calendar):
+            const dockBadge = document.getElementById('badge-dock-schedule');
+            if (dockBadge) {
+                if (count > 0) {
+                    dockBadge.textContent = count > 99 ? '99+' : count;
+                    dockBadge.classList.remove('hidden');
+                } else {
+                    dockBadge.classList.add('hidden');
+                }
+            }
+
+            // 2. Mała plakietka w stylu iPhone na ikonie kafla 1 u audytora (#aud-tile-calendar):
+            const tileBadge = document.getElementById('badge-tile-auditor-schedule');
+            const tilePill = document.getElementById('pill-tile-auditor-schedule');
+            if (tileBadge) {
+                if (count > 0) {
+                    tileBadge.textContent = count > 99 ? '99+' : count;
+                    tileBadge.classList.remove('hidden');
+                } else {
+                    tileBadge.classList.add('hidden');
+                }
+            }
+            if (tilePill) {
+                if (count > 0) {
+                    tilePill.textContent = `${count} ZAPLANOWANYCH`;
+                    tilePill.classList.remove('hidden');
+                } else {
+                    tilePill.classList.add('hidden');
+                }
+            }
+        }
+
         async function loadScheduleAndRender() {
             try {
                 const res = await fetch(`/api/schedule?auditor=${encodeURIComponent(state.auditor_id)}&role=${state.role}`);
                 const allSchedules = await res.json();
-                // Audytor widzi tylko zaplanowane (wykonane znikaja do historii), Manager widzi calosc
-                if (state.role !== 'MANAGER') {
-                    schedulesData = allSchedules.filter(s => s.status !== 'WYKONANY');
-                } else {
-                    schedulesData = allSchedules;
-                }
+                schedulesData = allSchedules;
+                updateAuditorScheduleBadges(allSchedules);
                 renderCalendar();
             } catch(e) { schedulesData = []; }
         }
@@ -977,13 +1012,13 @@
                         const currentFullDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(dateIter).padStart(2, '0')}`;
                         const holidayName = holidays[currentFullDate], isToday = currentFullDate === todayStr;
                         let dayAudits = schedulesData.filter(s => s.scheduled_date === currentFullDate);
-                        if (state.role !== 'MANAGER') {
+                        if (state.role !== 'MANAGER' && activeSelectedFilter !== 'WYKONANY') {
                             dayAudits = dayAudits.filter(s => s.status !== 'WYKONANY');
                         }
 
-                        // Ścisły filtr wyłączny: jeśli nic nie jest wciśnięte -> brak audytów
+                        // Filtr tagów: jeśli żaden nie jest wybrany -> pokazujemy wszystkie zaplanowane/aktywne audyty
                         dayAudits = dayAudits.filter(a => {
-                            if (!activeSelectedFilter) return false;
+                            if (!activeSelectedFilter) return true;
                             const aType = (a.audit_type || "HACCP").toUpperCase().trim();
                             const isCompleted = (a.status === 'WYKONANY');
                             const isOverdue = (!isCompleted && currentFullDate < todayStr);
@@ -994,7 +1029,7 @@
                             if (activeSelectedFilter === 'WYKONANY') return isCompleted;
                             if (activeSelectedFilter === 'SPOZNIONY') return isOverdue;
                             if (activeSelectedFilter === 'SWIETO') return !!holidayName;
-                            return false;
+                            return true;
                         });
                         
                         let badgeHtml = "";
@@ -4663,4 +4698,9 @@
         });
     }
 
-
+    // Okresowe ciche odświeżanie zaplanowanych audytów i plakietki powiadomień iPhone (co 15 sekund)
+    setInterval(() => {
+        if (state && state.token && state.auditor_id && typeof loadScheduleAndRender === 'function') {
+            loadScheduleAndRender().catch(() => {});
+        }
+    }, 15000);
