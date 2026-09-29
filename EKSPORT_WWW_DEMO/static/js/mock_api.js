@@ -216,7 +216,7 @@
                     (s.lead_auditor && s.lead_auditor.toLowerCase().includes(audLower)) ||
                     (s.backup_auditor && s.backup_auditor.toLowerCase().includes(audLower))
                 );
-                return jsonResponse(filtered.length > 0 ? filtered : schedules);
+                return jsonResponse(filtered);
             }
         }
 
@@ -289,7 +289,7 @@
             const countBefore = schedules.length;
             schedules = schedules.filter(s => {
                 if (!s.scheduled_date) return true;
-                if (s.scheduled_date >= startDateStr && s.scheduled_date <= endDateStr && s.status !== 'WYKONANY') {
+                if (s.scheduled_date >= startDateStr && s.scheduled_date <= endDateStr) {
                     return false;
                 }
                 return true;
@@ -302,6 +302,72 @@
         if (cleanUrl.endsWith('/api/schedule/clear-all') && method === 'POST') {
             setStorage('schedules_v3', []);
             return jsonResponse({ status: "success", deleted: 0, message: "Wyczyszczono wszystkie audyty" });
+        }
+
+        // Automatyczne generowanie audytów (mock)
+        if (cleanUrl.endsWith('/api/schedule/auto') && method === 'POST') {
+            const lines = bodyObj.lines || ['Linia L1 (Masa Konszowanie)'];
+            const auditTypes = bodyObj.audit_types || ['HACCP'];
+            const startYear = bodyObj.start_year || new Date().getFullYear();
+            const startMonth = bodyObj.start_month || (new Date().getMonth() + 1);
+            const startDay = bodyObj.start_day || 1;
+            const period = bodyObj.period_months || 1;
+            const includeWeekends = Boolean(bodyObj.include_weekends);
+
+            const startDate = new Date(startYear, startMonth - 1, startDay);
+            const endTotalM = startMonth + period - 1;
+            const endYear = startYear + Math.floor((endTotalM - 1) / 12);
+            const endMonth = ((endTotalM - 1) % 12) + 1;
+            const lastDay = new Date(endYear, endMonth, 0).getDate();
+            const endDate = new Date(endYear, endMonth - 1, lastDay);
+
+            let schedules = getStorage('schedules_v3', initDefaultSchedules());
+            const pad = n => String(n).padStart(2, '0');
+            const startIso = `${startYear}-${pad(startMonth)}-${pad(startDay)}`;
+            const endIso = `${endYear}-${pad(endMonth)}-${pad(lastDay)}`;
+
+            schedules = schedules.filter(s => !(s.scheduled_date && s.scheduled_date >= startIso && s.scheduled_date <= endIso));
+
+            const auditors = ['Grzegorz Zarakowski', 'J. Kowalski', 'A. Nowak'];
+            let audIdx = 0;
+            let count = 0;
+
+            let cur = new Date(startDate);
+            while (cur <= endDate) {
+                const dayOfWeek = cur.getDay();
+                if (!includeWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
+                    cur.setDate(cur.getDate() + 1);
+                    continue;
+                }
+                const curDateStr = `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`;
+                for (const line of lines) {
+                    for (const aType of auditTypes) {
+                        const leadAud = auditors[audIdx % auditors.length];
+                        const backupAud = auditors[(audIdx + 1) % auditors.length];
+                        audIdx++;
+                        schedules.push({
+                            id: Date.now() + Math.floor(Math.random() * 1000000) + count,
+                            scheduled_date: curDateStr,
+                            line: line,
+                            audit_type: aType,
+                            lead_auditor: leadAud,
+                            backup_auditor: backupAud,
+                            status: 'PLANOWANY',
+                            notes: 'Wygenerowano automatycznie'
+                        });
+                        count++;
+                    }
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            setStorage('schedules_v3', schedules);
+            return jsonResponse({
+                status: 'success',
+                count: count,
+                start_date: `${pad(startDay)}.${pad(startMonth)}.${startYear}`,
+                end_date: `${pad(lastDay)}.${pad(endMonth)}.${endYear}`
+            });
         }
 
         // Czyszczenie zakresu harmonogramu

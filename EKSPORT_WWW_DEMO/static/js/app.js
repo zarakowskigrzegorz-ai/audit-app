@@ -1088,12 +1088,20 @@
 
         async function loadScheduleAndRender() {
             try {
-                const res = await fetch(`/api/schedule?auditor=${encodeURIComponent(state.auditor_id)}&role=${state.role}`);
-                const allSchedules = await res.json();
-                schedulesData = allSchedules;
-                updateAuditorScheduleBadges(allSchedules);
+                const url = `/api/schedule?auditor=${encodeURIComponent(state.auditor_id)}&role=${state.role}&_t=${Date.now()}`;
+                const res = await apiFetch(url, { cache: 'no-store' });
+                if (res.ok) {
+                    const allSchedules = await res.json();
+                    schedulesData = Array.isArray(allSchedules) ? allSchedules : [];
+                    updateAuditorScheduleBadges(schedulesData);
+                    renderCalendar();
+                }
+            } catch(e) { 
+                console.error("loadScheduleAndRender error:", e);
+                schedulesData = []; 
+                updateAuditorScheduleBadges([]);
                 renderCalendar();
-            } catch(e) { schedulesData = []; }
+            }
         }
 
         function changeMonth(delta) {
@@ -1819,7 +1827,7 @@
             const payload = {
                 start_year: parseInt(document.getElementById('autoplan-year').value) || new Date().getFullYear(),
                 start_month: parseInt(document.getElementById('autoplan-month').value) || (new Date().getMonth() + 1),
-                start_day: new Date().getDate(),
+                start_day: 1,
                 period_months: state.selected_period_months || 1,
                 lines: lines,
                 audit_types: types,
@@ -5595,23 +5603,22 @@
             if (Array.isArray(schedulesData)) {
                 schedulesData = schedulesData.filter(s => {
                     if (!s.scheduled_date) return true;
-                    if (s.scheduled_date >= startDateStr && s.scheduled_date <= endDateStr) {
-                        return false;
-                    }
-                    return true;
+                    const sDate = String(s.scheduled_date).slice(0, 10);
+                    return !(sDate >= startDateStr && sDate <= endDateStr);
                 });
             }
 
-            // Natychmiastowa aktualizacja plakietek / ikon ilości w doku i na kaflu
+            // Natychmiastowe odświeżenie widoku kalendarza i plakietek ilości bez opóźnienia
+            if (typeof renderCalendar === 'function') {
+                renderCalendar();
+            }
             if (typeof updateAuditorScheduleBadges === 'function') {
                 updateAuditorScheduleBadges(schedulesData);
             }
 
-            // Odświeżenie danych z serwera i ponowne wyrenderowanie kalendarza
+            // Odświeżenie danych z serwera (z anty-cache)
             if (typeof loadScheduleAndRender === 'function') {
                 await loadScheduleAndRender();
-            } else if (typeof renderCalendar === 'function') {
-                renderCalendar();
             }
 
             if (typeof updateAutoPlanPreview === 'function') {

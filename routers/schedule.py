@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, Depends, Header
+from fastapi import APIRouter, HTTPException, Query, Depends, Header, Response
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from database import get_db
@@ -36,7 +36,10 @@ class AutoPlanModel(BaseModel):
 
 @router.get("")
 @router.get("/")
-async def list_schedules(auditor: Optional[str] = None, role: Optional[str] = "MANAGER", status: Optional[str] = None):
+async def list_schedules(response: Response, auditor: Optional[str] = None, role: Optional[str] = "MANAGER", status: Optional[str] = None):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     async with get_db() as conn:
         c = await conn.cursor()
         if role == "MANAGER" or not auditor:
@@ -233,8 +236,8 @@ async def router_clear_month(payload: ClearMonthModel, authorization: Optional[s
     if authorization:
         try:
             user = await get_current_user(authorization)
-            if user.get("role") != "MANAGER":
-                raise HTTPException(status_code=403, detail="Tylko Kierownik Jakości może czyścić harmonogram")
+            if user.get("role") not in ["MANAGER", "AUDITOR"]:
+                raise HTTPException(status_code=403, detail="Brak uprawnień do modyfikacji harmonogramu")
         except HTTPException:
             raise
         except Exception:
@@ -271,8 +274,8 @@ async def router_clear_all(authorization: Optional[str] = Header(None)):
     if authorization:
         try:
             user = await get_current_user(authorization)
-            if user.get("role") != "MANAGER":
-                raise HTTPException(status_code=403, detail="Tylko Kierownik Jakości może czyścić harmonogram")
+            if user.get("role") not in ["MANAGER", "AUDITOR"]:
+                raise HTTPException(status_code=403, detail="Brak uprawnień do modyfikacji harmonogramu")
         except HTTPException:
             raise
         except Exception:
