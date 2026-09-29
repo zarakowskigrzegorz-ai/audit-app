@@ -1556,11 +1556,15 @@
                             <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
                             <span>Generuj audyty na 1 miesiąc</span>
                         </button>
-                        <button type="button" id="btn-clear-auto-schedule" onclick="clearCurrentMonthSchedule()" class="tile-3d bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 text-rose-300 px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer">
+                        <button type="button" id="btn-clear-auto-schedule" onclick="clearCurrentMonthSchedule()" class="tile-3d bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 text-rose-300 px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer" title="Wyczyść zaplanowane audyty dla wybranego okresu">
                             <i class="fa-solid fa-trash-can text-rose-400"></i>
                             <span id="btn-clear-auto-schedule-text">Wyczyść 1 miesiąc</span>
                         </button>
-                        <button onclick="closeAutoPlanModal()" class="tile-3d bg-slate-800 px-4 py-2 text-xs font-bold text-slate-400 cursor-pointer hover:text-white transition">Anuluj</button>
+                        <button type="button" onclick="clearAllSchedules()" class="tile-3d bg-slate-900 hover:bg-rose-950/80 border border-slate-700 hover:border-rose-500/50 text-slate-400 hover:text-rose-300 px-2.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer" title="Wyczyść wszystkie audyty ze wszystkich miesięcy">
+                            <i class="fa-solid fa-broom text-rose-400/80"></i>
+                            <span>Wyczyść wszystko</span>
+                        </button>
+                        <button onclick="closeAutoPlanModal()" class="tile-3d bg-slate-800 px-3.5 py-2 text-xs font-bold text-slate-400 cursor-pointer hover:text-white transition">Anuluj</button>
                     </div>
                 </div>
             </div>
@@ -2727,7 +2731,7 @@
     <!-- FALLBACK MOCK API DLA WERSJI STATYCZNEJ / WWW OFFLINE -->
     <script src="static/js/mock_api.js?v=20260929_v5"></script>
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="static/js/app.js?v=20260929_v59"></script>
+    <script src="static/js/app.js?v=20260929_v60"></script>
     <script src="static/js/auth_caps.js?v=20260920_v4"></script>
 
     <!-- MODAL: LIVE CHAT OPERACYJNY (HALA ↔ BIURO / AUDYTORZY ↔ KIEROWNIK) -->

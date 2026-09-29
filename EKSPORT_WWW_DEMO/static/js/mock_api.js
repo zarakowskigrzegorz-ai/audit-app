@@ -298,6 +298,12 @@
             return jsonResponse({ status: "success", deleted: countBefore - schedules.length, start_date: startDateStr, end_date: endDateStr });
         }
 
+        // Czyszczenie całego harmonogramu
+        if (cleanUrl.endsWith('/api/schedule/clear-all') && method === 'POST') {
+            setStorage('schedules_v3', []);
+            return jsonResponse({ status: "success", deleted: 0, message: "Wyczyszczono wszystkie audyty" });
+        }
+
         // Czyszczenie zakresu harmonogramu
         if (cleanUrl.endsWith('/api/schedule/clear-range') && method === 'POST') {
             const months = bodyObj.months || 1;

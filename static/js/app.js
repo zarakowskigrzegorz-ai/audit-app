@@ -1047,9 +1047,12 @@
 
         function updateAuditorScheduleBadges(schedules) {
             if (!Array.isArray(schedules)) return;
-            // Zaplanowane audyty ze statusem PLANOWANY
-            const plannedAudits = schedules.filter(s => s.status === 'PLANOWANY');
-            const count = plannedAudits.length;
+            // Zaplanowane audyty ze statusem PLANOWANY w aktywnym/oglądanym miesiącu
+            const curYear = (currentCalDate instanceof Date && !isNaN(currentCalDate.getTime())) ? currentCalDate.getFullYear() : new Date().getFullYear();
+            const curMonth = (currentCalDate instanceof Date && !isNaN(currentCalDate.getTime())) ? (currentCalDate.getMonth() + 1) : (new Date().getMonth() + 1);
+            const prefix = `${curYear}-${String(curMonth).padStart(2, '0')}`;
+            const monthPlannedAudits = schedules.filter(s => s.scheduled_date && s.scheduled_date.startsWith(prefix) && s.status === 'PLANOWANY');
+            const count = monthPlannedAudits.length;
 
             // 1. Mała plakietka w stylu iPhone na tagu "Harmonogram" w górnym doku (#tag-calendar):
             const dockBadge = document.getElementById('badge-dock-schedule');
@@ -1096,6 +1099,7 @@
         function changeMonth(delta) {
             currentCalDate.setDate(1);
             currentCalDate.setMonth(currentCalDate.getMonth() + delta);
+            updateAuditorScheduleBadges(schedulesData);
             renderCalendar();
         }
 
@@ -1748,12 +1752,14 @@
             const dock = document.getElementById('bottom-dock');
             if (dock) dock.classList.add('hidden');
             document.getElementById('modal-autoplan').classList.remove('hidden'); 
-            const today = new Date();
+            const targetDate = (currentCalDate instanceof Date && !isNaN(currentCalDate.getTime())) ? currentCalDate : new Date();
+            const targetMonth = targetDate.getMonth() + 1;
+            const targetYear = targetDate.getFullYear();
             const mEl = document.getElementById('autoplan-month');
             const yEl = document.getElementById('autoplan-year');
-            if (mEl) mEl.value = today.getMonth() + 1;
-            if (yEl) yEl.value = today.getFullYear();
-            autoPlanCalDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            if (mEl) mEl.value = targetMonth;
+            if (yEl) yEl.value = targetYear;
+            autoPlanCalDate = new Date(targetYear, targetMonth - 1, 1);
 
             const autoLines = document.getElementById('autoplan-lines-container');
             if (!autoLines || autoLines.children.length === 0) {
@@ -5507,6 +5513,40 @@
         }
     };
 
+    
+    window.clearAllSchedules = async function() {
+        if (!confirm('Czy na pewno chcesz usunąć WSZYSTKIE audyty ze wszystkich miesięcy w całym harmonogramie?')) {
+            return;
+        }
+
+        try {
+            const res = await apiFetch('/api/schedule/clear-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                alert(`Błąd podczas usuwania: ${errData.detail || 'Błąd serwera'}`);
+                return;
+            }
+
+            schedulesData = [];
+            updateAuditorScheduleBadges([]);
+            if (typeof renderCalendar === 'function') {
+                renderCalendar();
+            }
+            if (typeof updateAutoPlanPreview === 'function') {
+                updateAutoPlanPreview(false);
+            }
+            closeAutoPlanModal();
+            alert('Pomyślnie wyczyszczono cały harmonogram!');
+        } catch (err) {
+            console.error('Błąd podczas czyszczenia całego harmonogramu:', err);
+            alert('Błąd połączenia z serwerem.');
+        }
+    };
+
     window.clearCurrentMonthSchedule = async function() {
         const monthSelect = document.getElementById('autoplan-month');
         const yearSelect = document.getElementById('autoplan-year');
@@ -5555,7 +5595,7 @@
             if (Array.isArray(schedulesData)) {
                 schedulesData = schedulesData.filter(s => {
                     if (!s.scheduled_date) return true;
-                    if (s.scheduled_date >= startDateStr && s.scheduled_date <= endDateStr && s.status !== 'WYKONANY') {
+                    if (s.scheduled_date >= startDateStr && s.scheduled_date <= endDateStr) {
                         return false;
                     }
                     return true;

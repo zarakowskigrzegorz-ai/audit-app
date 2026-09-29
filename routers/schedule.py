@@ -251,7 +251,7 @@ async def router_clear_month(payload: ClearMonthModel, authorization: Optional[s
 
     async with get_db() as conn:
         cursor = await conn.execute(
-            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ? AND (status != 'WYKONANY' OR status IS NULL)",
+            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ?",
             (start_date, end_date)
         )
         deleted_count = cursor.rowcount
@@ -264,4 +264,27 @@ async def router_clear_month(payload: ClearMonthModel, authorization: Optional[s
         "start_date": start_date,
         "end_date": end_date,
         "message": f"Usunięto {deleted_count} zaplanowanych audytów na okres: {label} ({start_date} – {end_date})"
+    }
+
+@router.post("/clear-all")
+async def router_clear_all(authorization: Optional[str] = Header(None)):
+    if authorization:
+        try:
+            user = await get_current_user(authorization)
+            if user.get("role") != "MANAGER":
+                raise HTTPException(status_code=403, detail="Tylko Kierownik Jakości może czyścić harmonogram")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    async with get_db() as conn:
+        cursor = await conn.execute("DELETE FROM audit_schedules")
+        deleted_count = cursor.rowcount
+        await conn.commit()
+
+    return {
+        "status": "success",
+        "deleted": deleted_count,
+        "message": f"Wyczyszczono wszystkie audyty z harmonogramu (usunięto {deleted_count})"
     }
