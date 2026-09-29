@@ -273,16 +273,29 @@
             return jsonResponse({ status: "ok" });
         }
 
-        // Czyszczenie wybranego miesiąca z harmonogramu
+        // Czyszczenie wybranego miesiąca lub zakresu miesięcy z harmonogramu
         if (cleanUrl.endsWith('/api/schedule/clear-month') && method === 'POST') {
             const m = bodyObj.month || (new Date().getMonth() + 1);
             const y = bodyObj.year || new Date().getFullYear();
-            const prefix = `${y}-${String(m).padStart(2, '0')}`;
+            const period = bodyObj.period_months || 1;
+            const startDateStr = `${y}-${String(m).padStart(2, '0')}-01`;
+            const endTotalMonths = m + period - 1;
+            const endYear = y + Math.floor((endTotalMonths - 1) / 12);
+            const endMonth = ((endTotalMonths - 1) % 12) + 1;
+            const lastDay = new Date(endYear, endMonth, 0).getDate();
+            const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
             let schedules = getStorage('schedules_v3', initDefaultSchedules());
             const countBefore = schedules.length;
-            schedules = schedules.filter(s => !s.scheduled_date || !s.scheduled_date.startsWith(prefix));
+            schedules = schedules.filter(s => {
+                if (!s.scheduled_date) return true;
+                if (s.scheduled_date >= startDateStr && s.scheduled_date <= endDateStr && s.status !== 'WYKONANY') {
+                    return false;
+                }
+                return true;
+            });
             setStorage('schedules_v3', schedules);
-            return jsonResponse({ status: "success", deleted: countBefore - schedules.length });
+            return jsonResponse({ status: "success", deleted: countBefore - schedules.length, start_date: startDateStr, end_date: endDateStr });
         }
 
         // Czyszczenie zakresu harmonogramu

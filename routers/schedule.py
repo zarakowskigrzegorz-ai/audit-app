@@ -182,7 +182,7 @@ async def auto_plan_audits(payload: AutoPlanModel, manager: dict = Depends(requi
         await conn.execute(
             """
             DELETE FROM audit_schedules 
-            WHERE scheduled_date >= ? AND scheduled_date <= ? AND status != 'WYKONANY'
+            WHERE scheduled_date >= ? AND scheduled_date <= ? AND (status != 'WYKONANY' OR status IS NULL)
             """,
             (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
         )
@@ -226,6 +226,7 @@ async def auto_plan_audits(payload: AutoPlanModel, manager: dict = Depends(requi
 class ClearMonthModel(BaseModel):
     month: int
     year: int
+    period_months: Optional[int] = 1
 
 @router.post("/clear-month")
 async def router_clear_month(payload: ClearMonthModel, authorization: Optional[str] = Header(None)):
@@ -239,9 +240,28 @@ async def router_clear_month(payload: ClearMonthModel, authorization: Optional[s
         except Exception:
             pass
 
+    period = payload.period_months if (payload.period_months and payload.period_months > 0) else 1
+    start_date = f"{payload.year:04d}-{payload.month:02d}-01"
+
+    end_total_m = payload.month + period - 1
+    end_year = payload.year + ((end_total_m - 1) // 12)
+    end_month = ((end_total_m - 1) % 12) + 1
+    _, last_day = calendar.monthrange(end_year, end_month)
+    end_date = f"{end_year:04d}-{end_month:02d}-{last_day:02d}"
+
     async with get_db() as conn:
-        prefix = f"{payload.year:04d}-{payload.month:02d}%"
-        cursor = await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix,))
+        cursor = await conn.execute(
+            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ? AND (status != 'WYKONANY' OR status IS NULL)",
+            (start_date, end_date)
+        )
         deleted_count = cursor.rowcount
         await conn.commit()
-    return {"status": "success", "deleted": deleted_count, "message": f"Usunięto {deleted_count} audytów z miesiąca {payload.year}-{payload.month:02d}"}
+
+    label = "1 miesiąc" if period == 1 else (f"{period} miesiące" if period < 5 else f"{period} miesięcy")
+    return {
+        "status": "success",
+        "deleted": deleted_count,
+        "start_date": start_date,
+        "end_date": end_date,
+        "message": f"Usunięto {deleted_count} zaplanowanych audytów na okres: {label} ({start_date} – {end_date})"
+    }

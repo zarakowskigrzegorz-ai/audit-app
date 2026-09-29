@@ -1784,10 +1784,14 @@
                 btn.classList.remove('bg-slate-800', 'text-slate-300');
                 btn.classList.add('tile-selected', 'bg-purple-600', 'text-white', 'border-purple-400');
             }
+            const label = m === 1 ? '1 miesiąc' : (m < 5 ? `${m} miesiące` : `${m} miesięcy`);
             const runBtn = document.getElementById('btn-run-auto-schedule');
             if (runBtn) {
-                const label = m === 1 ? '1 miesiąc' : (m < 5 ? `${m} miesiące` : `${m} miesięcy`);
-                runBtn.innerHTML = `<i class="fas fa-wand-magic-sparkles mr-1.5"></i>Generuj audyty na ${label}`;
+                runBtn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-amber-300 mr-1.5"></i><span>Generuj audyty na ${label}</span>`;
+            }
+            const clearBtnText = document.getElementById('btn-clear-auto-schedule-text');
+            if (clearBtnText) {
+                clearBtnText.textContent = m === 1 ? 'Wyczyść 1 miesiąc' : `Wyczyść ${label}`;
             }
             updateAutoPlanPreview(true);
         }
@@ -5508,16 +5512,30 @@
         const yearSelect = document.getElementById('autoplan-year');
         const monthNum = monthSelect ? parseInt(monthSelect.value) : (new Date().getMonth() + 1);
         const yearNum = yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear();
-        const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex]?.text : 'wybranego miesiąca';
+        const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex]?.text : `Miesiąc ${monthNum}`;
+        const period = state.selected_period_months || 1;
+        const periodLabel = period === 1 ? '1 miesiąc' : (period < 5 ? `${period} miesiące` : `${period} miesięcy`);
+
+        const startDateStr = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
+        const endTotalMonths = monthNum + period - 1;
+        const endYear = yearNum + Math.floor((endTotalMonths - 1) / 12);
+        const endMonth = ((endTotalMonths - 1) % 12) + 1;
+        const lastDay = new Date(endYear, endMonth, 0).getDate();
+        const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         
-        if (!confirm(`Czy na pewno chcesz usunąć wszystkie audyty dla miesiąca: ${monthName} ${yearNum}?`)) {
+        const confirmMsg = period === 1
+            ? `Czy na pewno chcesz usunąć wszystkie zaplanowane audyty dla miesiąca: ${monthName} ${yearNum}?`
+            : `Czy na pewno chcesz usunąć zaplanowane audyty na okres: ${periodLabel} (${startDateStr} do ${endDateStr})?`;
+
+        if (!confirm(confirmMsg)) {
             return;
         }
 
         try {
             const payload = {
                 month: monthNum,
-                year: yearNum
+                year: yearNum,
+                period_months: period
             };
             const res = await apiFetch('/api/schedule/clear-month', {
                 method: 'POST',
@@ -5525,13 +5543,31 @@
                 body: JSON.stringify(payload)
             });
 
-            // Natychmiastowe czyszczenie lokalne w pamięci podręcznej przeglądarki
-            const prefix = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
-            if (Array.isArray(schedulesData)) {
-                schedulesData = schedulesData.filter(s => !s.scheduled_date || !s.scheduled_date.startsWith(prefix));
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                alert(`Błąd podczas usuwania audytów: ${errData.detail || 'Wystąpił błąd serwera.'}`);
+                return;
             }
 
-            // Odświeżenie danych i ponowne wyrenderowanie kalendarza
+            const data = await res.json().catch(() => ({}));
+
+            // Natychmiastowe czyszczenie lokalne w pamięci podręcznej przeglądarki
+            if (Array.isArray(schedulesData)) {
+                schedulesData = schedulesData.filter(s => {
+                    if (!s.scheduled_date) return true;
+                    if (s.scheduled_date >= startDateStr && s.scheduled_date <= endDateStr && s.status !== 'WYKONANY') {
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            // Natychmiastowa aktualizacja plakietek / ikon ilości w doku i na kaflu
+            if (typeof updateAuditorScheduleBadges === 'function') {
+                updateAuditorScheduleBadges(schedulesData);
+            }
+
+            // Odświeżenie danych z serwera i ponowne wyrenderowanie kalendarza
             if (typeof loadScheduleAndRender === 'function') {
                 await loadScheduleAndRender();
             } else if (typeof renderCalendar === 'function') {
@@ -5542,10 +5578,10 @@
                 updateAutoPlanPreview(false);
             }
 
-            alert(`Usunięto audyty dla miesiąca: ${monthName} ${yearNum}`);
+            alert(data.message || `Usunięto audyty na okres: ${periodLabel} (${startDateStr} – ${endDateStr})`);
             closeAutoPlanModal();
         } catch (err) {
-            console.error('Błąd podczas czyszczenia miesiąca:', err);
+            console.error('Błąd podczas czyszczenia harmonogramu:', err);
             alert('Wystąpił błąd podczas usuwania audytów.');
         }
     };
