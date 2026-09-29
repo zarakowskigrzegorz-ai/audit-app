@@ -12,4 +12,5 @@ uploads/
 lora_audit_model*
 adapter_model.safetensors
 adapter_config.json
-
+*.zip
+PACZKA_PROJEKTU/

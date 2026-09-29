@@ -1,10 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Header
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from database import get_db
 from datetime import timedelta, datetime
 import calendar
-from security import require_manager
+from security import require_manager, require_auditor_or_manager, get_current_user
 
 router = APIRouter(prefix="/api/schedule", tags=["Schedule"])
 
@@ -72,7 +72,7 @@ async def list_schedules(auditor: Optional[str] = None, role: Optional[str] = "M
 
 @router.post("")
 @router.post("/")
-async def create_schedule(payload: ScheduleCreateModel, manager: dict = Depends(require_manager)):
+async def create_schedule(payload: ScheduleCreateModel, user: dict = Depends(require_auditor_or_manager)):
     async with get_db() as conn:
         await conn.execute(
             "INSERT INTO audit_schedules (scheduled_date, line, audit_type, lead_auditor, backup_auditor, notes) VALUES (?, ?, ?, ?, ?, ?)",
@@ -91,7 +91,7 @@ async def get_schedule(sched_id: int):
         return dict(row)
 
 @router.put("/{sched_id}")
-async def update_schedule(sched_id: int, payload: ScheduleUpdateModel, manager: dict = Depends(require_manager)):
+async def update_schedule(sched_id: int, payload: ScheduleUpdateModel, user: dict = Depends(require_auditor_or_manager)):
     async with get_db() as conn:
         await conn.execute(
             "UPDATE audit_schedules SET scheduled_date = ?, line = ?, audit_type = ?, lead_auditor = ?, backup_auditor = ?, status = ?, notes = ? WHERE id = ?",
@@ -101,7 +101,7 @@ async def update_schedule(sched_id: int, payload: ScheduleUpdateModel, manager: 
     return {"status": "success"}
 
 @router.put("/{sched_id}/reschedule")
-async def reschedule_audit(sched_id: int, payload: Dict[str, str], manager: dict = Depends(require_manager)):
+async def reschedule_audit(sched_id: int, payload: Dict[str, str], user: dict = Depends(require_auditor_or_manager)):
     new_date = payload.get("new_date")
     if not new_date:
         raise HTTPException(status_code=400, detail="Brak daty")
@@ -146,7 +146,7 @@ async def clear_range(payload: Dict[str, int], manager: dict = Depends(require_m
     
     async with get_db() as conn:
         await conn.execute(
-            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ?",
+            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ? AND status != 'WYKONANY'",
             (today_str, end_date)
         )
         await conn.commit()
@@ -182,7 +182,7 @@ async def auto_plan_audits(payload: AutoPlanModel, manager: dict = Depends(requi
         await conn.execute(
             """
             DELETE FROM audit_schedules 
-            WHERE scheduled_date >= ? AND scheduled_date <= ? AND status != 'ZAKOŃCZONY'
+            WHERE scheduled_date >= ? AND scheduled_date <= ? AND status != 'WYKONANY'
             """,
             (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
         )
@@ -228,9 +228,20 @@ class ClearMonthModel(BaseModel):
     year: int
 
 @router.post("/clear-month")
-async def router_clear_month(payload: ClearMonthModel):
+async def router_clear_month(payload: ClearMonthModel, authorization: Optional[str] = Header(None)):
+    if authorization:
+        try:
+            user = await get_current_user(authorization)
+            if user.get("role") != "MANAGER":
+                raise HTTPException(status_code=403, detail="Tylko Kierownik Jakości może czyścić harmonogram")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
     async with get_db() as conn:
         prefix = f"{payload.year:04d}-{payload.month:02d}%"
-        await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix,))
+        cursor = await conn.execute("DELETE FROM audit_schedules WHERE scheduled_date LIKE ?", (prefix,))
+        deleted_count = cursor.rowcount
         await conn.commit()
-    return {"status": "success"}
+    return {"status": "success", "deleted": deleted_count, "message": f"Usunięto {deleted_count} audytów z miesiąca {payload.year}-{payload.month:02d}"}

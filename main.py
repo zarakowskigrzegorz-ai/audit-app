@@ -34,7 +34,7 @@ app = FastAPI(title="Quality Audit Enterprise", lifespan=lifespan)
 # Ograniczenie CORS zgodnie z ISO 27001 A.8.20 / A.8.22
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

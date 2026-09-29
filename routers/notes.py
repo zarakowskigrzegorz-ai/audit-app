@@ -229,4 +229,70 @@ async def mark_all_notes_as_read():
         await conn.commit()
     return {"status": "success", "read_at": now_str}
 
+# =====================================================================
+# MODUŁ: LIVE CHAT (KOMUNIKATOR AUDYTORZY <-> KIEROWNIK JAKOŚCI)
+# =====================================================================
+class ChatMessageModel(BaseModel):
+    sender_name: str
+    sender_role: Optional[str] = "AUDITOR"
+    line_name: Optional[str] = "Hala Produkcyjna"
+    priority: Optional[str] = "CHAT"  # CHAT, INFO, WARNING, HOLD
+    message: str
+
+@router.get("/chat-messages")
+async def get_chat_messages(limit: int = 100):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            SELECT id, timestamp, auditor_name AS sender_name,
+                   direction AS sender_role, line_name, priority, content AS message, is_read
+            FROM auditor_notes
+            ORDER BY id ASC LIMIT ?
+        """, (limit,))
+        rows = await c.fetchall()
+        return [dict(r) for r in rows]
+
+@router.post("/chat-send")
+async def send_chat_message(payload: ChatMessageModel):
+    if not payload.message or not payload.message.strip():
+        raise HTTPException(status_code=400, detail="Wiadomość nie może być pusta.")
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    direction = "MANAGER" if (payload.sender_role and payload.sender_role.upper() == "MANAGER") else "AUDITOR"
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            INSERT INTO auditor_notes (
+                timestamp, auditor_name, line_name, priority, content, is_read, direction
+            ) VALUES (?, ?, ?, ?, ?, 1, ?)
+        """, (
+            timestamp,
+            payload.sender_name.strip(),
+            payload.line_name.strip() if payload.line_name else "Hala Produkcyjna",
+            payload.priority or "CHAT",
+            payload.message.strip(),
+            direction
+        ))
+        msg_id = c.lastrowid
+        await conn.commit()
+    
+    return {
+        "status": "success",
+        "id": msg_id,
+        "timestamp": timestamp,
+        "sender_name": payload.sender_name,
+        "sender_role": direction,
+        "line_name": payload.line_name or "Hala Produkcyjna",
+        "priority": payload.priority or "CHAT",
+        "message": payload.message.strip()
+    }
+
+@router.post("/chat-clear")
+async def clear_chat_messages():
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("DELETE FROM auditor_notes")
+        await conn.commit()
+    return {"status": "success", "message": "Historia Live Chatu wyczyszczona."}
+
 

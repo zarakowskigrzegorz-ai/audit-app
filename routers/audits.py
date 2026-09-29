@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 import shutil
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Request, Form, UploadFile, File, Depends, status, BackgroundTasks
 from pydantic import BaseModel
@@ -60,6 +61,7 @@ async def save_audit(
     bhp_estop_ok: str = Form("ZGODNY"), bhp_atex_ok: str = Form("ZGODNY"), bhp_hot_cip_ok: str = Form("ZGODNY"),
     bhp_evac_ppoz_ok: str = Form("ZGODNY"), bhp_status: str = Form("BRAK ZGŁOSZEŃ"), slm_analysis: str = Form(""),
     checklist_results: str = Form("{}"), photo: Optional[UploadFile] = File(None), notes: Optional[str] = Form(None),
+    audit_type: str = Form("HACCP"), schedule_id: Optional[int] = Form(None),
     background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     photo_path = None
@@ -119,32 +121,51 @@ async def save_audit(
     initial_risk = "KRYTYCZNE (HOLD LOT)" if (ko_failed_flag == 1 or (slm_analysis and "HOLD LOT" in slm_analysis.upper())) else ("ŚREDNIE" if rule_nok else "NISKIE")
     initial_analysis = slm_analysis if slm_analysis else "Weryfikacja regułowa zakończona. Analiza asystenta SLM AI trwa w tle..."
 
+    clean_audit_type = (audit_type or "HACCP").strip().upper()
     # BŁYSKAWICZNY ZAPIS DO BAZY DANYCH (< 30 ms)
     async with get_db() as db:
         cursor = await db.execute("""
             INSERT INTO audits (timestamp, 
-                auditor_id, line, shift, zone, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
+                auditor_id, line, shift, zone, audit_type, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
                 line_status, ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked, ccp2_magnet_ok, ccp3_sieve_ok,
                 gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok, bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, 
                 bhp_evac_ppoz_ok, bhp_status, slm_analysis, slm_verdict, risk_level, checklist_results, photo_path, notes, ko_failed
-            ) VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            auditor_id, line, shift, zone, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
+            auditor_id, line, shift, zone, clean_audit_type, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
             line_status, ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked, ccp2_magnet_ok, ccp3_sieve_ok,
             gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok, bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, 
             bhp_evac_ppoz_ok, bhp_status, initial_analysis, initial_verdict, initial_risk, checklist_results, photo_path, full_notes, ko_failed_flag
         ))
         audit_id = cursor.lastrowid
         today_str = datetime.now().strftime("%Y-%m-%d")
-        await db.execute("""
-            UPDATE audit_schedules 
-            SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP 
-            WHERE id = (
-                SELECT id FROM audit_schedules 
-                WHERE line = ? AND status = 'PLANOWANY' AND scheduled_date <= ? 
-                ORDER BY scheduled_date ASC LIMIT 1
-            )
-        """, (line, today_str))
+
+        if schedule_id:
+            await db.execute("""
+                UPDATE audit_schedules 
+                SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            """, (schedule_id,))
+        else:
+            upd = await db.execute("""
+                UPDATE audit_schedules 
+                SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP 
+                WHERE id = (
+                    SELECT id FROM audit_schedules 
+                    WHERE line = ? AND audit_type = ? AND status = 'PLANOWANY' AND scheduled_date <= ? 
+                    ORDER BY scheduled_date ASC LIMIT 1
+                )
+            """, (line, clean_audit_type, today_str))
+            if upd.rowcount == 0:
+                await db.execute("""
+                    UPDATE audit_schedules 
+                    SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP 
+                    WHERE id = (
+                        SELECT id FROM audit_schedules 
+                        WHERE line = ? AND status = 'PLANOWANY' AND scheduled_date <= ? 
+                        ORDER BY scheduled_date ASC LIMIT 1
+                    )
+                """, (line, today_str))
         await db.commit()
 
     # ASYNCHRONICZNE TŁO (BACKGROUND TASK): Uruchomienie modelu SLM AI bez blokowania odpowiedzi HTTP

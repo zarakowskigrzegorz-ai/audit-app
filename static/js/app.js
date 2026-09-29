@@ -18,14 +18,14 @@
                 titleEl.className = "text-xs font-black tracking-wider uppercase text-cyan-400";
             } else if (mode === 'success') {
                 box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-emerald-950/90 border-emerald-500/60 text-slate-100 min-w-[340px]";
-                spinner.className = "text-base";
-                spinner.textContent = "✅";
+                spinner.className = "text-base text-emerald-400";
+                spinner.innerHTML = '<i class="fas fa-circle-check"></i>';
                 titleEl.className = "text-xs font-black tracking-wider uppercase text-emerald-400";
                 setTimeout(() => toast.classList.add('hidden'), 3500);
             } else if (mode === 'alert') {
                 box.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-rose-950/90 border-rose-500/60 text-slate-100 min-w-[340px]";
-                spinner.className = "text-base";
-                spinner.textContent = "⚠️";
+                spinner.className = "text-base text-rose-400";
+                spinner.innerHTML = '<i class="fas fa-triangle-exclamation"></i>';
                 titleEl.className = "text-xs font-black tracking-wider uppercase text-rose-400";
                 setTimeout(() => toast.classList.add('hidden'), 5000);
             }
@@ -55,7 +55,7 @@
                 const data = await res.clone().json().catch(() => ({}));
                 const detail = data.detail || '';
                 if (detail.includes("Sesja wygasła") || detail.includes("Wymagana autoryzacja") || detail.includes("Brak tokenu")) {
-                    alert("⚠️ Sesja wygasła lub brak autoryzacji (ISO 27001). Zaloguj się ponownie.");
+                    alert("Sesja wygasła lub brak autoryzacji (ISO 27001). Zaloguj się ponownie.");
                     logout();
                 }
             }
@@ -527,11 +527,26 @@
         });
 
         document.addEventListener('keydown', function(e) {
+            // Wsparcie Undo/Redo w generatorze audytów (modal-autoplan)
+            const autoPlanModal = document.getElementById('modal-autoplan');
+            if (autoPlanModal && !autoPlanModal.classList.contains('hidden')) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (typeof autoPlanHistoryUndo === 'function') autoPlanHistoryUndo();
+                    return;
+                }
+                if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z'))) {
+                    e.preventDefault();
+                    if (typeof autoPlanHistoryRedo === 'function') autoPlanHistoryRedo();
+                    return;
+                }
+            }
+
             const activeForm = document.querySelector('.view-layer:not(.hidden) .view-tracked-form') || document.querySelector('.view-tracked-form:not(.hidden)');
             const formId = activeForm ? activeForm.id : null;
 
-            if (e.ctrlKey && e.key === 'z') { e.preventDefault(); if(formId) formHistory.undo(formId); }
-            if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'Z')) { e.preventDefault(); if(formId) formHistory.redo(formId); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); if(formId) formHistory.undo(formId); }
+            if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z'))) { e.preventDefault(); if(formId) formHistory.redo(formId); }
             if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); navGoBack(); }
             if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); navGoForward(); }
         });
@@ -569,23 +584,23 @@
                 return false;
             }
             if (!window.isSecureContext && location.hostname !== 'localhost') {
-                alert("⚠️ Logowanie biometryczne wymaga bezpiecznego połączenia (HTTPS) lub uruchamiania z localhost.");
+                alert("Logowanie biometryczne wymaga bezpiecznego połączenia (HTTPS) lub uruchamiania z localhost.");
                 return false;
             }
             if (!window.PublicKeyCredential) {
-                alert("⚠️ Twoja przeglądarka nie wspiera logowania biometrycznego.\nSpróbuj Chrome, Safari lub Edge na urządzeniu z systemem iOS/macOS/Windows.");
+                alert("Twoja przeglądarka nie wspiera logowania biometrycznego.\nSpróbuj Chrome, Safari lub Edge na urządzeniu z systemem iOS/macOS/Windows.");
                 return false;
             }
             return true;
         }
 
         async function registerCurrentDeviceBiometrics() {
-            if (!state.user_id) return alert("⚠️ Zaloguj się najpierw kodem PIN, a następnie kliknij ikonę biometrii w nagłówku!");
+            if (!state.user_id) return alert("Zaloguj się najpierw kodem PIN, a następnie kliknij ikonę biometrii w nagłówku!");
             if (!validateWebAuthnEnvironment()) return;
 
             try {
                 const resChall = await fetch(`/api/auth/biometric/register-challenge?user_id=${state.user_id}`, { method: 'POST' });
-                if (!resChall.ok) { alert("❌ Błąd pobierania wyzwania rejestracji."); return; }
+                if (!resChall.ok) { alert("Błąd pobierania wyzwania rejestracji."); return; }
                 const { challenge } = await resChall.json();
                 const enc = new TextEncoder();
 
@@ -613,7 +628,7 @@
                 const credId = bufferToBase64(cred.rawId);
                 
                 if (!credId || credId.length < 8) {
-                    alert("❌ Nie udało się uzyskać prawidłowego identyfikatora biometrycznego.");
+                    alert("Nie udało się uzyskać prawidłowego identyfikatora biometrycznego.");
                     return;
                 }
 
@@ -624,10 +639,10 @@
                 });
 
                 if (resVerify.ok) {
-                    alert("✅ Pomyślnie zarejestrowano biometrię (Face ID / Touch ID / Windows Hello)!\n\nOd tej chwili możesz logować się przyciskiem biometrycznym na ekranie logowania.");
+                    alert("Pomyślnie zarejestrowano biometrię (Face ID / Touch ID / Windows Hello)!\n\nOd tej chwili możesz logować się przyciskiem biometrycznym na ekranie logowania.");
                 } else {
                     const err = await resVerify.json().catch(() => ({}));
-                    alert("❌ Błąd zapisu poświadczenia: " + (err.detail || "Nieznany błąd"));
+                    alert("Błąd zapisu poświadczenia: " + (err.detail || "Nieznany błąd"));
                 }
             } catch(e) {
                 if (e.name === 'NotAllowedError') {
@@ -635,7 +650,7 @@
                 } else if (e.name === 'InvalidStateError') {
                     alert("ℹ️ To urządzenie jest już zarejestrowane dla tego konta.");
                 } else {
-                    alert("❌ Błąd biometrii: " + e.message);
+                    alert("Błąd biometrii: " + e.message);
                 }
             }
         }
@@ -654,7 +669,7 @@
 
             try {
                 const resChallenge = await fetch('/api/auth/biometric/login-challenge');
-                if (!resChallenge.ok) { alert("❌ Błąd serwera podczas pobierania wyzwania."); return; }
+                if (!resChallenge.ok) { alert("Błąd serwera podczas pobierania wyzwania."); return; }
                 const { challenge } = await resChallenge.json();
 
                 const assertion = await navigator.credentials.get({
@@ -669,7 +684,7 @@
 
                 const credId = bufferToBase64(assertion.rawId);
                 if (!credId || credId.length < 8) {
-                    alert("❌ Nieprawidłowy identyfikator biometryczny. Spróbuj zarejestrować urządzenie ponownie.");
+                    alert("Nieprawidłowy identyfikator biometryczny. Spróbuj zarejestrować urządzenie ponownie.");
                     return;
                 }
 
@@ -682,9 +697,9 @@
                 if (!resVerify.ok) {
                     const err = await resVerify.json().catch(() => ({}));
                     if (resVerify.status === 401) {
-                        alert("❌ To urządzenie nie jest powiązane z żadnym kontem.\n\nZaloguj się PIN-em i kliknij ikonę biometrii (🔒 w nagłówku), aby zarejestrować urządzenie.");
+                        alert("To urządzenie nie jest powiązane z żadnym kontem.\n\nZaloguj się PIN-em i kliknij ikonę biometrii w nagłówku, aby zarejestrować urządzenie.");
                     } else {
-                        alert("❌ Błąd logowania: " + (err.detail || "Nieznany błąd"));
+                        alert("Błąd logowania: " + (err.detail || "Nieznany błąd"));
                     }
                     return;
                 }
@@ -695,7 +710,7 @@
                 if (err.name === 'NotAllowedError') {
                     alert("ℹ️ Logowanie biometryczne anulowane lub brak zarejestrowanego klucza dla tej witryny.\n\nZaloguj się najpierw kodem PIN, a następnie powiąż urządzenie ikoną odcisku/twarzy w nagłówku.");
                 } else if (err.name === 'SecurityError') {
-                    alert(`⚠️ Błąd bezpieczeństwa WebAuthn (${err.message}).\n\nUpewnij się, że adres w przeglądarce to http://localhost:8000 (a nie adres IP np. 192.168.x.x lub 127.0.0.1).`);
+                    alert(`Błąd bezpieczeństwa WebAuthn (${err.message}).\n\nUpewnij się, że adres w przeglądarce to http://localhost:8000 (a nie adres IP np. 192.168.x.x lub 127.0.0.1).`);
                 } else {
                     alert("ℹ️ Zaloguj się kodem PIN, a następnie powiąż Face ID/Odcisk ikoną w nagłówku aplikacji.\n\n(" + (err.message || err.name) + ")");
                 }
@@ -729,12 +744,14 @@
 
         async function applyLoginUser(user) {
             try {
-                state.user_id = user.id;
-                state.auditor_id = user.full_name.trim();
-                state.role = user.role;
-                if (user.access_token) {
-                    state.token = user.access_token;
-                    sessionStorage.setItem('quality_audit_token', user.access_token);
+                const userData = (user && user.user) ? user.user : (user || {});
+                state.user_id = userData.id || user.id || 1;
+                state.auditor_id = String(userData.full_name || user.full_name || (state.role === 'MANAGER' ? "Administrator Jakości" : "Grzegorz Zarakowski")).trim();
+                state.role = String(userData.role || user.role || "MANAGER").toUpperCase();
+                const token = user.access_token || (user.user && user.user.access_token);
+                if (token) {
+                    state.token = token;
+                    sessionStorage.setItem('quality_audit_token', token);
                 }
 
                 const auditorEl = document.getElementById('display-auditor');
@@ -742,10 +759,10 @@
                 const roleEl = document.getElementById('display-role');
                 if (roleEl) {
                     if (state.role === "MANAGER") {
-                        roleEl.innerText = "👑 KEY USER (MANAGER)";
+                        roleEl.innerHTML = '<i class="fas fa-crown text-amber-400 mr-1"></i>KEY USER (MANAGER)';
                         roleEl.className = "text-[8.5px] font-black text-blue-400 uppercase block tracking-wider";
                     } else {
-                        roleEl.innerText = "👤 AUDYTOR";
+                        roleEl.innerHTML = '<i class="fas fa-user-shield text-emerald-400 mr-1"></i>AUDYTOR';
                         roleEl.className = "text-[8.5px] font-black text-emerald-400 uppercase block tracking-wider";
                     }
                 }
@@ -832,22 +849,153 @@
             } catch(e) {}
         }
 
+        let activeAuditorMatrixFilter = 'ALL';
+        let cachedAuditorsData = [];
+
+        function parseQualifications(raw) {
+            if (!raw) return [];
+            if (Array.isArray(raw)) return raw;
+            if (typeof raw === 'string') {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch(e) {}
+                return raw.split(',').map(s => s.trim()).filter(Boolean);
+            }
+            return [];
+        }
+
+        window.filterAuditorsMatrix = function(type) {
+            activeAuditorMatrixFilter = type ? type.toUpperCase() : 'ALL';
+            renderAuditorsListCards();
+        };
+
+        function renderAuditorsListCards() {
+            const container = document.getElementById('auditors-list-container');
+            if (!container) return;
+
+            // Stylizacja przycisków filtrujących
+            const filterTypes = ['ALL', 'HACCP', 'GMP', 'GHP'];
+            filterTypes.forEach(t => {
+                const btn = document.getElementById(`btn-matrix-${t.toLowerCase()}`);
+                if (!btn) return;
+                if (activeAuditorMatrixFilter === t) {
+                    btn.className = "btn-matrix-filter px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-500 text-slate-950 shadow-md transition active:scale-95 cursor-pointer";
+                } else {
+                    let borderCls = t === 'HACCP' ? 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/80' :
+                                    t === 'GMP' ? 'border-purple-500/40 text-purple-300 hover:bg-purple-950/80' :
+                                    t === 'GHP' ? 'border-cyan-500/40 text-cyan-300 hover:bg-cyan-950/80' :
+                                    'border-slate-700 text-slate-300 hover:bg-slate-800';
+                    btn.className = `btn-matrix-filter px-2.5 py-1 rounded-lg text-[10px] font-black bg-slate-900 border ${borderCls} transition active:scale-95 cursor-pointer`;
+                }
+            });
+
+            // Pasek stanu aktywnego filtra
+            const banner = document.getElementById('matrix-filter-banner');
+            const bannerTxt = document.getElementById('matrix-filter-current');
+            if (banner && bannerTxt) {
+                if (activeAuditorMatrixFilter !== 'ALL') {
+                    banner.classList.remove('hidden');
+                    bannerTxt.textContent = activeAuditorMatrixFilter;
+                } else {
+                    banner.classList.add('hidden');
+                }
+            }
+
+            // Filtrowanie audytorów według wybranego rodzaju audytu
+            let filteredUsers = cachedAuditorsData;
+            if (activeAuditorMatrixFilter !== 'ALL') {
+                filteredUsers = cachedAuditorsData.filter(u => {
+                    const quals = parseQualifications(u.qualifications);
+                    return quals.some(q => String(q).toUpperCase().includes(activeAuditorMatrixFilter));
+                });
+            }
+
+            const countBadge = document.getElementById('auditor-matrix-count');
+            if (countBadge) {
+                countBadge.textContent = `${filteredUsers.length} / ${cachedAuditorsData.length} audytorów`;
+            }
+
+            if (filteredUsers.length === 0) {
+                container.innerHTML = `
+                    <div class="p-5 text-center bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-slate-400">
+                        <i class="fas fa-user-slash text-xl mb-1 text-slate-600 block"></i>
+                        <span class="text-xs font-bold block">Brak audytorów z uprawnieniami do: ${activeAuditorMatrixFilter}</span>
+                        <button type="button" onclick="filterAuditorsMatrix('ALL')" class="mt-2 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] font-bold rounded-lg transition cursor-pointer">Pokaż wszystkich</button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filteredUsers.map(u => {
+                const quals = parseQualifications(u.qualifications);
+                const hasHaccp = quals.some(q => String(q).toUpperCase().includes('HACCP'));
+                const hasGmp = quals.some(q => String(q).toUpperCase().includes('GMP'));
+                const hasGhp = quals.some(q => String(q).toUpperCase().includes('GHP'));
+
+                // Kliknięcie w plakietkę audytu filtruje widok do tylko tego standardu
+                const haccpBadge = hasHaccp ? `
+                    <button type="button" onclick="event.stopPropagation(); filterAuditorsMatrix('HACCP')" title="Kliknij, aby pokazać tylko audytorów HACCP" class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-950 border ${activeAuditorMatrixFilter === 'HACCP' ? 'border-emerald-400 ring-2 ring-emerald-400/50 shadow-md' : 'border-emerald-500/60'} text-emerald-300 hover:brightness-125 transition cursor-pointer flex items-center gap-1.5">
+                        <i class="fas fa-shield-halved text-emerald-400"></i>
+                        <span>HACCP</span>
+                    </button>` : '';
+
+                const gmpBadge = hasGmp ? `
+                    <button type="button" onclick="event.stopPropagation(); filterAuditorsMatrix('GMP')" title="Kliknij, aby pokazać tylko audytorów GMP" class="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-950 border ${activeAuditorMatrixFilter === 'GMP' ? 'border-purple-400 ring-2 ring-purple-400/50 shadow-md' : 'border-purple-500/60'} text-purple-300 hover:brightness-125 transition cursor-pointer flex items-center gap-1.5">
+                        <i class="fas fa-industry text-purple-400"></i>
+                        <span>GMP</span>
+                    </button>` : '';
+
+                const ghpBadge = hasGhp ? `
+                    <button type="button" onclick="event.stopPropagation(); filterAuditorsMatrix('GHP')" title="Kliknij, aby pokazać tylko audytorów GHP" class="px-2 py-0.5 rounded-full text-[9px] font-black bg-cyan-950 border ${activeAuditorMatrixFilter === 'GHP' ? 'border-cyan-400 ring-2 ring-cyan-400/50 shadow-md' : 'border-cyan-500/60'} text-cyan-300 hover:brightness-125 transition cursor-pointer flex items-center gap-1.5">
+                        <i class="fas fa-pump-medical text-cyan-400"></i>
+                        <span>GHP</span>
+                    </button>` : '';
+
+                const otherQuals = quals.filter(q => !['HACCP', 'GMP', 'GHP'].some(std => String(q).toUpperCase().includes(std)));
+                const otherBadge = otherQuals.length > 0 ? `<span class="text-[8.5px] text-slate-400 font-bold bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 truncate max-w-[120px]" title="${otherQuals.join(', ')}">+ ${otherQuals.join(', ')}</span>` : '';
+
+                const isManager = (u.role === 'MANAGER');
+
+                return `
+                    <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs hover:border-slate-700 transition shadow-sm">
+                        <div class="min-w-0 pr-2">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-black text-white truncate block text-[11px]">${u.full_name}</span>
+                                ${isManager ? '<span class="text-[8px] bg-amber-950 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-bold uppercase tracking-wider">Kierownik</span>' : '<span class="text-[8px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-bold uppercase">Audytor</span>'}
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1 mt-1">
+                                ${haccpBadge}
+                                ${gmpBadge}
+                                ${ghpBadge}
+                                ${otherBadge}
+                                ${(!hasHaccp && !hasGmp && !hasGhp && otherQuals.length === 0) ? '<span class="text-[8.5px] text-rose-400 italic">Brak uprawnień</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onclick="showAuditorProfileModal(${JSON.stringify(u).replace(/"/g, '&quot;')})" class="px-2.5 py-1 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 rounded-full text-[10px] font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer">
+                                <i class="fas fa-user-gear text-cyan-400 text-xs"></i>
+                                <span>Profil</span>
+                            </button>
+                            ${!isManager ? `<button type="button" onclick="deleteAuditor(${u.id})" class="tile-3d bg-rose-950 hover:bg-rose-900 border border-rose-500/50 text-rose-300 px-2 py-1 text-[9px] font-bold rounded-full cursor-pointer">Usuń</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         async function renderAuditorsList() {
             const container = document.getElementById('auditors-list-container');
             if (!container) return;
-            const res = await apiFetch(`/api/users`);
-            if (!res.ok) return;
-            const data = await res.json();
-            const users = Array.isArray(data) ? data : (data.users || []);
-            container.innerHTML = users.map(u => `
-                <div class="bg-slate-900 p-2 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                    <div>
-                        <span class="font-bold text-white block">${u.full_name}</span>
-                        <span class="text-[9px] text-cyan-300 font-extrabold">${(u.qualifications || []).join(', ')}</span>
-                    </div>
-                    ${u.role !== 'MANAGER' ? `<div class="flex items-center gap-2"><button onclick="showAuditorProfileModal(${JSON.stringify(u).replace(/"/g, '&quot;')})" class="px-3 py-1 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 rounded-full text-[10px] font-bold transition flex items-center gap-1 shadow-sm">👤 Profil</button><button onclick="deleteAuditor(${u.id})" class="tile-3d bg-rose-950 border border-rose-500/50 text-rose-300 px-2 py-1 text-[9px] font-bold rounded-full">Usuń</button></div>` : '<span class="text-[9px] text-amber-400 font-bold">Kierownik</span>'}
-                </div>
-            `).join('');
+            try {
+                const res = await apiFetch(`/api/users`);
+                if (!res.ok) return;
+                const data = await res.json();
+                cachedAuditorsData = Array.isArray(data) ? data : (data.users || []);
+                renderAuditorsListCards();
+            } catch(e) {
+                console.warn("Błąd renderAuditorsList:", e);
+            }
         }
 
         async function addNewAuditor() {
@@ -868,12 +1016,12 @@
             });
 
             if (res.ok) {
-                alert("✅ Dodano audytora!");
+                alert("Dodano audytora!");
                 nameEl.value = ""; pinEl.value = "";
                 await renderAuditorsList();
             } else {
                 const err = await res.json();
-                alert(`❌ ${err.detail || 'Błąd zapisu'}`);
+                alert(`${err.detail || 'Błąd zapisu'}`);
             }
         }
 
@@ -884,7 +1032,7 @@
                 await renderAuditorsList();
             } else {
                 const err = await res.json().catch(() => ({}));
-                alert(`❌ ${err.detail || 'Błąd usuwania użytkownika'}`);
+                alert(`${err.detail || 'Błąd usuwania użytkownika'}`);
             }
         }
 
@@ -953,36 +1101,126 @@
 
                 let activeSelectedFilter = null;
 
-        function selectSingleFilter(key) {
-            if (activeSelectedFilter === key) {
-                activeSelectedFilter = null;
-            } else {
-                activeSelectedFilter = key;
-            }
-
+        function updateFilterTagButtons() {
             const map = {
-                'HACCP': 'btn-tag-haccp',
-                'GMP': 'btn-tag-gmp',
-                'GHP': 'btn-tag-ghp',
-                'WYKONANY': 'btn-tag-done',
-                'SPOZNIONY': 'btn-tag-overdue',
-                'SWIETO': 'btn-tag-holiday'
+                'HACCP': { id: 'btn-tag-haccp', ring: 'ring-emerald-400', label: 'HACCP' },
+                'GMP': { id: 'btn-tag-gmp', ring: 'ring-purple-400', label: 'GMP' },
+                'GHP': { id: 'btn-tag-ghp', ring: 'ring-cyan-400', label: 'GHP' },
+                'WYKONANY': { id: 'btn-tag-done', ring: 'ring-emerald-400', label: 'Wykonany' },
+                'SPOZNIONY': { id: 'btn-tag-overdue', ring: 'ring-rose-400', label: 'Spóźniony' },
+                'SWIETO': { id: 'btn-tag-holiday', ring: 'ring-amber-400', label: 'Święto' }
             };
 
-            Object.entries(map).forEach(([k, id]) => {
-                const b = document.getElementById(id);
-                if (!b) return;
-                if (activeSelectedFilter === k) {
-                    b.classList.remove('opacity-50');
-                    b.classList.add('ring-2', 'ring-cyan-300', 'brightness-125', 'scale-105');
+            const btnAll = document.getElementById('btn-tag-all');
+            if (btnAll) {
+                btnAll.classList.remove('ring-2', 'ring-cyan-400', 'brightness-125', 'scale-105', 'opacity-40', 'opacity-75', 'opacity-100', 'bg-cyan-950/80', 'border-cyan-500/80', 'text-cyan-200');
+                if (!activeSelectedFilter) {
+                    btnAll.classList.add('opacity-100', 'ring-2', 'ring-cyan-400', 'brightness-125', 'scale-105', 'bg-cyan-950/80', 'border-cyan-500/80', 'text-cyan-200');
                 } else {
-                    b.classList.add('opacity-50');
-                    b.classList.remove('ring-2', 'ring-cyan-300', 'brightness-125', 'scale-105');
+                    btnAll.classList.add('opacity-40', 'text-slate-400');
+                }
+            }
+
+            const banner = document.getElementById('cal-filter-status-banner');
+            const bannerText = document.getElementById('cal-filter-status-text');
+
+            Object.entries(map).forEach(([k, cfg]) => {
+                const b = document.getElementById(cfg.id);
+                if (!b) return;
+                b.classList.remove('ring-2', 'ring-cyan-300', 'ring-purple-400', 'ring-emerald-400', 'ring-rose-400', 'ring-amber-400', 'brightness-125', 'scale-105', 'opacity-40', 'opacity-50', 'opacity-75', 'opacity-100');
+                if (activeSelectedFilter === k) {
+                    b.classList.add('opacity-100', 'ring-2', cfg.ring, 'brightness-125', 'scale-105', 'shadow-lg');
+                } else if (activeSelectedFilter) {
+                    b.classList.add('opacity-40');
+                } else {
+                    b.classList.add('opacity-75');
                 }
             });
 
+            if (banner && bannerText) {
+                if (activeSelectedFilter && map[activeSelectedFilter]) {
+                    banner.classList.remove('hidden');
+                    bannerText.innerHTML = `Aktywny filtr: <strong class="text-white px-2 py-0.5 rounded bg-slate-800 border border-slate-700">${map[activeSelectedFilter].label}</strong> — pokazuję <span class="text-cyan-300 font-bold">tylko</span> te audyty.`;
+                } else {
+                    banner.classList.add('hidden');
+                }
+            }
+        }
+
+        function selectSingleFilter(key) {
+            // key === null oznacza powrót do wszystkich audytów
+            // Wybranie danego audytu (np. HACCP, GMP) ZAWSZE zachowuje ten filtr i nie resetuje go przy ponownym kliknięciu!
+            activeSelectedFilter = key;
+
+            updateFilterTagButtons();
             renderCalendar();
         }
+        window.selectSingleFilter = selectSingleFilter;
+        window.updateFilterTagButtons = updateFilterTagButtons;
+
+        window.openAuditActionModal = async function(id) {
+            try {
+                let a = schedulesData ? schedulesData.find(s => String(s.id) === String(id)) : null;
+                if (!a) {
+                    const res = await fetch(`/api/schedule/${id}`);
+                    if (res.ok) a = await res.json();
+                }
+                if (a && a.status === 'WYKONANY') {
+                    if (typeof openAuditDetailsModal === 'function') {
+                        return openAuditDetailsModal(id);
+                    }
+                }
+                if (state.role === 'MANAGER') {
+                    if (typeof openMgrModal === 'function') return openMgrModal(id);
+                } else {
+                    if (typeof openAudModal === 'function') return openAudModal(id);
+                }
+            } catch (e) {
+                console.warn("Błąd openAuditActionModal:", e);
+                if (state.role === 'MANAGER' && typeof openMgrModal === 'function') openMgrModal(id);
+                else if (typeof openAudModal === 'function') openAudModal(id);
+            }
+        };
+
+        window.handleAuditCardClick = function(event, auditId, auditType) {
+            if (event) event.stopPropagation();
+            if (activeSelectedFilter !== auditType) {
+                // Jeśli filtr nie był jeszcze ustawiony na ten typ, kliknięcie audytu izoluje widok do TYLKO tego audytu/typu
+                selectSingleFilter(auditType);
+                if (typeof showToast === 'function') {
+                    showToast(`Widok przefiltrowany: tylko audyty ${auditType}`, 'info');
+                }
+            } else {
+                // Gdy filtr jest już aktywny, kolejne kliknięcie otwiera szczegóły danego audytu
+                openAuditActionModal(auditId);
+            }
+        };
+
+        window.handleCalendarTileClick = function(dateStr) {
+            const dayAudits = Array.isArray(schedulesData) ? schedulesData.filter(s => s.scheduled_date === dateStr) : [];
+            const matchingAudits = activeSelectedFilter ? dayAudits.filter(a => {
+                const aType = String(a.audit_type || "HACCP").toUpperCase().trim();
+                if (activeSelectedFilter === 'HACCP') return aType.includes('HACCP');
+                if (activeSelectedFilter === 'GMP') return aType.includes('GMP');
+                if (activeSelectedFilter === 'GHP') return aType.includes('GHP');
+                if (activeSelectedFilter === 'WYKONANY') return a.status === 'WYKONANY';
+                if (activeSelectedFilter === 'SPOZNIONY') return a.status !== 'WYKONANY' && a.scheduled_date < getLocalDateString();
+                return true;
+            }) : dayAudits;
+
+            if (matchingAudits.length > 0) {
+                const targetAudit = matchingAudits[0];
+                const aType = String(targetAudit.audit_type || "HACCP").toUpperCase();
+                const targetType = aType.includes("GMP") ? "GMP" : aType.includes("GHP") ? "GHP" : "HACCP";
+                if (activeSelectedFilter !== targetType) {
+                    selectSingleFilter(targetType);
+                } else {
+                    openAuditActionModal(targetAudit.id);
+                }
+            } else {
+                if (typeof openManualPlanModal === 'function') openManualPlanModal(dateStr);
+            }
+        };
 
         function formatAuditorBadge(auditor) {
             if (!auditor) return "Audytor";
@@ -1020,6 +1258,7 @@
             grid.innerHTML = "";
             let dateIter = 1;
             const totalDays = lastDay.getDate(), todayStr = getLocalDateString();
+            let totalMatchingAuditsInMonth = 0;
 
             for (let row = 0; row < 6; row++) {
                 if (dateIter > totalDays) break;
@@ -1035,24 +1274,41 @@
                         }
 
                         // Filtr tagów: jeśli żaden nie jest wybrany -> pokazujemy wszystkie zaplanowane/aktywne audyty
+                        // Gdy wciśnięty jest tag -> pokazuje się TYLKO audyt spełniający ten filtr
                         dayAudits = dayAudits.filter(a => {
                             if (!activeSelectedFilter) return true;
-                            const aType = (a.audit_type || "HACCP").toUpperCase().trim();
+                            const aType = String(a.audit_type || "HACCP").toUpperCase().trim();
                             const isCompleted = (a.status === 'WYKONANY');
                             const isOverdue = (!isCompleted && currentFullDate < todayStr);
 
-                            if (activeSelectedFilter === 'HACCP') return aType === 'HACCP';
-                            if (activeSelectedFilter === 'GMP') return aType === 'GMP';
-                            if (activeSelectedFilter === 'GHP') return aType === 'GHP';
+                            if (activeSelectedFilter === 'HACCP') return aType.includes('HACCP');
+                            if (activeSelectedFilter === 'GMP') return aType.includes('GMP');
+                            if (activeSelectedFilter === 'GHP') return aType.includes('GHP');
                             if (activeSelectedFilter === 'WYKONANY') return isCompleted;
                             if (activeSelectedFilter === 'SPOZNIONY') return isOverdue;
                             if (activeSelectedFilter === 'SWIETO') return !!holidayName;
-                            return true;
+                            return false;
                         });
+
+                        totalMatchingAuditsInMonth += dayAudits.length;
+
+                        let tileHighlight = '';
+                        if (activeSelectedFilter) {
+                            if (dayAudits.length > 0) {
+                                if (activeSelectedFilter === 'GMP') tileHighlight = 'ring-2 ring-purple-500/80 bg-purple-950/20 border-purple-500/60 shadow-lg shadow-purple-950/30';
+                                else if (activeSelectedFilter === 'GHP') tileHighlight = 'ring-2 ring-cyan-500/80 bg-cyan-950/20 border-cyan-500/60 shadow-lg shadow-cyan-950/30';
+                                else if (activeSelectedFilter === 'HACCP') tileHighlight = 'ring-2 ring-emerald-500/80 bg-emerald-950/20 border-emerald-500/60 shadow-lg shadow-emerald-950/30';
+                                else if (activeSelectedFilter === 'WYKONANY') tileHighlight = 'ring-2 ring-emerald-500/80 bg-emerald-950/20 border-emerald-500/60 shadow-lg shadow-emerald-950/30';
+                                else if (activeSelectedFilter === 'SPOZNIONY') tileHighlight = 'ring-2 ring-rose-500/80 bg-rose-950/20 border-rose-500/60 shadow-lg shadow-rose-950/30';
+                                else if (activeSelectedFilter === 'SWIETO') tileHighlight = holidayName ? 'ring-2 ring-amber-500/80 bg-amber-950/20 border-amber-500/60 shadow-lg shadow-amber-950/30' : 'opacity-25';
+                            } else {
+                                tileHighlight = (activeSelectedFilter === 'SWIETO' && holidayName) ? 'ring-2 ring-amber-500/80 bg-amber-950/20 border-amber-500/60' : 'opacity-25 grayscale-[30%] hover:opacity-100 transition-opacity';
+                            }
+                        }
                         
                         let badgeHtml = "";
                         dayAudits.forEach(a => {
-                            const aType = (a.audit_type || "HACCP").toUpperCase().trim();
+                            const aType = String(a.audit_type || "HACCP").toUpperCase().trim();
                             const isCompleted = (a.status === 'WYKONANY');
                             const isOverdue = (!isCompleted && currentFullDate < todayStr);
 
@@ -1060,17 +1316,17 @@
                             const cleanAud = (a.lead_auditor || "Audytor").replace(/\s*\(.*?\)/g, "").trim();
                             const auditorDisplay = formatAuditorBadge(cleanAud);
 
-                            let badgeColor = aType === "GMP" ? "bg-purple-950/90 border-purple-500/60 text-purple-200 shadow-purple-950/40" :
-                                             aType === "GHP" ? "bg-blue-950/90 border-cyan-500/60 text-cyan-200 shadow-cyan-950/40" : 
+                            let badgeColor = aType.includes("GMP") ? "bg-purple-950/90 border-purple-500/60 text-purple-200 shadow-purple-950/40" :
+                                             aType.includes("GHP") ? "bg-blue-950/90 border-cyan-500/60 text-cyan-200 shadow-cyan-950/40" : 
                                              "bg-emerald-950/90 border-emerald-500/60 text-emerald-200 shadow-emerald-950/40";
                             
                             let badgeStyle = isCompleted ? `${badgeColor} opacity-80` :
                                              isOverdue ? "bg-rose-950/90 border-rose-500/80 text-rose-200 animate-pulse shadow-rose-950/50" : `${badgeColor}`;
 
                             let typeIcon = '';
-                            if (aType === 'GMP') {
+                            if (aType.includes('GMP')) {
                                 typeIcon = `<svg class="w-3 h-3 text-purple-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`;
-                            } else if (aType === 'GHP') {
+                            } else if (aType.includes('GHP')) {
                                 typeIcon = `<svg class="w-3 h-3 text-cyan-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
                             } else {
                                 typeIcon = `<svg class="w-3 h-3 text-emerald-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
@@ -1083,17 +1339,28 @@
                                 statusIcon = `<svg class="w-3 h-3 text-rose-400 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 15 13.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
                             }
 
+                            const tagFilterKey = aType.includes("GMP") ? "GMP" : aType.includes("GHP") ? "GHP" : "HACCP";
+
                             badgeHtml += `
                                 <div draggable="true" ondragstart="event.stopPropagation(); event.dataTransfer.setData('text/plain', ${a.id});"
-                                     onclick="event.stopPropagation(); state.role === 'MANAGER' ? openMgrModal(${a.id}) : openAudModal(${a.id});" 
-                                     title="${aType} • ${cleanAud} (${a.line || ''})"
-                                     class="${badgeStyle} border rounded-lg py-1 px-1.5 shadow-md flex flex-col justify-center mb-1 cursor-pointer relative z-10 hover:scale-[1.02] transition-transform hover:brightness-110 leading-tight overflow-hidden max-w-full box-border">
+                                     onclick="handleAuditCardClick(event, ${a.id}, '${tagFilterKey}')"
+                                     ondblclick="event.stopPropagation(); openAuditActionModal(${a.id})"
+                                     title="${aType} • ${cleanAud} (${a.line || ''}) — Kliknij, aby pokazać tylko audyty ${tagFilterKey} w kalendarzu"
+                                     class="${badgeStyle} border rounded-lg py-1 px-1.5 shadow-md flex flex-col justify-center mb-1 cursor-pointer relative z-10 hover:scale-[1.02] transition-transform hover:brightness-110 leading-tight overflow-hidden max-w-full box-border group">
                                     <div class="flex items-center justify-between gap-1 w-full min-w-0 font-black text-[9.5px] sm:text-[10px] uppercase">
                                         <div class="flex items-center gap-1 min-w-0 truncate">
                                             ${typeIcon}
-                                            <span class="truncate">${aType}</span>
+                                            <span class="truncate hover:underline hover:text-white cursor-pointer font-black">${aType}</span>
                                         </div>
-                                        ${statusIcon ? `<div class="shrink-0 flex items-center justify-center">${statusIcon}</div>` : ''}
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            ${statusIcon ? `<div class="shrink-0 flex items-center justify-center">${statusIcon}</div>` : ''}
+                                            <button type="button" 
+                                                    onclick="event.stopPropagation(); openAuditActionModal(${a.id})" 
+                                                    title="Otwórz szczegóły tego audytu #${a.id}" 
+                                                    class="p-0.5 rounded bg-black/30 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
+                                                <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="text-[9px] sm:text-[9.5px] font-bold text-white/90 truncate mt-0.5" title="${cleanAud}">
                                         ${auditorDisplay}
@@ -1104,8 +1371,8 @@
                         
                         grid.innerHTML += `
                             <div ondragover="event.preventDefault()" ondrop="handleAuditDrop(event, '${currentFullDate}')"
-                                 onclick="if(state.role==='MANAGER'){openManualPlanModal('${currentFullDate}')}" 
-                                 class="cal-day tile-3d ${holidayName ? 'bg-amber-950/20 border-amber-900/40' : 'bg-slate-900/80'} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1.5 flex flex-col justify-between cursor-pointer rounded-xl overflow-hidden box-border">
+                                 onclick="handleCalendarTileClick('${currentFullDate}')" 
+                                 class="cal-day tile-3d ${tileHighlight || (holidayName ? 'bg-amber-950/20 border-amber-900/40' : 'bg-slate-900/80')} ${isToday ? 'border-cyan-400 ring-1 ring-cyan-400/40' : 'border-slate-800'} p-1.5 flex flex-col justify-between cursor-pointer rounded-xl overflow-hidden box-border transition-all">
                                 <div class="flex justify-between items-start gap-1">
                                     <span class="text-[10px] font-extrabold ${holidayName ? 'text-amber-400' : 'text-slate-200'}">${dateIter}</span>
                                     ${holidayName ? `<span class="text-[7.5px] text-amber-300 truncate max-w-[65px] font-extrabold flex items-center gap-0.5" title="${holidayName}"><svg class="w-2.5 h-2.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="2" y1="2" x2="22" y2="22"/></svg> ${holidayName}</span>` : ''}
@@ -1117,6 +1384,15 @@
                     }
                 }
             }
+
+            if (activeSelectedFilter) {
+                const bannerText = document.getElementById('cal-filter-status-text');
+                if (bannerText) {
+                    const filterLabels = { 'HACCP': 'HACCP', 'GMP': 'GMP', 'GHP': 'GHP', 'WYKONANY': 'Wykonany', 'SPOZNIONY': 'Spóźniony', 'SWIETO': 'Święto' };
+                    const lbl = filterLabels[activeSelectedFilter] || activeSelectedFilter;
+                    bannerText.innerHTML = `Aktywny filtr: <strong class="text-white px-2 py-0.5 rounded bg-slate-800 border border-slate-700">${lbl}</strong> — w tym miesiącu znaleziono: <strong class="text-cyan-300">${totalMatchingAuditsInMonth}</strong> audytów`;
+                }
+            }
         }
 
         async function handleAuditDrop(event, targetDate) {
@@ -1126,7 +1402,7 @@
 
             const today = getLocalDateString();
             if (targetDate < today) {
-                return alert("⚠️ Nie można przenosić audytów na daty wsteczne!");
+                return alert("Nie można przenosić audytów na daty wsteczne!");
             }
 
             try {
@@ -1140,7 +1416,7 @@
                     await loadScheduleAndRender();
                 } else {
                     const err = await res.json();
-                    alert("❌ " + (err.detail || "Błąd zmiany terminu."));
+                    alert("" + (err.detail || "Błąd zmiany terminu."));
                 }
             } catch (e) {
                 alert("Błąd połączenia z serwerem.");
@@ -1148,16 +1424,41 @@
         }
 
         async function openManualPlanModal(dateStr = "") {
-            if (state.role !== "MANAGER") return;
+            if (state.role !== "MANAGER" && state.role !== "AUDITOR") return;
             const selectedDate = dateStr || getLocalDateString();
-            document.getElementById('plan-date').value = selectedDate; 
+            const dateInput = document.getElementById('plan-date');
+            if (dateInput) dateInput.value = selectedDate; 
             miniCalDate = new Date(selectedDate);
             renderMiniCalendar();
-            await loadAuditorsDropdown(document.getElementById('plan-type').value);
+
+            if (!productionLinesData || productionLinesData.length === 0) {
+                await loadProductionLines();
+            }
+
+            const planTypeEl = document.getElementById('plan-type');
+            const currentType = planTypeEl ? planTypeEl.value : "HACCP";
+            await loadAuditorsDropdown(currentType);
+
+            // Jeśli zalogowany jest audytor, ustaw go jako domyślnego audytora głównego
+            if (state.role === "AUDITOR" && state.user && state.user.full_name) {
+                const audSelect = document.getElementById('plan-auditor');
+                if (audSelect) {
+                    for (let i = 0; i < audSelect.options.length; i++) {
+                        if (audSelect.options[i].value.includes(state.user.full_name) || state.user.full_name.includes(audSelect.options[i].value)) {
+                            audSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
             
-            formHistory.saveState('modal-plan-form');
-            document.getElementById('modal-plan').classList.remove('hidden');
+            if (window.formHistory && typeof window.formHistory.saveState === 'function') {
+                formHistory.saveState('modal-plan-form');
+            }
+            const modalEl = document.getElementById('modal-plan');
+            if (modalEl) modalEl.classList.remove('hidden');
         }
+        window.openManualPlanModal = openManualPlanModal;
 
         function closePlanModal() { document.getElementById('modal-plan').classList.add('hidden'); }
         function changeMiniMonth(delta) { miniCalDate.setMonth(miniCalDate.getMonth() + delta); renderMiniCalendar(); }
@@ -1185,14 +1486,14 @@
             const today = getLocalDateString();
             
             if (pDate < today) {
-                return alert("⚠️ Nie można planować audytów z datą wsteczną! Wybierz datę bieżącą lub przyszłą.");
+                return alert("Nie można planować audytów z datą wsteczną! Wybierz datę bieżącą lub przyszłą.");
             }
 
             const leadAuditor = document.getElementById('plan-auditor').value;
             const backupAuditor = document.getElementById('plan-backup').value;
 
             if (leadAuditor === backupAuditor && backupAuditor !== "Brak") {
-                return alert("⚠️ Niezgodność z normą IFS: Audytor Główny i Zastępca nie mogą być tą samą osobą!");
+                return alert("Niezgodność z normą IFS: Audytor Główny i Zastępca nie mogą być tą samą osobą!");
             }
 
             const payload = {
@@ -1204,18 +1505,132 @@
                 notes: document.getElementById('plan-notes').value
             };
             const res = await apiFetch('/api/schedule', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-            if (res.ok) { alert("✅ Audyt zaplanowany!"); closePlanModal(); await loadScheduleAndRender(); }
+            if (res.ok) { alert("Audyt zaplanowany!"); closePlanModal(); await loadScheduleAndRender(); }
             else {
                 const err = await res.json().catch(() => ({}));
-                alert("❌ Błąd planowania: " + (err.detail || "Nie udało się zapisać audytu."));
+                alert("Błąd planowania: " + (err.detail || "Nie udało się zapisać audytu."));
             }
         }
 
-        function updateAutoPlanPreview() {
+        let autoPlanCalDate = new Date();
+        let autoPlanHistory = [];
+        let autoPlanHistoryIndex = -1;
+
+        function recordAutoPlanState() {
+            const mEl = document.getElementById('autoplan-month');
+            const yEl = document.getElementById('autoplan-year');
+            const haccpEl = document.getElementById('auto-type-haccp');
+            const gmpEl = document.getElementById('auto-type-gmp');
+            const ghpEl = document.getElementById('auto-type-ghp');
+            const weekendsEl = document.getElementById('auto-include-weekends');
+            if (!mEl || !yEl) return;
+
+            const snapshot = {
+                period: state.selected_period_months || 1,
+                month: parseInt(mEl.value) || (new Date().getMonth() + 1),
+                year: parseInt(yEl.value) || new Date().getFullYear(),
+                haccp: Boolean(haccpEl && haccpEl.checked),
+                gmp: Boolean(gmpEl && gmpEl.checked),
+                ghp: Boolean(ghpEl && ghpEl.checked),
+                weekends: Boolean(weekendsEl && weekendsEl.checked),
+                lines: Array.from(document.querySelectorAll('.auto-line-chk:checked')).map(c => c.value)
+            };
+
+            // Nie duplikuj identycznych stanów pod rząd
+            if (autoPlanHistoryIndex >= 0) {
+                const prev = autoPlanHistory[autoPlanHistoryIndex];
+                if (JSON.stringify(prev) === JSON.stringify(snapshot)) return;
+            }
+
+            autoPlanHistory = autoPlanHistory.slice(0, autoPlanHistoryIndex + 1);
+            autoPlanHistory.push(snapshot);
+            autoPlanHistoryIndex = autoPlanHistory.length - 1;
+            updateAutoPlanUndoRedoButtons();
+        }
+
+        function updateAutoPlanUndoRedoButtons() {
+            const undoBtn = document.getElementById('btn-autoplan-undo');
+            const redoBtn = document.getElementById('btn-autoplan-redo');
+            if (undoBtn) undoBtn.disabled = (autoPlanHistoryIndex <= 0);
+            if (redoBtn) redoBtn.disabled = (autoPlanHistoryIndex >= autoPlanHistory.length - 1);
+        }
+
+        window.autoPlanHistoryUndo = function() {
+            if (autoPlanHistoryIndex > 0) {
+                autoPlanHistoryIndex--;
+                applyAutoPlanState(autoPlanHistory[autoPlanHistoryIndex]);
+            }
+        };
+
+        window.autoPlanHistoryRedo = function() {
+            if (autoPlanHistoryIndex < autoPlanHistory.length - 1) {
+                autoPlanHistoryIndex++;
+                applyAutoPlanState(autoPlanHistory[autoPlanHistoryIndex]);
+            }
+        };
+
+        function applyAutoPlanState(snap) {
+            if (!snap) return;
+            state.selected_period_months = snap.period;
+            document.querySelectorAll('.btn-period').forEach(b => {
+                const isMatch = (parseInt(b.textContent) === snap.period);
+                if (isMatch) {
+                    b.classList.remove('bg-slate-800', 'text-slate-300');
+                    b.classList.add('tile-selected', 'bg-purple-600', 'text-white', 'border-purple-400');
+                } else {
+                    b.classList.remove('tile-selected', 'bg-purple-600', 'text-white', 'border-purple-400');
+                    b.classList.add('bg-slate-800', 'text-slate-300');
+                }
+            });
+            const mEl = document.getElementById('autoplan-month');
+            const yEl = document.getElementById('autoplan-year');
+            const haccpEl = document.getElementById('auto-type-haccp');
+            const gmpEl = document.getElementById('auto-type-gmp');
+            const ghpEl = document.getElementById('auto-type-ghp');
+            const weekendsEl = document.getElementById('auto-include-weekends');
+
+            if (mEl) mEl.value = snap.month;
+            if (yEl) yEl.value = snap.year;
+            if (haccpEl) haccpEl.checked = snap.haccp;
+            if (gmpEl) gmpEl.checked = snap.gmp;
+            if (ghpEl) ghpEl.checked = snap.ghp;
+            if (weekendsEl) weekendsEl.checked = snap.weekends;
+
+            if (Array.isArray(snap.lines)) {
+                document.querySelectorAll('.auto-line-chk').forEach(c => {
+                    c.checked = snap.lines.includes(c.value);
+                });
+            }
+
+            autoPlanCalDate = new Date(snap.year, snap.month - 1, 1);
+            updateAutoPlanPreview(false);
+            updateAutoPlanUndoRedoButtons();
+        }
+
+        window.changeAutoPlanMiniMonth = function(delta) {
+            autoPlanCalDate.setMonth(autoPlanCalDate.getMonth() + delta);
+            const mEl = document.getElementById('autoplan-month');
+            const yEl = document.getElementById('autoplan-year');
+            if (mEl) mEl.value = autoPlanCalDate.getMonth() + 1;
+            if (yEl) yEl.value = autoPlanCalDate.getFullYear();
+            updateAutoPlanPreview(true);
+        };
+
+        window.onAutoPlanParamChange = function() {
+            const mEl = document.getElementById('autoplan-month');
+            const yEl = document.getElementById('autoplan-year');
+            if (mEl && yEl) {
+                autoPlanCalDate = new Date(parseInt(yEl.value) || 2026, (parseInt(mEl.value) || 1) - 1, 1);
+            }
+            updateAutoPlanPreview(true);
+        };
+
+        function updateAutoPlanPreview(shouldRecord = true) {
             const mEl = document.getElementById('autoplan-month');
             const yEl = document.getElementById('autoplan-year');
             const txtEl = document.getElementById('autoplan-range-text');
-            if (!mEl || !yEl || !txtEl) return;
+            const badgeEl = document.getElementById('autoplan-days-count-badge');
+            if (!mEl || !yEl) return;
 
             const m = parseInt(mEl.value) || (new Date().getMonth() + 1);
             const y = parseInt(yEl.value) || new Date().getFullYear();
@@ -1236,22 +1651,109 @@
                 startY = today.getFullYear();
             }
 
+            const startDateObj = new Date(startY, startM - 1, startDay);
             const endTotalM = startM + period - 1;
             const endY = startY + Math.floor((endTotalM - 1) / 12);
             const endM = ((endTotalM - 1) % 12) + 1;
             const lastDay = new Date(endY, endM, 0).getDate();
+            const endDateObj = new Date(endY, endM - 1, lastDay);
 
             const pad = (n) => String(n).padStart(2, '0');
-            txtEl.textContent = `${pad(startDay)}.${pad(startM)}.${startY} – ${pad(lastDay)}.${pad(endM)}.${endY}`;
+            if (txtEl) {
+                txtEl.textContent = `${pad(startDay)}.${pad(startM)}.${startY} – ${pad(lastDay)}.${pad(endM)}.${endY}`;
+            }
+
+            // Obliczenie aktywnych dni roboczych
+            const weekendsEl = document.getElementById('auto-include-weekends');
+            const includeWeekends = Boolean(weekendsEl && weekendsEl.checked);
+            let activeDaysCount = 0;
+            let cur = new Date(startDateObj);
+            while (cur <= endDateObj) {
+                const dayOfWeek = cur.getDay(); // 0 is Sun, 6 is Sat
+                const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+                if (!isWeekend || includeWeekends) {
+                    activeDaysCount++;
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+            if (badgeEl) {
+                badgeEl.textContent = `${activeDaysCount} dni ${includeWeekends ? 'planowanych' : 'roboczych'}`;
+            }
+
+            // Renderowanie mini kalendarza
+            renderAutoPlanMiniCalendar(startDateObj, endDateObj, includeWeekends);
+
+            if (shouldRecord) {
+                recordAutoPlanState();
+            }
+        }
+
+        function renderAutoPlanMiniCalendar(rangeStart, rangeEnd, includeWeekends) {
+            const grid = document.getElementById('autoplan-mini-calendar-grid');
+            const titleEl = document.getElementById('autoplan-cal-month-title');
+            if (!grid) return;
+
+            const year = autoPlanCalDate.getFullYear();
+            const month = autoPlanCalDate.getMonth();
+            const monthNames = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+            if (titleEl) {
+                titleEl.textContent = `${monthNames[month]} ${year}`;
+            }
+
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            let startDayIdx = firstDay.getDay() - 1;
+            if (startDayIdx === -1) startDayIdx = 6; // Pn = 0, Nd = 6
+
+            grid.innerHTML = "";
+            for (let i = 0; i < startDayIdx; i++) {
+                grid.innerHTML += `<div class="p-1"></div>`;
+            }
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            for (let day = 1; day <= lastDay.getDate(); day++) {
+                const thisDate = new Date(year, month, day);
+                thisDate.setHours(0, 0, 0, 0);
+                const dayOfWeek = thisDate.getDay();
+                const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+                const isPast = (thisDate < today);
+
+                const inRange = (rangeStart && rangeEnd && thisDate >= rangeStart && thisDate <= rangeEnd);
+
+                let cellClass = "p-1 rounded text-[9.5px] font-bold transition-all ";
+                let titleAttr = `${day} ${monthNames[month]} ${year}`;
+
+                if (inRange) {
+                    if (isWeekend && !includeWeekends) {
+                        cellClass += "bg-slate-900 text-amber-500/60 border border-dashed border-amber-500/30 opacity-60 ";
+                        titleAttr += " (Weekend – pomijany)";
+                    } else {
+                        cellClass += "bg-gradient-to-br from-purple-600 to-indigo-600 text-white font-black shadow-md ring-1 ring-purple-400 scale-[1.03] ";
+                        titleAttr += " (Planowany audyt)";
+                    }
+                } else if (isPast) {
+                    cellClass += "bg-slate-950/40 text-slate-600 opacity-40 ";
+                    titleAttr += " (Data miniona)";
+                } else {
+                    cellClass += isWeekend ? "bg-slate-950 text-slate-500 " : "bg-slate-900 text-slate-300 hover:bg-slate-800 ";
+                }
+
+                grid.innerHTML += `<div class="${cellClass}" title="${titleAttr}">${day}</div>`;
+            }
         }
 
         async function openAutoPlanModal() { 
+            const dock = document.getElementById('bottom-dock');
+            if (dock) dock.classList.add('hidden');
             document.getElementById('modal-autoplan').classList.remove('hidden'); 
             const today = new Date();
             const mEl = document.getElementById('autoplan-month');
             const yEl = document.getElementById('autoplan-year');
             if (mEl) mEl.value = today.getMonth() + 1;
             if (yEl) yEl.value = today.getFullYear();
+            autoPlanCalDate = new Date(today.getFullYear(), today.getMonth(), 1);
 
             const autoLines = document.getElementById('autoplan-lines-container');
             if (!autoLines || autoLines.children.length === 0) {
@@ -1260,10 +1762,17 @@
 
             const btn1 = document.querySelector('.btn-period');
             setPlanPeriod(1, btn1);
-            updateAutoPlanPreview();
+
+            autoPlanHistory = [];
+            autoPlanHistoryIndex = -1;
+            updateAutoPlanPreview(true);
         }
 
-        function closeAutoPlanModal() { document.getElementById('modal-autoplan').classList.add('hidden'); }
+        function closeAutoPlanModal() { 
+            document.getElementById('modal-autoplan').classList.add('hidden'); 
+            const dock = document.getElementById('bottom-dock');
+            if (dock && state.role) dock.classList.remove('hidden');
+        }
 
         function setPlanPeriod(m, btn) {
             state.selected_period_months = m;
@@ -1278,9 +1787,9 @@
             const runBtn = document.getElementById('btn-run-auto-schedule');
             if (runBtn) {
                 const label = m === 1 ? '1 miesiąc' : (m < 5 ? `${m} miesiące` : `${m} miesięcy`);
-                runBtn.innerHTML = `🚀 Generuj audyty na ${label}`;
+                runBtn.innerHTML = `<i class="fas fa-wand-magic-sparkles mr-1.5"></i>Generuj audyty na ${label}`;
             }
-            updateAutoPlanPreview();
+            updateAutoPlanPreview(true);
         }
 
         async function runAutoSchedule() {
@@ -1321,17 +1830,17 @@
 
                 if (res.ok) {
                     const d = await res.json();
-                    alert(`✨ Wygenerowano plan audytów: ${d.count} audytów w zakresie ${d.start_date} – ${d.end_date} (bez dat wstecznych).`);
+                    alert(`Pomyślnie wygenerowano plan audytów: ${d.count} audytów w zakresie ${d.start_date} – ${d.end_date}.`);
                     closeAutoPlanModal();
                     showModule('calendar');
                     await loadScheduleAndRender();
                 } else {
                     const errData = await res.json().catch(() => ({}));
-                    alert(`❌ Błąd generowania harmonogramu: ${errData.detail || 'Wystąpił błąd podczas generowania audytów.'}`);
+                    alert(`Błąd generowania harmonogramu: ${errData.detail || 'Wystąpił błąd podczas generowania audytów.'}`);
                 }
             } catch (err) {
                 console.error("Auto plan error:", err);
-                alert("❌ Błąd połączenia z serwerem podczas generowania harmonogramu.");
+                alert("Błąd połączenia z serwerem podczas generowania harmonogramu.");
             } finally {
                 if (btn) {
                     btn.disabled = false;
@@ -1507,7 +2016,7 @@
                        </span>`;
 
                 const readBtn = isUnread 
-                    ? `<button onclick="markAuditorNoteAsRead(${n.id})" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap">✓ Oznacz przeczytane</button>`
+                    ? `<button onclick="markAuditorNoteAsRead(${n.id})" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap inline-flex items-center gap-1"><i class="fas fa-check"></i><span>Oznacz przeczytane</span></button>`
                     : `<span class="text-[9px] text-slate-500 italic">Przeczytano (${n.read_at ? n.read_at.substring(11, 16) : '—'})</span>`;
 
                 const replyBtn = `<button onclick="openManagerReplyModal(${n.id})" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[9px] rounded-lg transition active:scale-95 shadow cursor-pointer whitespace-nowrap ml-1.5"><i class="fas fa-reply mr-1"></i>Odpowiedz</button>`;
@@ -1746,7 +2255,7 @@
                 } else if (activeManagerResultsTab === 'rejected') {
                     tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-500 italic">Brak odrzuconych audytów. Wszystkie niezaakceptowane audyty pojawią się tutaj.</td></tr>';
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-emerald-400 font-bold">✨ Brak oczekujących audytów! Wszystkie bieżące wpisy zostały sprawdzone.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-xs text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i class="fas fa-circle-check text-emerald-400"></i><span>Brak oczekujących audytów! Wszystkie bieżące wpisy zostały sprawdzone.</span></td></tr>';
                 }
                 return;
             }
@@ -1784,7 +2293,7 @@
                         <td class="py-2.5 px-3 border-b border-white/5 text-[10px] text-slate-300 whitespace-nowrap font-medium">${a.shift || '—'}</td>
                         <td class="py-2.5 px-3 border-b border-white/5 text-[9px] text-slate-400 whitespace-nowrap font-semibold" title="${a.auditor_id || 'Audytor'}">${audName}</td>
                         <td id="status-${a.id}" class="py-2.5 px-3 border-b border-white/5 text-[8px] font-black whitespace-nowrap ${statusColor}">
-                            ${a.record_status}${isApproved ? ' <span class="text-emerald-400">(✓)</span>' : isRejected ? ' <span class="text-rose-500">(✕)</span>' : ''}
+                            ${a.record_status}${isApproved ? ' <span class="text-emerald-400"><i class="fas fa-check text-[9px]"></i></span>' : isRejected ? ' <span class="text-rose-500"><i class="fas fa-xmark text-[9px]"></i></span>' : ''}
                         </td>
                         <td class="py-2.5 px-3 border-b border-white/5 ${slmColor} text-[9px] whitespace-nowrap">${a.slm_verdict} <span class="text-[8px] text-slate-400">(${a.risk_level})</span></td>
                         <td class="py-2.5 px-3 border-b border-white/5 text-right whitespace-nowrap">
@@ -1996,8 +2505,8 @@
                                         }).join('')}
                                         ${items.length > 8 ? `<span class="text-[9px] text-slate-500 font-medium">+${items.length - 8} więcej</span>` : ''}
                                     </div>
-                                    ${nokItems.length > 0 ? `<div class="text-[9px] text-rose-300 font-bold mt-0.5">⚠ ${nokItems.length} niezgodności</div>` : '<div class="text-[9px] text-emerald-400 font-bold mt-0.5">✓ Wszystkie zgodne</div>'}
-                                    ${notesItems.length > 0 ? `<div class="mt-1 space-y-0.5">${notesItems.slice(0, 3).map(q => `<div class="text-[9px] text-amber-200/80 bg-amber-950/30 rounded px-1.5 py-0.5 border border-amber-700/30">💬 <b>${q.clause || ''}</b>: ${q.notes}</div>`).join('')}</div>` : ''}
+                                    ${nokItems.length > 0 ? `<div class="text-[9px] text-rose-300 font-bold mt-0.5 flex items-center gap-1"><i class="fas fa-triangle-exclamation text-rose-400"></i><span>${nokItems.length} niezgodności</span></div>` : '<div class="text-[9px] text-emerald-400 font-bold mt-0.5 flex items-center gap-1"><i class="fas fa-circle-check text-emerald-400"></i><span>Wszystkie zgodne</span></div>'}
+                                    ${notesItems.length > 0 ? `<div class="mt-1 space-y-0.5">${notesItems.slice(0, 3).map(q => `<div class="text-[9px] text-amber-200/80 bg-amber-950/30 rounded px-1.5 py-0.5 border border-amber-700/30 flex items-center gap-1"><i class="fas fa-comment-dots text-amber-400"></i><b>${q.clause || ''}</b>: ${q.notes}</div>`).join('')}</div>` : ''}
                                 </div>`;
                         } catch(e) {
                             chSummary = '';
@@ -2008,13 +2517,13 @@
                     let lockReason = '';
                     if (isLocked) {
                         if (isApproved) {
-                            lockReason = '✅ Raport ZATWIERDZONY przez Key Usera (Manager Jakości) — oficjalny rekord IFS Food v8.';
+                            lockReason = 'Raport ZATWIERDZONY przez Key Usera (Manager Jakości) — oficjalny rekord IFS Food v8.';
                         } else if (riskLevel.includes('HOLD') || riskLevel.includes('KRYTYCZNE')) {
-                            lockReason = '🚨 Zablokowany — wymagana procedura HOLD LOT (poziom ryzyka KRYTYCZNE). Oczekuje interwencji managera.';
+                            lockReason = 'Zablokowany — wymagana procedura HOLD LOT (poziom ryzyka KRYTYCZNE). Oczekuje interwencji managera.';
                         } else if (complianceVerdict === 'ODRZUCONY') {
-                            lockReason = '❌ Odrzucony przez Kierownika Jakości — wymaga złożenia wniosku o ponowne otwarcie.';
+                            lockReason = 'Odrzucony przez Kierownika Jakości — wymaga złożenia wniosku o ponowne otwarcie.';
                         } else {
-                            lockReason = '🔒 Zablokowany automatycznie po zapisie — zgodnie z normą IFS Food v8 każdy zatwierdzony zapis jest chroniony przed nieautoryzowaną edycją. Złóż wniosek o korektę do managera.';
+                            lockReason = 'Zablokowany automatycznie po zapisie — zgodnie z normą IFS Food v8 każdy zatwierdzony zapis jest chroniony przed nieautoryzowaną edycją. Złóż wniosek o korektę do managera.';
                         }
                     }
 
@@ -2194,7 +2703,7 @@
                                     <!-- Uwagi audytora -->
                                     ${auditNotes ? `
                                     <div class="bg-slate-900/60 rounded-xl p-3 border border-amber-700/30">
-                                        <div class="text-[9px] font-black text-amber-400 uppercase tracking-wider mb-1">💬 Uwagi Audytora</div>
+                                        <div class="text-[9px] font-black text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1.5"><i class="fas fa-comment-dots text-amber-400"></i><span>Uwagi Audytora</span></div>
                                         <p class="text-[11px] text-amber-200/90 leading-snug whitespace-pre-line">${auditNotes}</p>
                                     </div>` : `
                                     <div class="bg-slate-900/40 rounded-xl p-2.5 border border-slate-800">
@@ -2242,10 +2751,10 @@
 
                 const data = await res.json();
                 if (res.ok) {
-                    alert("✅ " + data.message);
+                    alert("" + data.message);
                     loadAuditorHistory();
                 } else {
-                    alert("❌ " + (data.detail || "Błąd wysyłania wniosku."));
+                    alert("" + (data.detail || "Błąd wysyłania wniosku."));
                 }
             } catch(e) {
                 alert("Błąd połączenia z serwerem.");
@@ -2589,13 +3098,13 @@
                     saveBtn.disabled = false;
                     saveBtn.className = "w-full tile-3d h-14 bg-gradient-to-br from-emerald-600 to-teal-600 font-black text-xs uppercase text-white shadow-xl flex items-center justify-center gap-2 rounded-2xl cursor-pointer hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] transition-all duration-200 ring-2 ring-emerald-400/40";
                     if (saveText) {
-                        saveText.innerHTML = `<span>💾 Zapisz Audyt i Wykonaj Analizę SLM AI</span>`;
+                        saveText.innerHTML = `<span class="flex items-center gap-2"><i class="fas fa-floppy-disk text-sm"></i><span>Zapisz Audyt i Wykonaj Analizę SLM AI</span></span>`;
                     }
                 } else {
                     saveBtn.disabled = true;
                     saveBtn.className = "w-full h-14 font-bold text-xs uppercase shadow-none flex items-center justify-center gap-2 rounded-2xl transition-all duration-300 opacity-40 bg-slate-900 text-slate-500 border border-slate-800 cursor-not-allowed pointer-events-none select-none";
                     if (saveText) {
-                        saveText.innerHTML = `<span>🔒 Zaakceptuj wszystkie pytania (pozostało ${unacceptedCount}/${totalCount})</span>`;
+                        saveText.innerHTML = `<span class="flex items-center gap-2"><i class="fas fa-lock text-xs"></i><span>Zaakceptuj wszystkie pytania (pozostało ${unacceptedCount}/${totalCount})</span></span>`;
                     }
                 }
             }
@@ -2607,12 +3116,12 @@
             const unaccepted = keys.filter(k => !state.checklist_results[k].locked && !state.checklist_results[k].accepted);
             
             if (keys.length === 0) {
-                showToast("⚠️ Błąd: Brak pytań w checkliście do zapisu.", "warning");
+                showToast("Błąd: Brak pytań w checkliście do zapisu.", "warning");
                 return;
             }
 
             if (unaccepted.length > 0) {
-                showToast(`⚠️ Wymagane zatwierdzenie wszystkich punktów! Pozostało do zaakceptowania: ${unaccepted.length}.`, "warning");
+                showToast(`Wymagane zatwierdzenie wszystkich punktów! Pozostało do zaakceptowania: ${unaccepted.length}.`, "warning");
                 const firstMissing = document.getElementById(`chk-card-${unaccepted[0]}`);
                 if (firstMissing) {
                     firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2671,6 +3180,10 @@
             formData.append("bhp_status", state.bhp_status);
             formData.append("slm_analysis", slmText);
             formData.append("checklist_results", JSON.stringify(state.checklist_results));
+            formData.append("audit_type", state.active_audit_type || "HACCP");
+            if (state.schedule_id) {
+                formData.append("schedule_id", state.schedule_id);
+            }
 
             // Załączenie zdjęcia fotograficznego (jeśli wykonano aparatem lub wybrano plik)
             if (window.currentAuditPhotoFile) {
@@ -2691,6 +3204,8 @@
             const res = await fetch('/api/audit', { method: 'POST', body: formData });
 
             if (res.ok) {
+                state.schedule_id = null;
+                activeSelectedAudit = null;
                 const data = await res.json().catch(() => ({}));
                 const verdict = data.slm_verdict || (slmText.includes('NOK') ? 'NOK' : 'OK');
                 
@@ -2888,9 +3403,9 @@
                     window.updateQuickNoteCounter(textarea);
                     if (window.setQuickNotePriority) window.setQuickNotePriority('INFO');
                     if (feedback) {
-                        feedback.innerText = isAnonymous 
-                            ? "✓ Wysłano anonimowo (IFS Culture) do Key Usera!" 
-                            : "✓ Wysłano do Key Usera!";
+                        feedback.innerHTML = isAnonymous 
+                            ? '<span class="flex items-center gap-1.5"><i class="fas fa-circle-check text-emerald-400"></i><span>Wysłano anonimowo (IFS Culture) do Key Usera!</span></span>' 
+                            : '<span class="flex items-center gap-1.5"><i class="fas fa-circle-check text-emerald-400"></i><span>Wysłano do Key Usera!</span></span>';
                         feedback.className = "text-emerald-400 font-bold";
                         setTimeout(() => { 
                             if (feedback && feedback.innerText.includes("Wysłano")) {
@@ -2907,7 +3422,7 @@
                         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         recentTime.innerText = now;
                         const prefixLine = payload.line_id ? `[${payload.line_name}] ` : '';
-                        const prefixAnon = isAnonymous ? `🔒 [Poufne IFS] ` : '';
+                        const prefixAnon = isAnonymous ? `[Poufne IFS] ` : '';
                         recentContent.innerText = `${prefixAnon}${prefixLine}${content}`;
                         recentBox.classList.remove('hidden');
                     }
@@ -2974,215 +3489,228 @@
             }
         };
 
-        window.openQuickNoteModal = function(initialTab) {
-            const modal = document.getElementById('modal-quick-note');
+        // =====================================================================
+        // MODUŁ: LIVE CHAT OPERACYJNY (HALA ↔ BIURO / AUDYTORZY ↔ KIEROWNIK)
+        // =====================================================================
+        let liveChatPollingTimer = null;
+        let cachedChatMessages = [];
+
+        window.openLiveChatModal = function(initialText = '', initialPrio = '') {
+            const modal = document.getElementById('modal-live-chat') || document.getElementById('modal-quick-note');
             if (modal) {
                 modal.classList.remove('hidden');
-                if (typeof loadProductionLines === 'function') loadProductionLines();
-                
-                // Sprawdź czy jest wskazana zakładka, lub czy są nieprzeczytane odpowiedzi
-                const tabToOpen = initialTab || currentQuickNoteTab || 'inbox';
-                window.switchQuickNoteTab(tabToOpen);
-                if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
-            }
-        };
 
-        window.closeQuickNoteModal = function() {
-            const modal = document.getElementById('modal-quick-note');
-            if (modal) {
-                modal.classList.add('hidden');
-            }
-        };
-
-        window.loadAuditorInboxMessages = async function() {
-            const listEl = document.getElementById('auditor-inbox-list');
-            if (!listEl) return;
-            try {
-                listEl.innerHTML = '<div class="text-center py-6 text-xs text-slate-500 italic">Odświeżanie skrzynki odbiorczej...</div>';
-                const audParam = (state.auditor_id || state.auditor || '').trim();
-                const res = await fetch(`/api/auditor-notes?mode=inbox&auditor=${encodeURIComponent(audParam)}&limit=50`);
-                if (!res.ok) throw new Error("Błąd ładowania wiadomości");
-                const notes = await res.json();
-
-                if (!notes || notes.length === 0) {
-                    listEl.innerHTML = `
-                        <div class="text-center py-10 px-4 bg-slate-950/60 rounded-xl border border-slate-800">
-                            <svg class="w-10 h-10 mx-auto text-slate-600 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
-                                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
-                            </svg>
-                            <h4 class="text-xs font-bold text-slate-300">Skrzynka odbiorcza jest pusta</h4>
-                            <p class="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto">Gdy Key User odpowie na Twoją notatkę lub nada ogłoszenie do audytorów, odpowiedź pojawi się w tym miejscu.</p>
-                            <button type="button" onclick="switchQuickNoteTab('send')" class="mt-3 px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition cursor-pointer">
-                                ✉️ Wyślij nową wiadomość
-                            </button>
-                        </div>
-                    `;
-                    if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
-                    return;
+                // Zasilenie listy linii w formularzu Chatu
+                const chatLine = document.getElementById('live-chat-line');
+                if (chatLine && Array.isArray(productionLinesData) && productionLinesData.length > 0) {
+                    const curVal = chatLine.value;
+                    chatLine.innerHTML = `<option value="Hala Główna">— Cała Hala / Ogólna —</option>` + 
+                        productionLinesData.map(l => `<option value="${l.name}">${l.name}${l.code ? ' (' + l.code + ')' : ''}</option>`).join('');
+                    if (curVal) chatLine.value = curVal;
                 }
 
-                listEl.innerHTML = notes.map(n => {
-                    const isUnreadByAuditor = !n.auditor_read_response;
-                    const unreadBadge = isUnreadByAuditor 
-                        ? `<span class="bg-rose-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full border border-rose-400 animate-pulse">NOWA ODPOWIEDŹ</span>` 
-                        : `<span class="text-slate-500 text-[9.5px]">Przeczytana</span>`;
-                    const prioColor = n.priority === 'HOLD' 
-                        ? 'text-rose-400 bg-rose-950/60 border-rose-500/50' 
-                        : (n.priority === 'WARNING' ? 'text-amber-300 bg-amber-950/60 border-amber-500/50' : 'text-cyan-300 bg-cyan-950/60 border-cyan-500/50');
-
-                    return `
-                        <div class="p-3.5 rounded-xl ${isUnreadByAuditor ? 'bg-amber-950/20 border border-amber-500/50 shadow-md' : 'bg-slate-950/70 border border-slate-800'} transition space-y-2 text-left">
-                            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="text-xs font-black text-amber-400 flex items-center gap-1">
-                                        <i class="fas fa-user-shield text-xs"></i> ${n.manager_name || 'Key User (Manager)'}
-                                    </span>
-                                    <span class="text-[10px] font-mono text-slate-400">${n.manager_response_at || n.timestamp}</span>
-                                    <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded border ${prioColor}">${n.priority || 'INFO'}</span>
-                                    ${n.line_name ? `<span class="text-[9.5px] font-bold text-cyan-300 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/30">${n.line_name}</span>` : ''}
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    ${unreadBadge}
-                                </div>
-                            </div>
-
-                            <div class="bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 p-3 rounded-xl border border-amber-500/30 text-xs sm:text-sm text-amber-100 font-medium leading-relaxed shadow-sm">
-                                <div class="text-[9.5px] font-bold text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                                    <i class="fas fa-comment-dots text-amber-400"></i> Odpowiedź z Działu Jakości / Key Usera:
-                                </div>
-                                <p class="whitespace-pre-line">${n.manager_response || n.content}</p>
-                            </div>
-
-                            <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800 text-[11px] text-slate-400">
-                                <span class="font-bold text-slate-300">Twoje zgłoszenie:</span> "${n.content}"
-                            </div>
-
-                            <div class="flex items-center justify-between pt-1">
-                                <span class="text-[10px] text-slate-500 font-mono">Wiadomość #${n.id}</span>
-                                <div class="flex items-center gap-2">
-                                    ${isUnreadByAuditor ? `
-                                        <button type="button" onclick="markAuditorResponseAsRead(${n.id})" class="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-lg transition active:scale-95 shadow cursor-pointer">
-                                            ✓ Oznacz jako przeczytane
-                                        </button>
-                                    ` : ''}
-                                    <button type="button" onclick="replyBackToManager('${n.line_name || ''}', ${n.id})" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
-                                        <i class="fas fa-reply text-xs"></i> Odpowiedz
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-
-                if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
-            } catch(e) {
-                console.warn("Błąd renderowania skrzynki audytora:", e);
-                listEl.innerHTML = '<div class="text-center py-6 text-xs text-rose-400 italic">Błąd pobierania wiadomości ze skrzynki.</div>';
-            }
-        };
-
-        window.loadAuditorSentMessages = async function() {
-            const listEl = document.getElementById('auditor-sent-list');
-            const badgeSent = document.getElementById('qn-badge-sent');
-            if (!listEl) return;
-            try {
-                listEl.innerHTML = '<div class="text-center py-6 text-xs text-slate-500 italic">Ładowanie historii wysłanych...</div>';
-                const audParam = (state.auditor_id || state.auditor || '').trim();
-                const res = await fetch(`/api/auditor-notes?mode=sent&auditor=${encodeURIComponent(audParam)}&limit=50`);
-                if (!res.ok) throw new Error("Błąd ładowania wysłanych");
-                const notes = await res.json();
-
-                if (badgeSent) badgeSent.textContent = notes.length;
-
-                if (!notes || notes.length === 0) {
-                    listEl.innerHTML = `
-                        <div class="text-center py-10 px-4 bg-slate-950/60 rounded-xl border border-slate-800">
-                            <i class="fas fa-paper-plane text-2xl text-slate-600 mb-2"></i>
-                            <h4 class="text-xs font-bold text-slate-300">Brak wysłanych notatek</h4>
-                            <p class="text-[11px] text-slate-500 mt-1">Nie wysłałeś jeszcze żadnej szybkiej notatki z hali.</p>
-                        </div>
-                    `;
-                    return;
+                if (initialPrio) {
+                    const prioSel = document.getElementById('live-chat-prio');
+                    if (prioSel) prioSel.value = initialPrio;
                 }
 
-                listEl.innerHTML = notes.map(n => {
-                    const hasReply = Boolean(n.manager_response && n.manager_response.trim());
-                    const isReadByMgr = Boolean(n.is_read);
-
-                    const statusBadge = hasReply 
-                        ? `<span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer" onclick="switchQuickNoteTab('inbox')"><i class="fas fa-comment-dots"></i> Odpowiedziano</span>`
-                        : (isReadByMgr 
-                            ? `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full">✓ Przeczytana przez Key Usera</span>`
-                            : `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full">⏳ Oczekuje na odczyt</span>`
-                        );
-
-                    return `
-                        <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-left space-y-2">
-                            <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5 text-xs">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-mono text-[10px] text-slate-400">${n.timestamp}</span>
-                                    <span class="font-bold text-cyan-300">${n.line_name || 'Ogólna / Cała Hala'}</span>
-                                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">${n.priority || 'INFO'}</span>
-                                </div>
-                                <div>${statusBadge}</div>
-                            </div>
-                            <div class="text-xs text-slate-200">${n.content}</div>
-                            ${hasReply ? `
-                                <div class="p-2 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-[11px] text-cyan-200">
-                                    <b class="text-cyan-400">Odpowiedź Key Usera:</b> ${n.manager_response}
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                }).join('');
-            } catch(e) {
-                console.warn("Błąd renderowania wysłanych audytora:", e);
-                listEl.innerHTML = '<div class="text-center py-6 text-xs text-rose-400 italic">Błąd pobierania historii wysłanych.</div>';
-            }
-        };
-
-        window.replyBackToManager = function(lineName, originalNoteId) {
-            window.switchQuickNoteTab('send');
-            const qnLine = document.getElementById('quick-note-line');
-            if (qnLine && lineName) {
-                for (let i = 0; i < qnLine.options.length; i++) {
-                    if (qnLine.options[i].text.includes(lineName) || qnLine.options[i].value.includes(lineName)) {
-                        qnLine.selectedIndex = i;
-                        break;
+                if (initialText) {
+                    const inp = document.getElementById('live-chat-input');
+                    if (inp) {
+                        inp.value = initialText;
+                        inp.focus();
                     }
                 }
-            }
-            const textarea = document.getElementById('quick-note-text');
-            if (textarea) {
-                textarea.value = `Odp. do notatki #${originalNoteId}: `;
-                textarea.focus();
-                window.updateQuickNoteCounter(textarea);
+
+                loadLiveChatMessages(true);
+
+                if (liveChatPollingTimer) clearInterval(liveChatPollingTimer);
+                liveChatPollingTimer = setInterval(() => {
+                    const m = document.getElementById('modal-live-chat') || document.getElementById('modal-quick-note');
+                    if (m && !m.classList.contains('hidden')) {
+                        loadLiveChatMessages(false);
+                    }
+                }, 3000);
             }
         };
 
-        window.markAuditorResponseAsRead = async function(noteId) {
-            try {
-                const res = await fetch(`/api/auditor-notes/${noteId}/auditor-read`, { method: 'PATCH' });
-                if (res.ok) {
-                    await window.loadAuditorInboxMessages();
-                    if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
-                }
-            } catch(e) {
-                console.error("Błąd oznaczania odpowiedzi jako przeczytana:", e);
+        window.closeLiveChatModal = function() {
+            const modal = document.getElementById('modal-live-chat') || document.getElementById('modal-quick-note');
+            if (modal) modal.classList.add('hidden');
+            if (liveChatPollingTimer) {
+                clearInterval(liveChatPollingTimer);
+                liveChatPollingTimer = null;
             }
         };
 
-        window.markAllAuditorInboxAsRead = async function() {
+        window.loadLiveChatMessages = async function(shouldScrollToBottom = true) {
+            const container = document.getElementById('live-chat-messages-container');
+            if (!container) return;
+
             try {
-                const audParam = (state.auditor_id || state.auditor || '').trim();
-                const res = await fetch(`/api/auditor-notes/auditor-mark-all-read?auditor=${encodeURIComponent(audParam)}`, { method: 'POST' });
-                if (res.ok) {
-                    await window.loadAuditorInboxMessages();
-                    if (window.updateAuditorNotesBadge) window.updateAuditorNotesBadge();
+                const res = await fetch('/api/auditor-notes/chat-messages?limit=100');
+                if (!res.ok) throw new Error("Błąd pobierania wiadomości chatu");
+                const messages = await res.json();
+                cachedChatMessages = messages;
+
+                if (!messages || messages.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-12 px-4 bg-slate-950/40 rounded-xl border border-slate-800/80">
+                            <div class="w-12 h-12 mx-auto rounded-2xl bg-cyan-950/50 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-3 shadow-inner">
+                                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                </svg>
+                            </div>
+                            <h4 class="text-sm font-black text-slate-200">Live Chat jest gotowy</h4>
+                            <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Napisz wiadomość poniżej, zadaj pytanie lub zgłoś natychmiastowy alert z hali produkcyjnej.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+                const currentRole = state.role || 'AUDITOR';
+                const currentUserName = (state.auditor_name || state.auditor || state.user_name || '').toLowerCase();
+
+                container.innerHTML = messages.map(msg => {
+                    const isMgr = (msg.sender_role === 'MANAGER');
+                    const isMe = (currentRole === 'MANAGER' && isMgr) || 
+                                 (currentRole !== 'MANAGER' && !isMgr && msg.sender_name && msg.sender_name.toLowerCase().includes(currentUserName));
+
+                    let prioBadge = '';
+                    if (msg.priority === 'HOLD') {
+                        prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-600 text-white border border-rose-400 animate-pulse inline-flex items-center gap-1"><i class="fas fa-triangle-exclamation"></i><span>HOLD CCP</span></span>`;
+                    } else if (msg.priority === 'WARNING') {
+                        prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/30 text-amber-300 border border-amber-400/50 inline-flex items-center gap-1"><i class="fas fa-circle-exclamation"></i><span>UWAGA CP</span></span>`;
+                    } else if (msg.priority === 'INFO') {
+                        prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 inline-flex items-center gap-1"><i class="fas fa-circle-info"></i><span>INFO</span></span>`;
+                    }
+
+                    const lineTag = msg.line_name ? `<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-900 border border-slate-700 text-slate-300 inline-flex items-center gap-1"><i class="fas fa-industry text-amber-400"></i><span>${msg.line_name}</span></span>` : '';
+
+                    const senderLabel = isMgr 
+                        ? `<span class="text-amber-300 font-black flex items-center gap-1"><i class="fas fa-user-shield text-[10px]"></i> ${msg.sender_name || 'Kierownik Jakości'}</span>`
+                        : `<span class="text-cyan-300 font-bold flex items-center gap-1"><i class="fas fa-hard-hat text-[10px]"></i> ${msg.sender_name || 'Audytor Operacyjny'}</span>`;
+
+                    const bubbleAlign = isMe ? 'items-end' : 'items-start';
+                    const bubbleBg = isMe 
+                        ? (isMgr ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white rounded-br-none border border-amber-400/40 shadow-lg' : 'bg-gradient-to-br from-cyan-600 to-blue-600 text-white rounded-br-none border border-cyan-400/40 shadow-lg')
+                        : (isMgr ? 'bg-amber-950/40 text-slate-100 rounded-bl-none border border-amber-500/40 shadow-md' : 'bg-slate-900 text-slate-100 rounded-bl-none border border-slate-700 shadow-md');
+
+                    return `
+                        <div class="flex flex-col ${bubbleAlign} space-y-1">
+                            <div class="flex items-center gap-2 text-[10px] px-1">
+                                ${senderLabel}
+                                ${prioBadge}
+                                ${lineTag}
+                                <span class="text-slate-500 font-mono text-[9px]">${msg.timestamp ? (msg.timestamp.split(' ')[1] || msg.timestamp) : ''}</span>
+                            </div>
+                            <div class="max-w-[85%] sm:max-w-[75%] p-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed break-words ${bubbleBg}">
+                                ${msg.message}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                if (shouldScrollToBottom || isNearBottom) {
+                    container.scrollTop = container.scrollHeight;
                 }
             } catch(e) {
-                console.error("Błąd oznaczania wszystkich jako przeczytane:", e);
+                console.warn("Błąd ładowania wiadomości czatu:", e);
+            }
+        };
+
+        window.sendLiveChatMessage = async function() {
+            const inputEl = document.getElementById('live-chat-input');
+            const lineEl = document.getElementById('live-chat-line');
+            const prioEl = document.getElementById('live-chat-prio');
+            const sendBtn = document.getElementById('btn-live-chat-send');
+            if (!inputEl) return;
+
+            const text = (inputEl.value || '').trim();
+            if (!text) return;
+
+            const senderName = state.role === 'MANAGER' 
+                ? (state.user_name || 'Kierownik Jakości (Key User)')
+                : (state.auditor_name || state.auditor || 'Audytor Operacyjny');
+
+            const payload = {
+                sender_name: senderName,
+                sender_role: state.role || 'AUDITOR',
+                line_name: lineEl ? lineEl.value : 'Hala Główna',
+                priority: prioEl ? prioEl.value : 'CHAT',
+                message: text
+            };
+
+            try {
+                if (sendBtn) {
+                    sendBtn.disabled = true;
+                    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                }
+
+                const res = await fetch('/api/auditor-notes/chat-send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    inputEl.value = '';
+                    if (prioEl) prioEl.value = 'CHAT';
+                    await loadLiveChatMessages(true);
+                } else {
+                    const err = await res.json();
+                    alert("Błąd wysyłania wiadomości: " + (err.detail || 'Nieznany błąd'));
+                }
+            } catch(e) {
+                console.error("Błąd sieci czatu:", e);
+                alert("Błąd połączenia z serwerem czatu.");
+            } finally {
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = '<i class="fas fa-paper-plane text-xs"></i><span>Wyślij</span>';
+                }
+                inputEl.focus();
+            }
+        };
+
+        window.handleLiveChatKeyDown = function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendLiveChatMessage();
+            }
+        };
+
+        window.insertLiveChatQuickAction = function(actionType) {
+            const prioEl = document.getElementById('live-chat-prio');
+            const inputEl = document.getElementById('live-chat-input');
+            if (!inputEl) return;
+
+            if (actionType === 'HOLD') {
+                if (prioEl) prioEl.value = 'HOLD';
+                inputEl.value = '[PILNE CCP] Natychmiastowe wstrzymanie procesu produkcyjnego na linii! Przyczyna: ';
+            } else if (actionType === 'WARNING') {
+                if (prioEl) prioEl.value = 'WARNING';
+                inputEl.value = '[UWAGA CP] Odchylenie od standardu dobrych praktyk higienicznych (GMP/GHP): ';
+            } else if (actionType === 'RESUME') {
+                if (prioEl) prioEl.value = 'INFO';
+                inputEl.value = '[WZNOWIENIE] Niezgodność usunięta, linia produkcyjna dopuszczona do wznowienia pracy.';
+            } else if (actionType === 'QUESTION') {
+                if (prioEl) prioEl.value = 'CHAT';
+                inputEl.value = '[ZAPYTANIE] Pytanie do Kierownika Jakości: ';
+            }
+            inputEl.focus();
+        };
+
+        window.clearLiveChatHistory = async function() {
+            if (!confirm("Czy na pewno chcesz wyczyścić całą historię Live Chatu?")) return;
+            try {
+                const res = await fetch('/api/auditor-notes/chat-clear', { method: 'POST' });
+                if (res.ok) {
+                    await loadLiveChatMessages(true);
+                }
+            } catch(e) {
+                console.error("Błąd czyszczenia czatu:", e);
             }
         };
 
@@ -3190,49 +3718,18 @@
             try {
                 const quickNoteTag = document.getElementById('tag-quick-note');
                 if (quickNoteTag) {
-                    if (state.role === 'MANAGER') {
-                        quickNoteTag.classList.add('hidden');
-                    } else {
-                        quickNoteTag.classList.remove('hidden');
-                    }
+                    quickNoteTag.classList.remove('hidden');
                 }
-
-                if (state.role === 'MANAGER') {
-                    // U Key Usera nie ma tagu w górnym doku - skrzynka odbiorcza pozostaje w Kaflu 8
-                    return;
-                }
-
-                const audParam = (state.auditor_id || state.auditor || '').trim();
-                const res = await fetch(`/api/auditor-notes/counts?auditor=${encodeURIComponent(audParam)}`);
-                if (!res.ok) return;
-                const counts = await res.json();
-                
-                // 1. Plakietka na tagu w górnym doku (#badge-dock-notes) tylko dla Audytora:
-                const dockBadge = document.getElementById('badge-dock-notes');
-                if (dockBadge) {
-                    const countToShow = counts.auditor_unread || 0;
-                    if (countToShow > 0) {
-                        dockBadge.textContent = countToShow > 99 ? '99+' : countToShow;
-                        dockBadge.classList.remove('hidden');
-                    } else {
-                        dockBadge.classList.add('hidden');
-                    }
-                }
-
-                // 2. Plakietka w modalu na zakładce "Odbierz / Odpowiedzi" (#qn-badge-inbox):
-                const modalInboxBadge = document.getElementById('qn-badge-inbox');
-                if (modalInboxBadge) {
-                    if (counts.auditor_unread > 0) {
-                        modalInboxBadge.textContent = counts.auditor_unread;
-                        modalInboxBadge.classList.remove('hidden');
-                    } else {
-                        modalInboxBadge.classList.add('hidden');
-                    }
-                }
-            } catch(e) {
-                console.warn("Błąd pobierania licznika wiadomości:", e);
-            }
+            } catch(e) {}
         };
+
+        // Aliases dla pełnej wstecznej kompatybilności
+        window.openQuickNoteModal = window.openLiveChatModal;
+        window.closeQuickNoteModal = window.closeLiveChatModal;
+        window.openAuditorNotesInbox = window.openLiveChatModal;
+        window.loadManagerAuditorNotes = window.loadLiveChatMessages;
+        window.loadAuditorInboxMessages = window.loadLiveChatMessages;
+        window.loadAuditorSentMessages = window.loadLiveChatMessages;
 
         function selectTile(cat, val, btn) {
             document.querySelectorAll(`.tile-${cat}`).forEach(b => b.classList.remove('tile-selected'));
@@ -3351,8 +3848,8 @@
                 codeInput.value = autoCode;
                 const badge = document.getElementById('badge-code-auto');
                 if (badge) {
-                    badge.textContent = '⚡ Auto-kod';
-                    badge.className = 'text-[9px] text-amber-400 font-black tracking-wider uppercase';
+                    badge.innerHTML = '<i class="fas fa-bolt text-amber-400 mr-1"></i>Auto-kod';
+                    badge.className = 'text-[9px] text-amber-400 font-black tracking-wider uppercase flex items-center';
                 }
             }
         }
@@ -3367,7 +3864,7 @@
             }
             const btnSave = document.getElementById('btn-save-line');
             if (btnSave) {
-                btnSave.innerHTML = '💾 Zapisz Linię w Rejestrze Fabrycznym';
+                btnSave.innerHTML = '<i class="fas fa-floppy-disk mr-1.5"></i>Zapisz Linię w Rejestrze Fabrycznym';
             }
             const nameEl = document.getElementById('new-line-name');
             const codeEl = document.getElementById('new-line-code');
@@ -3378,8 +3875,8 @@
             isCodeManuallyEdited = false;
             const badge = document.getElementById('badge-code-auto');
             if (badge) {
-                badge.textContent = '⚡ Auto-kod';
-                badge.className = 'text-[9px] text-amber-400 font-black tracking-wider uppercase';
+                badge.innerHTML = '<i class="fas fa-bolt text-amber-400 mr-1"></i>Auto-kod';
+                badge.className = 'text-[9px] text-amber-400 font-black tracking-wider uppercase flex items-center';
             }
         }
 
@@ -3411,8 +3908,8 @@
                         isCodeManuallyEdited = true;
                         const badge = document.getElementById('badge-code-auto');
                         if (badge) {
-                            badge.textContent = '✏️ Ręczny';
-                            badge.className = 'text-[9px] text-cyan-400 font-black tracking-wider uppercase';
+                            badge.innerHTML = '<i class="fas fa-pen mr-1"></i>Ręczny';
+                            badge.className = 'text-[9px] text-cyan-400 font-black tracking-wider uppercase flex items-center';
                         }
                     };
                 }
@@ -3446,7 +3943,7 @@
             }
             const btnSave = document.getElementById('btn-save-line');
             if (btnSave) {
-                btnSave.innerHTML = `💾 Zapisz Zmiany w Linii #${targetId}`;
+                btnSave.innerHTML = `<i class="fas fa-floppy-disk mr-1.5"></i>Zapisz Zmiany w Linii #${targetId}`;
             }
 
             // 4. Wypełniamy pola danymi wybranej linii
@@ -3469,8 +3966,8 @@
             isCodeManuallyEdited = true;
             const badge = document.getElementById('badge-code-auto');
             if (badge) {
-                badge.textContent = '✏️ Edycja';
-                badge.className = 'text-[9px] text-cyan-400 font-black tracking-wider uppercase';
+                badge.innerHTML = '<i class="fas fa-pen-to-square mr-1"></i>Edycja';
+                badge.className = 'text-[9px] text-cyan-400 font-black tracking-wider uppercase flex items-center';
             }
 
             // 5. Płynne przewinięcie do formularza
@@ -3494,30 +3991,30 @@
         function getStatusBadge(status) {
             const s = (status || '').toUpperCase();
             if (s.includes('HOLD') || s.includes('KWARANTANNA') || s.includes('BLOKAD')) {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500 animate-pulse">🔴 HOLD LOT</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500 animate-pulse inline-flex items-center gap-1"><i class="fas fa-triangle-exclamation text-[10px]"></i><span>HOLD LOT</span></span>`;
             } else if (s.includes('WARUNKOW')) {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/50">🟡 Warunkowo</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/50 inline-flex items-center gap-1"><i class="fas fa-circle-exclamation text-[10px]"></i><span>Warunkowo</span></span>`;
             } else if (s.includes('CIP') || s.includes('MYCIE') || s.includes('SANITYZ')) {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/50">🔵 Mycie CIP</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/50 inline-flex items-center gap-1"><i class="fas fa-pump-medical text-[10px]"></i><span>Mycie CIP</span></span>`;
             } else {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">🟢 Zwolniona</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40 inline-flex items-center gap-1"><i class="fas fa-circle-check text-[10px]"></i><span>Zwolniona</span></span>`;
             }
         }
 
         function getZoneBadge(zone) {
             const z = (zone || '').toLowerCase();
             if (z.includes('wysok') || z.includes('high')) {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500/40">🔴 High Care</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500/40 inline-flex items-center gap-1"><i class="fas fa-shield-virus text-[10px]"></i><span>High Care</span></span>`;
             } else if (z.includes('średni') || z.includes('medium')) {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40">🟠 Medium Care</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40 inline-flex items-center gap-1"><i class="fas fa-shield-halved text-[10px]"></i><span>Medium Care</span></span>`;
             } else if (z.includes('nisk') || z.includes('low')) {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-yellow-950 text-yellow-300 border border-yellow-500/40">🟡 Low Care</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-yellow-950 text-yellow-300 border border-yellow-500/40 inline-flex items-center gap-1"><i class="fas fa-box text-[10px]"></i><span>Low Care</span></span>`;
             } else if (z.includes('pakow') || z.includes('pack')) {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40">🟣 Packaging</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-500/40 inline-flex items-center gap-1"><i class="fas fa-boxes-packing text-[10px]"></i><span>Packaging</span></span>`;
             } else if (z.includes('magazyn') || z.includes('warehous')) {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40">🔵 Magazyn</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40 inline-flex items-center gap-1"><i class="fas fa-warehouse text-[10px]"></i><span>Magazyn</span></span>`;
             } else {
-                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">⚪ Pomocnicza</span>`;
+                return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 inline-flex items-center gap-1"><i class="fas fa-gears text-[10px]"></i><span>Pomocnicza</span></span>`;
             }
         }
 
@@ -3609,8 +4106,8 @@
 
                 if (res && res.ok) {
                     const msg = editingLineId 
-                        ? `✅ Pomyślnie zaktualizowano dane linii "${name}"!` 
-                        : "✅ Zarejestrowano nową linię produkcyjną z profilem sanitarnym!";
+                        ? `Pomyślnie zaktualizowano dane linii "${name}"!` 
+                        : "Zarejestrowano nową linię produkcyjną z profilem sanitarnym!";
                     alert(msg);
                     resetLineFormToNew();
                     const form = document.getElementById('form-add-line-container');
@@ -3621,11 +4118,11 @@
                     renderLinesManagerList();
                 } else {
                     const err = await res.json().catch(() => ({}));
-                    alert(`❌ Błąd podczas zapisu linii: ${err.detail || 'Brak uprawnień lub błąd serwera'}`);
+                    alert(`Błąd podczas zapisu linii: ${err.detail || 'Brak uprawnień lub błąd serwera'}`);
                 }
             } catch (e) {
                 console.error("Błąd zapisu linii:", e);
-                alert("❌ Błąd połączenia podczas zapisywania linii.");
+                alert("Błąd połączenia podczas zapisywania linii.");
             }
         }
         window.saveProductionLine = saveProductionLine;
@@ -3701,13 +4198,13 @@
                 });
 
                 if (res && res.ok) {
-                    alert(`✅ Status linii został zaktualizowany na: ${newStatus}`);
+                    alert(`Status linii został zaktualizowany na: ${newStatus}`);
                     await loadProductionLines();
                     renderLinesManagerList();
                     openLinePassportModal(currentPassportLineId); // odśwież widok profilu
                 } else {
                     const err = await res.json().catch(() => ({}));
-                    alert(`❌ Błąd podczas zmiany statusu linii: ${err.detail || 'Brak uprawnień'}`);
+                    alert(`Błąd podczas zmiany statusu linii: ${err.detail || 'Brak uprawnień'}`);
                 }
             } catch(e) {
                 alert("Błąd połączenia: " + e.message);
@@ -3722,23 +4219,29 @@
                 renderLinesManagerList();
             } else {
                 const err = await res.json().catch(() => ({}));
-                alert(`❌ Błąd usuwania linii: ${err.detail || 'Brak uprawnień'}`);
+                alert(`Błąd usuwania linii: ${err.detail || 'Brak uprawnień'}`);
             }
         }
 
         async function loadAuditorsDropdown(type = "HACCP") {
-            const res = await fetch(`/api/auth/auditors?type=${encodeURIComponent(type)}`);
-            const list = await res.json();
-            
-            const createOption = (auditor) => {
-                const name = (typeof auditor === 'object' && auditor !== null) ? (auditor.name || auditor.full_name || auditor.id) : auditor;
-                const val = (typeof auditor === 'object' && auditor !== null) ? (auditor.name || auditor.id) : auditor;
-                return `<option value="${val}">${name}</option>`;
-            };
+            try {
+                const res = await apiFetch(`/api/auth/auditors?type=${encodeURIComponent(type)}`);
+                const list = await res.json();
+                
+                const createOption = (auditor) => {
+                    const name = (typeof auditor === 'object' && auditor !== null) ? (auditor.full_name || auditor.name || auditor.id) : auditor;
+                    const val = (typeof auditor === 'object' && auditor !== null) ? (auditor.full_name || auditor.name || auditor.id) : auditor;
+                    return `<option value="${val}">${name}</option>`;
+                };
 
-            const opts = list.map(createOption).join('');
-            document.getElementById('plan-auditor').innerHTML = opts;
-            document.getElementById('plan-backup').innerHTML = `<option value="Brak">Brak</option>` + opts;
+                const opts = Array.isArray(list) ? list.map(createOption).join('') : '';
+                const audSelect = document.getElementById('plan-auditor');
+                const backupSelect = document.getElementById('plan-backup');
+                if (audSelect) audSelect.innerHTML = opts;
+                if (backupSelect) backupSelect.innerHTML = `<option value="Brak">Brak</option>` + opts;
+            } catch (err) {
+                console.warn("[loadAuditorsDropdown] Błąd pobierania audytorów:", err);
+            }
         }
 
         function filterPlanAuditorsByType(v) { loadAuditorsDropdown(v); }
@@ -3851,7 +4354,7 @@
                 ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
                 : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50';
 
-            const icon = isCritical ? '🚨' : '✅';
+            const icon = isCritical ? '<i class="fas fa-triangle-exclamation text-rose-400 text-xl"></i>' : '<i class="fas fa-circle-check text-emerald-400 text-xl"></i>';
             const statusLabel = isCritical ? 'NOK (NIEZGODNY - HOLD LOT)' : 'OK (ZGODNY)';
 
             let akcjeHtml = '';
@@ -3860,14 +4363,14 @@
                     <div class="mt-2.5 pt-2.5 border-t border-white/10 space-y-1.5">
                         <div class="flex items-center justify-between">
                             <span class="text-[9.5px] font-black text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
-                                <span>🛠️</span> <span>Wymagane Działania Korygujące (CAPA):</span>
+                                <i class="fas fa-screwdriver-wrench text-rose-400"></i> <span>Wymagane Działania Korygujące (CAPA):</span>
                             </span>
                             <span class="text-[8px] font-bold bg-rose-900/40 text-rose-300 px-1.5 py-0.5 rounded border border-rose-700/50">IFS KO 6</span>
                         </div>
                         <div class="space-y-1">
                             ${akcje.map(a => `
                                 <div class="p-2 rounded-xl bg-black/50 border border-rose-500/30 text-[11px] text-slate-100 flex items-start gap-2 shadow-inner">
-                                    <span class="text-rose-400 font-bold">⚠️</span>
+                                    <i class="fas fa-circle-exclamation text-rose-400 mt-0.5 shrink-0 text-xs"></i>
                                     <span class="leading-snug">${a}</span>
                                 </div>
                             `).join('')}
@@ -3882,14 +4385,14 @@
                     <div class="mt-2.5 pt-2 border-t border-white/10 space-y-1.5">
                         <div class="flex items-center justify-between">
                             <span class="text-[9.5px] font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                                <span>🛡️</span> <span>Wytyczne Prewencyjne & SOP:</span>
+                                <i class="fas fa-shield-halved text-amber-400"></i> <span>Wytyczne Prewencyjne & SOP:</span>
                             </span>
                             <span class="text-[8px] font-bold bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded border border-amber-700/50">Dobre Praktyki</span>
                         </div>
                         <div class="space-y-1">
                             ${podpowiedzi.map(p => `
                                 <div class="p-2 rounded-xl bg-black/50 border border-amber-500/30 text-[11px] text-slate-300 flex items-start gap-2 shadow-inner">
-                                    <span class="text-amber-400 font-bold">🔹</span>
+                                    <i class="fas fa-chevron-right text-amber-400 mt-0.5 shrink-0 text-[10px]"></i>
                                     <span class="leading-snug">${p}</span>
                                 </div>
                             `).join('')}
@@ -3901,7 +4404,7 @@
             // Odnośniki graficzne i szybkie akcje
             const quickLinksHtml = `
                 <div class="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-1.5 flex-wrap">
-                    <span class="text-[8.5px] font-black text-slate-400 uppercase tracking-wider mr-1">🔗 Odnośniki:</span>
+                    <span class="text-[8.5px] font-black text-slate-400 uppercase tracking-wider mr-1 flex items-center gap-1"><i class="fas fa-link text-slate-400"></i> Odnośniki:</span>
                     <button onclick="showModule('audit-main')" class="tile-3d bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-lg text-[9px] font-black flex items-center gap-1 shadow-md">
                         <i class="fas fa-clipboard-check"></i> Przejdź do formularza audytu
                     </button>
@@ -3928,8 +4431,8 @@
                     </div>
 
                     <div class="bg-black/50 p-3 rounded-xl border border-white/10 shadow-inner">
-                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
-                            <span>🛑</span> <span>Decyzja Operacyjna:</span>
+                        <span class="text-[9px] font-black text-amber-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+                            <i class="fas fa-circle-stop text-amber-400"></i> <span>Decyzja Operacyjna:</span>
                         </span>
                         <p class="text-xs font-bold text-slate-100 leading-relaxed">${decyzja}</p>
                     </div>
@@ -3965,7 +4468,7 @@
             const sel = document.getElementById('agent-line-select');
             if (!sel) return;
             const currVal = sel.value;
-            let opts = `<option value="Cały Zakład">🏢 Cały Zakład (Widok Ogólny)</option>`;
+            let opts = `<option value="Cały Zakład">— Cały Zakład (Widok Ogólny) —</option>`;
             if (Array.isArray(productionLinesData) && productionLinesData.length > 0) {
                 opts += productionLinesData.map(l => `<option value="${l.name}">${l.name}</option>`).join('');
             }
@@ -3994,7 +4497,8 @@
             box.innerHTML += `
                 <div class="flex justify-end">
                     <div class="bg-cyan-950/70 p-2.5 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%] text-xs font-bold flex items-center gap-1.5 shadow-md">
-                        <span>🚀 Żądanie odprawy dla: <u>${line}</u></span>
+                        <i class="fas fa-bolt-lightning text-cyan-400"></i>
+                        <span>Żądanie odprawy dla: <u>${line}</u></span>
                     </div>
                 </div>
             `;
@@ -4017,7 +4521,7 @@
                 if (data.checkpoints && data.checkpoints.length > 0) {
                     checkpointsHtml = `
                         <div class="mt-2.5 pt-2 border-t border-slate-700/60">
-                            <span class="text-[9px] font-black text-cyan-300 uppercase tracking-wider block mb-1.5">🎯 Punkty wzmożonej uwagi podczas inspekcji:</span>
+                            <span class="text-[9px] font-black text-cyan-300 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5"><i class="fas fa-bullseye text-cyan-400"></i><span>Punkty wzmożonej uwagi podczas inspekcji:</span></span>
                             <ul class="space-y-1 text-[11px] text-slate-300 list-none pl-0">
                                 ${data.checkpoints.map(cp => `<li class="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-start gap-1.5"><span class="text-indigo-400">▪</span> <span>${renderMarkdownToHtml(cp)}</span></li>`).join('')}
                             </ul>
@@ -4030,7 +4534,7 @@
                         <div class="bg-slate-900/95 p-3.5 rounded-2xl border border-indigo-500/40 text-slate-200 max-w-[95%] shadow-xl space-y-2">
                             <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
                                 <span class="text-[10.5px] font-black text-amber-400 flex items-center gap-1.5">
-                                    📋 ODPRAWA: ${data.line}
+                                    <i class="fas fa-clipboard-check text-cyan-400"></i> ODPRAWA: ${data.line}
                                 </span>
                                 ${statusBadge}
                             </div>
@@ -4046,7 +4550,7 @@
                     </div>
                 `;
             } catch(e) {
-                box.innerHTML += `<div class="text-rose-400 text-xs p-2.5 bg-rose-950/40 rounded-xl border border-rose-800/40">❌ Nie udało się pobrać odprawy. Sprawdź połączenie z serwerem.</div>`;
+                box.innerHTML += `<div class="text-rose-400 text-xs p-2.5 bg-rose-950/40 rounded-xl border border-rose-800/40">Nie udało się pobrać odprawy. Sprawdź połączenie z serwerem.</div>`;
             } finally {
                 if (typing) typing.classList.add('hidden');
                 if (btn) btn.disabled = false;
@@ -4093,13 +4597,13 @@
                 box.innerHTML += `
                     <div class="flex justify-start">
                         <div class="bg-indigo-950/50 p-3 rounded-2xl border border-indigo-500/30 text-slate-200 max-w-[92%] text-xs leading-relaxed shadow-lg">
-                            <span class="text-[9.5px] font-black text-amber-400 block mb-1">🤖 Ai Support [${activeLine}]:</span>
+                            <span class="text-[9.5px] font-black text-amber-400 block mb-1 flex items-center gap-1.5"><i class="fas fa-microchip text-amber-400"></i><span>Ai Support [${activeLine}]:</span></span>
                             ${renderMarkdownToHtml(d.reply)}
                         </div>
                     </div>
                 `;
             } catch(e) {
-                box.innerHTML += `<div class="text-rose-400 text-[10px] p-2 bg-rose-950/30 rounded-lg">❌ Błąd komunikacji z silnikiem SLM.</div>`;
+                box.innerHTML += `<div class="text-rose-400 text-[10px] p-2 bg-rose-950/30 rounded-lg">Błąd komunikacji z silnikiem SLM.</div>`;
             } finally {
                 if (typing) typing.classList.add('hidden');
                 box.scrollTop = box.scrollHeight;
@@ -4120,8 +4624,8 @@
             if (box) {
                 box.innerHTML = `
                     <div class="bg-indigo-950/40 p-3 rounded-2xl border border-indigo-500/30 text-slate-200">
-                        <span class="text-[10px] font-black text-amber-400 block mb-1">🤖 Ai Support:</span>
-                        Czat został wyczyszczony. Wybierz linię i kliknij <b>„🚀 Wejście na linię”</b> lub skorzystaj z szybkich kafelków standardów.
+                        <span class="text-[10px] font-black text-amber-400 block mb-1 flex items-center gap-1.5"><i class="fas fa-microchip text-amber-400"></i><span>Ai Support:</span></span>
+                        Czat został wyczyszczony. Wybierz linię i kliknij <b>„Odprawa Terenowa (AI)”</b> lub skorzystaj z szybkich kafelków standardów.
                     </div>
                 `;
             }
@@ -4143,8 +4647,15 @@
 
             const audRes = await fetch('/api/auth/auditors');
             const auds = await audRes.json();
-            document.getElementById('mgr-edit-lead').innerHTML = auds.map(aud => `<option value="${aud}" ${aud === a.lead_auditor ? 'selected' : ''}>${aud}</option>`).join('');
-            document.getElementById('mgr-edit-backup').innerHTML = `<option value="Brak">Brak</option>` + auds.map(aud => `<option value="${aud}" ${aud === a.backup_auditor ? 'selected' : ''}>${aud}</option>`).join('');
+            const getAudName = (aud) => (typeof aud === 'string' ? aud : (aud.full_name || aud.name || 'Audytor'));
+            document.getElementById('mgr-edit-lead').innerHTML = auds.map(aud => {
+                const name = getAudName(aud);
+                return `<option value="${name}" ${name === a.lead_auditor ? 'selected' : ''}>${name}</option>`;
+            }).join('');
+            document.getElementById('mgr-edit-backup').innerHTML = `<option value="Brak">Brak</option>` + auds.map(aud => {
+                const name = getAudName(aud);
+                return `<option value="${name}" ${name === a.backup_auditor ? 'selected' : ''}>${name}</option>`;
+            }).join('');
 
             document.getElementById('modal-mgr-edit').classList.remove('hidden');
         }
@@ -4161,14 +4672,14 @@
 
             // Jeśli użytkownik zmienia datę spóźnionego audytu, nowy termin musi być bieżący lub przyszły
             if (originalDate && newDate !== originalDate && newDate < today) {
-                return alert("⚠️ Nowy wyznaczony termin audytu musi być datą bieżącą lub przyszłą!");
+                return alert("Nowy wyznaczony termin audytu musi być datą bieżącą lub przyszłą!");
             }
 
             const leadAuditor = document.getElementById('mgr-edit-lead').value;
             const backupAuditor = document.getElementById('mgr-edit-backup').value;
 
             if (leadAuditor === backupAuditor && backupAuditor !== "Brak") {
-                return alert("⚠️ Niezgodność z normą IFS: Audytor Główny i Zastępca nie mogą być tą samą osobą!");
+                return alert("Niezgodność z normą IFS: Audytor Główny i Zastępca nie mogą być tą samą osobą!");
             }
 
             const payload = {
@@ -4184,7 +4695,7 @@
             if (res.ok) { closeMgrModal(); await loadScheduleAndRender(); }
             else {
                 const err = await res.json().catch(() => ({}));
-                alert("❌ Błąd zapisu zmian: " + (err.detail || "Nie udało się zaktualizować audytu."));
+                alert("Błąd zapisu zmian: " + (err.detail || "Nie udało się zaktualizować audytu."));
             }
         }
 
@@ -4195,7 +4706,7 @@
             if (res.ok) { closeMgrModal(); await loadScheduleAndRender(); }
             else {
                 const err = await res.json().catch(() => ({}));
-                alert("❌ Błąd usuwania: " + (err.detail || "Nie udało się usunąć audytu."));
+                alert("Błąd usuwania: " + (err.detail || "Nie udało się usunąć audytu."));
             }
         }
 
@@ -4290,11 +4801,11 @@
 
                 const statusBadge = document.getElementById('det-badge-record-status');
                 if (a.record_status === 'ODBLOKOWANY_DO_KOREKTY') {
-                    statusBadge.textContent = '🔓 ODBLOKOWANY';
-                    statusBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-emerald-950 text-emerald-300 border-emerald-500/30';
+                    statusBadge.innerHTML = '<i class="fas fa-lock-open mr-1"></i>ODBLOKOWANY';
+                    statusBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-emerald-950 text-emerald-300 border-emerald-500/30 flex items-center';
                 } else {
-                    statusBadge.textContent = '🔒 ZABLOKOWANY';
-                    statusBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-amber-950 text-amber-300 border-amber-500/30';
+                    statusBadge.innerHTML = '<i class="fas fa-lock mr-1"></i>ZABLOKOWANY';
+                    statusBadge.className = 'text-[10px] px-2.5 py-1 rounded-full font-black border uppercase tracking-wider bg-amber-950 text-amber-300 border-amber-500/30 flex items-center';
                 }
 
                 // TAB 1: SLM Analysis
@@ -4314,14 +4825,14 @@
                 if (a.slm_analysis_parsed) {
                     const p = a.slm_analysis_parsed;
                     let out = '';
-                    if (p.decyzja) out += `📌 DECYZJA OPERACYJNA:\n${p.decyzja}\n\n`;
+                    if (p.decyzja) out += `[DECYZJA OPERACYJNA]:\n${p.decyzja}\n\n`;
                     if (p.akcje_korygujace && p.akcje_korygujace.length) {
-                        out += `🚨 WYMAGANE AKCJE KORYGUJĄCE (CAPA):\n`;
+                        out += `[WYMAGANE AKCJE KORYGUJĄCE (CAPA)]:\n`;
                         p.akcje_korygujace.forEach((act, idx) => out += `  ${idx + 1}. ${act}\n`);
                         out += `\n`;
                     }
                     if (p.podpowiedzi_prewencyjne && p.podpowiedzi_prewencyjne.length) {
-                        out += `🛡️ ZALECENIA PREWENCYJNE:\n`;
+                        out += `[ZALECENIA PREWENCYJNE]:\n`;
                         p.podpowiedzi_prewencyjne.forEach((prv, idx) => out += `  • ${prv}\n`);
                     }
                     analysisEl.textContent = out || a.slm_analysis || 'Brak danych analizy.';
@@ -4376,8 +4887,9 @@
                             <div class="space-y-1 text-xs">
                                 <div class="text-white font-bold">Fotografia dowodowa niezgodności</div>
                                 <div class="text-[10px] text-slate-400">Plik: ${a.photo_path}</div>
-                                <a href="${a.photo_path}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-cyan-400 hover:underline">
-                                    🔍 Otwórz zdjęcie w pełnym rozmiarze
+                                <a href="${a.photo_path}" target="_blank" class="inline-flex items-center gap-1.5 text-[10px] text-cyan-400 hover:underline">
+                                    <i class="fas fa-magnifying-glass-plus"></i>
+                                    <span>Otwórz zdjęcie w pełnym rozmiarze</span>
                                 </a>
                             </div>
                         </div>
@@ -4407,7 +4919,7 @@
                         const koBadge = item.is_ko ? `<span class="ml-1 text-[8px] bg-red-950 text-red-400 px-1 py-0.2 rounded border border-red-500/30 font-bold">KO</span>` : '';
                         const statusColor = isNok ? 'bg-rose-950 text-rose-300 border-rose-500/40' : 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
                         const scoreDisplay = item.score !== undefined ? `${item.score}/5` : (item.status || 'OK');
-                        const notesDisplay = item.notes ? `<span class="text-amber-300 font-medium">💬 ${item.notes}</span>` : `<span class="text-slate-500 italic">Brak uwag</span>`;
+                        const notesDisplay = item.notes ? `<span class="text-amber-300 font-medium inline-flex items-center gap-1"><i class="fas fa-comment-dots text-amber-400"></i><span>${item.notes}</span></span>` : `<span class="text-slate-500 italic">Brak uwag</span>`;
 
                         chBody.innerHTML += `
                             <tr class="hover:bg-slate-800/60 transition">
@@ -4473,7 +4985,7 @@
                     modeBadge.textContent = 'Tryb: Odblokowany do korekty';
                     modeBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30';
                     noticeEl.className = 'p-2.5 rounded-lg border text-xs flex items-center gap-2 bg-emerald-950/40 border-emerald-500/40 text-emerald-300';
-                    noticeEl.innerHTML = `<span>🔓</span> <div><b>Audyt został formalnie odblokowany do edycji przez Managera Jakości.</b> Możesz wprowadzić poprawki i zatwierdzić wpis w Audit Trail.</div>`;
+                    noticeEl.innerHTML = `<i class="fas fa-lock-open text-emerald-400 text-base shrink-0"></i> <div><b>Audyt został formalnie odblokowany do edycji przez Managera Jakości.</b> Możesz wprowadzić poprawki i zatwierdzić wpis w Audit Trail.</div>`;
                 } else {
                     lineInput.disabled = true;
                     shiftInput.disabled = true;
@@ -4482,7 +4994,7 @@
                     modeBadge.textContent = 'Tryb: Zablokowany (Tylko do odczytu)';
                     modeBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/30';
                     noticeEl.className = 'p-2.5 rounded-lg border text-xs flex items-center gap-2 bg-amber-950/40 border-amber-500/40 text-amber-300';
-                    noticeEl.innerHTML = `<span>🔒</span> <div><b>Wpis jest zablokowany zgodnie z wymogami IFS Food v8.</b> Bezpośrednia modyfikacja jest niedozwolona dopóki wniosek o korektę nie zostanie zatwierdzony w panelu wniosków.</div>`;
+                    noticeEl.innerHTML = `<i class="fas fa-lock text-amber-400 text-base shrink-0"></i> <div><b>Wpis jest zablokowany zgodnie z wymogami IFS Food v8.</b> Bezpośrednia modyfikacja jest niedozwolona dopóki wniosek o korektę nie zostanie zatwierdzony w panelu wniosków.</div>`;
                 }
 
                 // Pasek akcji Managera
@@ -4500,24 +5012,24 @@
                 if (a.compliance_verdict === 'ZATWIERDZONY') {
                     btnApprove.disabled = true;
                     btnApprove.className = 'px-3 py-1.5 bg-slate-800 text-slate-500 rounded-lg text-xs font-bold cursor-not-allowed';
-                    btnApprove.innerHTML = `<span>✓ Raport Zatwierdzony</span>`;
+                    btnApprove.innerHTML = `<span class="flex items-center gap-1.5"><i class="fas fa-check-double text-emerald-400"></i><span>Raport Zatwierdzony</span></span>`;
                     btnReject.disabled = false;
                     btnReject.className = 'px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition';
-                    footerInfo.innerHTML = `<span class="text-emerald-400 font-bold">✓ Formalnie zatwierdzony przez Managera Jakości</span>`;
+                    footerInfo.innerHTML = `<span class="text-emerald-400 font-bold flex items-center gap-1.5"><i class="fas fa-circle-check"></i><span>Formalnie zatwierdzony przez Managera Jakości</span></span>`;
                 } else if (a.compliance_verdict === 'ODRZUCONY') {
                     btnReject.disabled = true;
                     btnReject.className = 'px-3 py-1.5 bg-slate-800 text-slate-500 rounded-lg text-xs font-bold cursor-not-allowed';
-                    btnReject.innerHTML = `<span>✕ Raport Odrzucony</span>`;
+                    btnReject.innerHTML = `<span class="flex items-center gap-1.5"><i class="fas fa-circle-xmark text-rose-400"></i><span>Raport Odrzucony</span></span>`;
                     btnApprove.disabled = false;
                     btnApprove.className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition';
-                    footerInfo.innerHTML = `<span class="text-rose-400 font-bold">✕ Raport odrzucony przez Managera</span>`;
+                    footerInfo.innerHTML = `<span class="text-rose-400 font-bold flex items-center gap-1.5"><i class="fas fa-circle-xmark"></i><span>Raport odrzucony przez Managera</span></span>`;
                 } else {
                     btnApprove.disabled = false;
-                    btnApprove.className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1';
-                    btnApprove.innerHTML = `<span>✓ Zatwierdź Raport Audytu</span>`;
+                    btnApprove.className = 'px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5';
+                    btnApprove.innerHTML = `<span class="flex items-center gap-1.5"><i class="fas fa-check"></i><span>Zatwierdź Raport Audytu</span></span>`;
                     btnReject.disabled = false;
-                    btnReject.className = 'px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1';
-                    btnReject.innerHTML = `<span>✕ Odrzuć Raport</span>`;
+                    btnReject.className = 'px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5';
+                    btnReject.innerHTML = `<span class="flex items-center gap-1.5"><i class="fas fa-xmark"></i><span>Odrzuć Raport</span></span>`;
                     footerInfo.innerHTML = `<span class="text-slate-400">Oczekuje na weryfikację i decyzję Managera Jakości</span>`;
                 }
 
@@ -4545,9 +5057,9 @@
                 });
                 if (res && res.ok) {
                     if (typeof showToast === 'function') {
-                        showToast(`✅ Raport audytu #${targetId} został zatwierdzony i przeniesiony do Zatwierdzonych!`, 'success');
+                        showToast(`Raport audytu #${targetId} został zatwierdzony i przeniesiony do Zatwierdzonych!`, 'success');
                     } else {
-                        alert(`✅ Raport audytu #${targetId} został formalnie zatwierdzony!`);
+                        alert(`Raport audytu #${targetId} został formalnie zatwierdzony!`);
                     }
                     await openAuditDetailsModal(targetId);
                     renderManagerAuditsTable();
@@ -4600,7 +5112,7 @@
 
         window.handleHoldLotFromModal = async function() {
             if (!currentDetailedAuditId) return;
-            const confirmAction = confirm(`⚠️ UWAGA: Czy na pewno chcesz natychmiast zarządzić procedurę wstrzymania partii (HOLD LOT) dla audytu #${currentDetailedAuditId}? Ta operacja zostanie trwale odnotowana w Audit Trail.`);
+            const confirmAction = confirm(`UWAGA: Czy na pewno chcesz natychmiast zarządzić procedurę wstrzymania partii (HOLD LOT) dla audytu #${currentDetailedAuditId}? Ta operacja zostanie trwale odnotowana w Audit Trail.`);
             if (!confirmAction) return;
 
             try {
@@ -4610,7 +5122,7 @@
                     body: JSON.stringify({ reason: 'Zarządzenie wstrzymania partii (HOLD LOT) na skutek werdyktu NOK', manager_name: 'Manager Jakości' })
                 });
                 if (res.ok) {
-                    alert(`🚨 Procedura HOLD LOT została zarejestrowana i oznaczona w systemie!`);
+                    alert(`Procedura HOLD LOT została zarejestrowana i oznaczona w systemie!`);
                     await openAuditDetailsModal(currentDetailedAuditId);
                     if (typeof loadAuditResults === 'function') await loadAuditResults();
                 } else {
@@ -4657,7 +5169,7 @@
 
                 const data = await res.json();
                 if (res.ok) {
-                    alert('✅ Korekta została zarejestrowana w dzienniku Audit Trail!');
+                    alert('Korekta została zarejestrowana w dzienniku Audit Trail!');
                     await openAuditDetailsModal(currentDetailedAuditId);
                     if (typeof loadAuditResults === 'function') await loadAuditResults();
                     if (typeof loadAuditorHistory === 'function') await loadAuditorHistory();
@@ -4668,7 +5180,7 @@
                 alert('Błąd połączenia z serwerem podczas zapisu korekty.');
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>💾 Zapisz korektę w Audit Trail</span>';
+                btn.innerHTML = '<span class="flex items-center gap-1.5"><i class="fas fa-floppy-disk"></i><span>Zapisz korektę w Audit Trail</span></span>';
             }
         };
 
@@ -4780,7 +5292,7 @@
                 renderManagerAuditsTable();
 
                 if (typeof showToast === 'function') {
-                    showToast(`✅ Audyt #${id} zatwierdzony! Przeniesiono do zakładki "Zatwierdzone".`, 'success');
+                    showToast(`Audyt #${id} zatwierdzony! Przeniesiono do zakładki "Zatwierdzone".`, 'success');
                 }
 
                 try {
@@ -4853,11 +5365,13 @@
         
         function startAuditorTask() {
             if (!activeSelectedAudit) return;
+            state.schedule_id = activeSelectedAudit.id;
             state.line = activeSelectedAudit.line;
             state.active_audit_type = activeSelectedAudit.audit_type || "HACCP";
             setInspectionStandard(state.active_audit_type);
             
-            document.getElementById('hidden-line-input').value = state.line;
+            const hiddenLine = document.getElementById('hidden-line-input');
+            if (hiddenLine) hiddenLine.value = state.line;
             document.querySelectorAll('.tile-line').forEach(b => {
                 if (b.getAttribute('data-line') === state.line || b.textContent.trim() === state.line) {
                     b.classList.add('tile-selected');
@@ -4865,11 +5379,23 @@
                     b.classList.remove('tile-selected');
                 }
             });
-            formHistory.saveState('view-audit-form'); 
+            if (window.formHistory && typeof formHistory.saveState === 'function') {
+                formHistory.saveState('view-audit-form'); 
+            }
             
             closeAudModal();
             showModule('audit-main');
         }
+
+        window.startAuditorTaskById = async function(id) {
+            try {
+                const res = await fetch(`/api/schedule/${id}`);
+                if (!res.ok) return;
+                const a = await res.json();
+                activeSelectedAudit = a;
+                startAuditorTask();
+            } catch(e) { console.warn("Błąd startAuditorTaskById:", e); }
+        };
 
 
     window.toggleAuditorPinVisibility = function(show) {
@@ -4957,7 +5483,7 @@
 
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
-                alert('❌ Błąd podczas zapisu: ' + (errorData.detail || errorData.message || res.statusText));
+                alert('Błąd podczas zapisu: ' + (errorData.detail || errorData.message || res.statusText));
                 return;
             }
 
@@ -4967,43 +5493,60 @@
 
             document.getElementById('auditor-profile-modal').classList.add('hidden');
             const successMsg = pin 
-                ? '✅ Profil audytora oraz nowy kod PIN zostały pomyślnie zaktualizowane!' 
-                : '✅ Profil audytora został pomyślnie zaktualizowany (dotychczasowy PIN zachowany)!';
+                ? 'Profil audytora oraz nowy kod PIN zostały pomyślnie zaktualizowane!' 
+                : 'Profil audytora został pomyślnie zaktualizowany (dotychczasowy PIN zachowany)!';
             alert(successMsg);
 
         } catch (error) {
             console.error('Wystąpił błąd sieci lub serwera:', error);
-            alert('❌ Wystąpił błąd sieci lub serwera podczas zapisu profilu.');
+            alert('Wystąpił błąd sieci lub serwera podczas zapisu profilu.');
         }
     };
 
     window.clearCurrentMonthSchedule = async function() {
         const monthSelect = document.getElementById('autoplan-month');
         const yearSelect = document.getElementById('autoplan-year');
+        const monthNum = monthSelect ? parseInt(monthSelect.value) : (new Date().getMonth() + 1);
+        const yearNum = yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear();
         const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex]?.text : 'wybranego miesiąca';
         
-        if (!confirm(`Czy na pewno chcesz usunąć zaplanowane audyty dla miesiąca: ${monthName}?`)) {
+        if (!confirm(`Czy na pewno chcesz usunąć wszystkie audyty dla miesiąca: ${monthName} ${yearNum}?`)) {
             return;
         }
 
         try {
             const payload = {
-                month: monthSelect ? parseInt(monthSelect.value) : new Date().getMonth() + 1,
-                year: yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear()
+                month: monthNum,
+                year: yearNum
             };
             const res = await apiFetch('/api/schedule/clear-month', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!res.ok) {
-                console.warn('Dedykowany endpoint clear-month niedostępny, odświeżam widok harmonogramu.');
+
+            // Natychmiastowe czyszczenie lokalne w pamięci podręcznej przeglądarki
+            const prefix = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+            if (Array.isArray(schedulesData)) {
+                schedulesData = schedulesData.filter(s => !s.scheduled_date || !s.scheduled_date.startsWith(prefix));
             }
-            if (typeof loadSchedule === 'function') loadSchedule();
-            if (typeof loadScheduleAndRender === 'function') loadScheduleAndRender();
+
+            // Odświeżenie danych i ponowne wyrenderowanie kalendarza
+            if (typeof loadScheduleAndRender === 'function') {
+                await loadScheduleAndRender();
+            } else if (typeof renderCalendar === 'function') {
+                renderCalendar();
+            }
+
+            if (typeof updateAutoPlanPreview === 'function') {
+                updateAutoPlanPreview(false);
+            }
+
+            alert(`Usunięto audyty dla miesiąca: ${monthName} ${yearNum}`);
             closeAutoPlanModal();
         } catch (err) {
             console.error('Błąd podczas czyszczenia miesiąca:', err);
+            alert('Wystąpił błąd podczas usuwania audytów.');
         }
     };
 

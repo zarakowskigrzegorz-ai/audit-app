@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from typing import Dict, List, Any
 from database import get_db
 
-router = APIRouter(prefix="/api/checklist-template", tags=["Checklists"])
+router = APIRouter(tags=["Checklists"])
 
 CHECKLIST_TEMPLATES = {
     "HACCP": [
@@ -42,7 +42,8 @@ CHECKLIST_TEMPLATES = {
     ]
 }
 
-@router.get("/{audit_type}")
+@router.get("/api/checklist-template/{audit_type}")
+@router.get("/api/checklist/{audit_type}")
 def get_checklist_template(audit_type: str):
     return CHECKLIST_TEMPLATES.get(audit_type.upper().strip(), CHECKLIST_TEMPLATES["HACCP"])
 

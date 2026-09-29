@@ -1,0 +1,39 @@
+=============================================================================
+SYSTEM JAKOŚCI I AUDYTU (IFS FOOD v8 / BRCGS v9) - WERSJA STRONY WWW
+=============================================================================
+
+Ten folder zawiera kompletną, autonomiczną wersję strony WWW aplikacji audytowej.
+Możesz ją udostępnić na 3 bardzo proste sposoby:
+
+-----------------------------------------------------------------------------
+SPOSÓB 1: DARMOWY HOSTING WWW (NETLIFY DROP / VERCEL / GITHUB) - NAJPROSTSZY!
+-----------------------------------------------------------------------------
+1. Wejdź na stronę: https://app.netlify.com/drop
+2. Przeciągnij ten folder "EKSPORT_WWW_DEMO" (lub plik ZIP) bezpośrednio w okno przeglądarki.
+3. W 5 sekund otrzymasz darmowy, publiczny adres HTTPS (np. https://twoja-nazwa.netlify.app),
+   który działa 24/7 na telefonie, tablecie i dowolnym komputerze bez Twojego włączonego komputera!
+
+-----------------------------------------------------------------------------
+SPOSÓB 2: BEZPOŚREDNIE OTWARCIE W PRZEGLĄDARCE (OFFLINE / PENDRIBE)
+-----------------------------------------------------------------------------
+Wystarczy dwukrotnie kliknąć plik "index.html" na dowolnym komputerze (Mac, Windows, Linux).
+Aplikacja uruchomi się od razu w przeglądarce (Chrome, Safari, Edge) ze wszystkimi
+funkcjami (kalendarz, filtry GMP/GHP/HACCP, wprowadzanie audytu, raporty).
+
+-----------------------------------------------------------------------------
+SPOSÓB 3: PEŁNY LINK NA ŻYWO Z TWOJEGO MACA (Z BAZĄ SQLITE)
+-----------------------------------------------------------------------------
+W głównym folderze aplikacji na Twoim Macu uruchom w Terminalu:
+   ./uruchom_darmowy_link_www.sh
+Skrypt natychmiast wygeneruje publiczny link HTTPS połączony z Twoją lokalną bazą danych.
+
+=============================================================================
+🔑 DANE LOGOWANIA DO SYSTEMU:
+=============================================================================
+👑 KIEROWNIK / KEY USER (Zarządzanie, generowanie harmonogramu, czyszczenie):
+   PIN: 9999
+
+🔍 AUDYTOR (Wykonywanie audytów, kalendarz, formularz inspekcji):
+   PIN: 0000 (Grzegorz Zarakowski)
+   lub PIN: 1001, 1002, 1003
+=============================================================================
