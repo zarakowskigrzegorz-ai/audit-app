@@ -3147,8 +3147,92 @@
             // NATYCHMIASTOWA REAKCJA (0 ms)
             updateAuditHud(1, "KROK 1/2: ANALIZA SLM", "Wnioskowanie lokalnego modelu i weryfikacja IFS Food v8...", "loading");
 
+            // Dynamiczne mapowanie odpowiedzi z checklisty na dedykowane pola Audit Trail
+            const chkItems = Object.values(state.checklist_results || {});
+            
+            function getLowestScore(items, defaultScore = 5) {
+                if (!items || items.length === 0) return defaultScore;
+                let minScore = 5;
+                items.forEach(it => {
+                    const sc = it.score !== undefined ? parseInt(it.score) : (it.status === 'NOK' ? 1 : 5);
+                    if (!isNaN(sc) && sc < minScore) minScore = sc;
+                });
+                return minScore;
+            }
+
+            function filterItems(predicate) {
+                return chkItems.filter(predicate);
+            }
+
+            // Mapowanie szkła i twardego plastiku
+            const glassItems = filterItems(it => it.id === 205 || /szk[łl]|plastik|glass/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const glassPlasticOk = glassItems.length > 0 ? (getLowestScore(glassItems) <= 2 ? "NOK" : "ZGODNY") : (state.glass_plastic_ok || "ZGODNY");
+
+            // Mapowanie czystości alergenowej i CIP
+            const allergenItems = filterItems(it => it.id === 102 || it.id === 208 || it.id === 307 || /alergen|allergen|cip|czyszcz/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const allergenCleanOk = allergenItems.length > 0 ? (getLowestScore(allergenItems) <= 2 ? "NOK" : "ZGODNY") : (state.allergen_clean_ok || "ZGODNY");
+
+            // Mapowanie polityki drewna i ciał obcych
+            const woodItems = filterItems(it => it.id === 207 || /drewn|wood|ta[śs]m|trytyt/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const woodPolicyOk = woodItems.length > 0 ? (getLowestScore(woodItems) <= 2 ? "NOK" : "ZGODNY") : (state.wood_policy_ok || "ZGODNY");
+
+            // Mapowanie odzieży ochronnej i PPE
+            const ppeItems = filterItems(it => it.id === 201 || it.id === 301 || it.id === 302 || /odzie[żz]|ppe|fartuch|czepk|bi[żz]uter/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const ppeOk = ppeItems.length > 0 ? (getLowestScore(ppeItems) <= 2 ? "NOK" : "ZGODNY") : (state.ppe_ok || "ZGODNY");
+
+            // Mapowanie stanu zdrowia (PR15.01)
+            const healthItems = filterItems(it => it.id === 203 || it.id === 303 || /zdrow|infekcj|zranie|plastr|pr15/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const healthOk = healthItems.length > 0 ? (getLowestScore(healthItems) <= 2 ? "NIE" : "TAK") : (state.health_ok || "TAK");
+
+            // Mapowanie CCP1 (Detektor metali / X-Ray / Częstotliwość testów)
+            const ccp1Items = filterItems(it => it.id === 106 || it.id === 209 || /detektor|ccp1|wzorc|x-ray/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const ccp1Val = ccp1Items.length > 0 ? (getLowestScore(ccp1Items) <= 2 ? "NOK" : "ZGODNY") : (state.ccp1_fe_ok || "ZGODNY");
+            const ccp1FeOk = ccp1Val;
+            const ccp1NonfeOk = ccp1Val;
+            const ccp1SsOk = ccp1Val;
+            const ccp1RejectOk = ccp1Val;
+            const ccp1BinLocked = ccp1Val;
+
+            // Mapowanie Magnesów (CCP2) i Sit (CCP3)
+            const magnetItems = filterItems(it => /magnes/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const ccp2MagnetOk = magnetItems.length > 0 ? (getLowestScore(magnetItems) <= 2 ? "NOK" : "ZGODNY") : (state.ccp2_magnet_ok || "ZGODNY");
+
+            const sieveItems = filterItems(it => /sit[aoeó]/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const ccp3SieveOk = sieveItems.length > 0 ? (getLowestScore(sieveItems) <= 2 ? "NOK" : "ZGODNY") : (state.ccp3_sieve_ok || "ZGODNY");
+
+            // Mapowanie ogólnej czystości GMP
+            const cleanItems = filterItems(it => it.id === 204 || it.id === 208 || it.id === 304 || it.id === 305 || it.id === 306 || /czysto[śs][ćc]|higien|posadzk/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const gmpCleanlinessOk = cleanItems.length > 0 ? (getLowestScore(cleanItems) <= 2 ? "NOK" : "ZGODNY") : (state.gmp_cleanliness_ok || "ZGODNY");
+
+            // Oceny punktowe GMP (drewno i ciała obce)
+            const gmpWoodScore = woodItems.length > 0 ? getLowestScore(woodItems) : (state.gmp_wood_score || 5);
+            const foreignItems = filterItems(it => it.id === 205 || it.id === 207 || it.id === 209 || /cia[łl]a obce|szk[łl]|plastik|detekcj/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const gmpForeignScore = foreignItems.length > 0 ? getLowestScore(foreignItems) : (state.gmp_foreign_score || 5);
+
+            // Odpady produkcyjne
+            const wasteItems = filterItems(it => it.id === 306 || /odpad/i.test((it.clause || '') + ' ' + (it.question || '')));
+            const gmpWasteOk = wasteItems.length > 0 ? (getLowestScore(wasteItems) <= 2 ? "NOK" : "ZGODNY") : (state.gmp_waste_ok || "ZGODNY");
+
+            // Zapis do obiektu state w celu utrzymania spójności aplikacji
+            state.glass_plastic_ok = glassPlasticOk;
+            state.allergen_clean_ok = allergenCleanOk;
+            state.wood_policy_ok = woodPolicyOk;
+            state.ppe_ok = ppeOk;
+            state.health_ok = healthOk;
+            state.ccp1_fe_ok = ccp1FeOk;
+            state.ccp1_nonfe_ok = ccp1NonfeOk;
+            state.ccp1_ss_ok = ccp1SsOk;
+            state.ccp1_reject_ok = ccp1RejectOk;
+            state.ccp1_bin_locked = ccp1BinLocked;
+            state.ccp2_magnet_ok = ccp2MagnetOk;
+            state.ccp3_sieve_ok = ccp3SieveOk;
+            state.gmp_cleanliness_ok = gmpCleanlinessOk;
+            state.gmp_wood_score = gmpWoodScore;
+            state.gmp_foreign_score = gmpForeignScore;
+            state.gmp_waste_ok = gmpWasteOk;
+
             let koFailed = false;
-            Object.values(state.checklist_results).forEach(it => {
+            chkItems.forEach(it => {
                 const isCritNok = (it.score !== undefined ? parseInt(it.score) <= 2 : it.status === "NOK");
                 if (it.is_ko && isCritNok) koFailed = true;
             });
@@ -3156,8 +3240,13 @@
             let slmText = "Audyt zakończony pomyślnie.";
             try {
                 const slmReq = {
-                    line: state.line, shift: state.shift, zone: state.zone, health_ok: state.health_ok,
-                    ko_failed: koFailed
+                    line: state.line, shift: state.shift, zone: state.zone, health_ok: healthOk,
+                    ko_failed: koFailed,
+                    ccp1_fe_ok: ccp1FeOk,
+                    ccp1_reject_ok: ccp1RejectOk,
+                    allergen_clean_ok: allergenCleanOk,
+                    glass_plastic_ok: glassPlasticOk,
+                    wood_policy_ok: woodPolicyOk
                 };
                 const sRes = await fetch('/api/slm-analyze', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(slmReq) });
                 const analysis = await sRes.json();
@@ -3169,24 +3258,24 @@
             formData.append("line", state.line);
             formData.append("shift", state.shift);
             formData.append("zone", state.zone);
-            formData.append("health_ok", state.health_ok);
+            formData.append("health_ok", healthOk);
             formData.append("dispense_no", state.dispense_no || "BRAK");
-            formData.append("glass_plastic_ok", state.glass_plastic_ok);
-            formData.append("allergen_clean_ok", state.allergen_clean_ok);
-            formData.append("wood_policy_ok", state.wood_policy_ok);
-            formData.append("ppe_ok", state.ppe_ok);
+            formData.append("glass_plastic_ok", glassPlasticOk);
+            formData.append("allergen_clean_ok", allergenCleanOk);
+            formData.append("wood_policy_ok", woodPolicyOk);
+            formData.append("ppe_ok", ppeOk);
             formData.append("line_status", state.line_status);
-            formData.append("ccp1_fe_ok", state.ccp1_fe_ok);
-            formData.append("ccp1_nonfe_ok", state.ccp1_nonfe_ok);
-            formData.append("ccp1_ss_ok", state.ccp1_ss_ok);
-            formData.append("ccp1_reject_ok", state.ccp1_reject_ok);
-            formData.append("ccp1_bin_locked", state.ccp1_bin_locked);
-            formData.append("ccp2_magnet_ok", state.ccp2_magnet_ok);
-            formData.append("ccp3_sieve_ok", state.ccp3_sieve_ok);
-            formData.append("gmp_cleanliness_ok", state.gmp_cleanliness_ok);
-            formData.append("gmp_wood_score", state.gmp_wood_score);
-            formData.append("gmp_foreign_score", state.gmp_foreign_score);
-            formData.append("gmp_waste_ok", state.gmp_waste_ok);
+            formData.append("ccp1_fe_ok", ccp1FeOk);
+            formData.append("ccp1_nonfe_ok", ccp1NonfeOk);
+            formData.append("ccp1_ss_ok", ccp1SsOk);
+            formData.append("ccp1_reject_ok", ccp1RejectOk);
+            formData.append("ccp1_bin_locked", ccp1BinLocked);
+            formData.append("ccp2_magnet_ok", ccp2MagnetOk);
+            formData.append("ccp3_sieve_ok", ccp3SieveOk);
+            formData.append("gmp_cleanliness_ok", gmpCleanlinessOk);
+            formData.append("gmp_wood_score", gmpWoodScore);
+            formData.append("gmp_foreign_score", gmpForeignScore);
+            formData.append("gmp_waste_ok", gmpWasteOk);
             formData.append("bhp_estop_ok", state.bhp_estop_ok);
             formData.append("bhp_atex_ok", state.bhp_atex_ok);
             formData.append("bhp_hot_cip_ok", state.bhp_hot_cip_ok);
