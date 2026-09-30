@@ -805,9 +805,6 @@
                 if (typeof loadProductionLines === 'function') {
                     await loadProductionLines().catch(e => console.warn(e));
                 }
-                if (typeof loadScheduleAndRender === 'function') {
-                    await loadScheduleAndRender().catch(e => console.warn(e));
-                }
                 if (typeof updateKpiRibbon === 'function') {
                     await updateKpiRibbon().catch(e => console.warn(e));
                 }
@@ -1090,7 +1087,10 @@
             }
         }
 
+        let isScheduleLoading = false;
         async function loadScheduleAndRender() {
+            if (isScheduleLoading) return;
+            isScheduleLoading = true;
             try {
                 const url = `/api/schedule?auditor=${encodeURIComponent(state.auditor_id)}&role=${state.role}&_t=${Date.now()}`;
                 const res = await apiFetch(url, { cache: 'no-store' });
@@ -1105,6 +1105,8 @@
                 schedulesData = []; 
                 updateAuditorScheduleBadges([]);
                 renderCalendar();
+            } finally {
+                isScheduleLoading = false;
             }
         }
 
