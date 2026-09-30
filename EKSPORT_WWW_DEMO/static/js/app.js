@@ -3898,21 +3898,42 @@
 
         window.handleAuditPhotoSelected = function(event) {
             const file = event.target.files && event.target.files[0];
-            if (!file) return;
+            if (!file) {
+                // Jeśli użytkownik anulował okno systemowe aparatu/galerii (np. na iOS Safari / Android),
+                // input czyści event.target.files. Wywołujemy removeAuditPhoto(), aby stan i podgląd
+                // nie były rozsynchronizowane z wysyłanymi danymi w FormData.
+                if (typeof window.removeAuditPhoto === 'function') {
+                    window.removeAuditPhoto();
+                }
+                return;
+            }
 
             // Sprawdź format pliku (zdjęcia: jpg, png, webp, heic)
             if (!file.type.startsWith('image/')) {
                 alert('Proszę wybrać plik graficzny (zdjęcie aparatu lub plik graficzny).');
-                event.target.value = '';
+                if (typeof window.removeAuditPhoto === 'function') {
+                    window.removeAuditPhoto();
+                } else {
+                    event.target.value = '';
+                }
                 return;
             }
 
             // Sprawdź limit rozmiaru (maksymalnie 15MB)
             if (file.size > 15 * 1024 * 1024) {
                 alert('Rozmiar zdjęcia przekracza dopuszczalny limit 15 MB.');
-                event.target.value = '';
+                if (typeof window.removeAuditPhoto === 'function') {
+                    window.removeAuditPhoto();
+                } else {
+                    event.target.value = '';
+                }
                 return;
             }
+
+            // Wyczyść drugi input aparatu/pliku, aby zachować spójność
+            const otherInputId = event.target.id === 'audit-photo-camera' ? 'audit-photo-file' : 'audit-photo-camera';
+            const otherInput = document.getElementById(otherInputId);
+            if (otherInput) otherInput.value = '';
 
             window.currentAuditPhotoFile = file;
 
