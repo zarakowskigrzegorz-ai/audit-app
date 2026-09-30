@@ -61,7 +61,7 @@ async def save_audit(
     bhp_estop_ok: str = Form("ZGODNY"), bhp_atex_ok: str = Form("ZGODNY"), bhp_hot_cip_ok: str = Form("ZGODNY"),
     bhp_evac_ppoz_ok: str = Form("ZGODNY"), bhp_status: str = Form("BRAK ZGŁOSZEŃ"), slm_analysis: str = Form(""),
     checklist_results: str = Form("{}"), photo: Optional[UploadFile] = File(None), notes: Optional[str] = Form(None),
-    audit_type: str = Form("HACCP"), schedule_id: Optional[int] = Form(None),
+    audit_type: str = Form("HACCP"), schedule_id: Optional[int] = Form(None), ko_failed: Optional[Any] = Form(False),
     background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     photo_path = None
@@ -113,15 +113,28 @@ async def save_audit(
     extracted_notes = "; ".join(chk_notes_list) if chk_notes_list else ""
     full_notes = ((notes.strip() + " | " + extracted_notes) if (notes and notes.strip() and extracted_notes) else (notes.strip() if (notes and notes.strip()) else extracted_notes)) or None
 
-    # Wstępna natychmiastowa ocena regułowa (< 1 ms)
-    rule_nok = (
-        ccp1_fe_ok == "NOK" or ccp1_reject_ok == "NOK" or ccp2_magnet_ok == "NOK" or
-        ccp3_sieve_ok == "NOK" or health_ok != "TAK" or ko_failed_flag == 1 or
-        (slm_analysis and ("NOK" in slm_analysis.upper() or "HOLD LOT" in slm_analysis.upper()))
-    )
+    # Wstępna natychmiastowa ocena regułowa (< 1 ms) zgodna z normą IFS Food v8
+    ko_param_failed = bool(ko_failed) and str(ko_failed).lower() not in ["false", "0", "f"]
+    ko_failed_val = ko_param_failed or (ko_failed_flag == 1)
+
+    ccp_nok = any(str(val or '').strip().upper() in ["NOK", "NIEZGODNY"] for val in [
+        ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp2_magnet_ok, ccp3_sieve_ok
+    ])
+    health_nok = str(health_ok or '').strip().upper() not in ["TAK", "ZGODNY", "OK"]
+    slm_analysis_nok = bool(slm_analysis and ("NOK" in slm_analysis.upper() or "HOLD LOT" in slm_analysis.upper()))
+
+    rule_nok = ccp_nok or health_nok or ko_failed_val or slm_analysis_nok
     initial_verdict = "NOK" if rule_nok else "OK"
-    initial_risk = "KRYTYCZNE (HOLD LOT)" if (ko_failed_flag == 1 or (slm_analysis and "HOLD LOT" in slm_analysis.upper())) else ("ŚREDNIE" if rule_nok else "NISKIE")
-    initial_analysis = slm_analysis if slm_analysis else "Weryfikacja regułowa zakończona. Analiza asystenta SLM AI trwa w tle..."
+    is_critical_hold = (
+        ko_failed_val or 
+        str(ccp1_fe_ok or '').strip().upper() in ["NOK", "NIEZGODNY"] or 
+        str(ccp1_reject_ok or '').strip().upper() in ["NOK", "NIEZGODNY"] or 
+        health_nok or 
+        (bool(slm_analysis) and "HOLD LOT" in slm_analysis.upper())
+    )
+    initial_risk = "KRYTYCZNE (HOLD LOT)" if is_critical_hold else ("ŚREDNIE" if rule_nok else "NISKIE")
+    initial_analysis = slm_analysis if slm_analysis else ("Wykryto odchylenie krytyczne CCP / procedury PR15.01. Uruchomiono protokół blokady partii (Hold Lot)." if rule_nok else "Weryfikacja regułowa zakończona. Analiza asystenta SLM AI trwa w tle...")
+    ko_failed_flag = 1 if is_critical_hold else 0
 
     clean_audit_type = (audit_type or "HACCP").strip().upper()
     # BŁYSKAWICZNY ZAPIS DO BAZY DANYCH (< 30 ms)

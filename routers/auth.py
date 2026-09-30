@@ -51,19 +51,6 @@ async def auth_login(payload: PinLoginModel):
                 matched = row
                 break
 
-        # Awaryjny fallback dla standardowych PINów (Key User: 9999, Audytor: 0000)
-        if not matched:
-            if clean_pin == "9999" and (not expected or expected == "MANAGER"):
-                for row in rows:
-                    if row["role"] == "MANAGER":
-                        matched = row
-                        break
-            elif clean_pin == "0000" and (not expected or expected == "AUDITOR"):
-                for row in rows:
-                    if "Grzegorz" in row["full_name"] or row["role"] == "AUDITOR":
-                        matched = row
-                        break
-
         if not matched:
             detail_msg = (
                 "Nieprawidłowy kod PIN dla konta Key User (Kierownik Jakości)."
