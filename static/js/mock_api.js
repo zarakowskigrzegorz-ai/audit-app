@@ -518,7 +518,7 @@
             }
 
             if (cleanUrl.endsWith('/chat-send') && method === 'POST') {
-                const body = reqData.body ? JSON.parse(reqData.body) : {};
+                const body = bodyObj || {};
                 let msgs = getStorage('chat_messages', []);
                 const newMsg = {
                     id: Date.now(),
