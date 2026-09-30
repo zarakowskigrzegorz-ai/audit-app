@@ -746,7 +746,11 @@
             try {
                 const userData = (user && user.user) ? user.user : (user || {});
                 state.user_id = userData.id || user.id || 1;
+                state.userId = state.user_id;
                 state.auditor_id = String(userData.full_name || user.full_name || (state.role === 'MANAGER' ? "Administrator Jakości" : "Grzegorz Zarakowski")).trim();
+                state.auditor = state.auditor_id;
+                state.auditor_name = state.auditor_id;
+                state.user_name = state.auditor_id;
                 state.role = String(userData.role || user.role || "MANAGER").toUpperCase();
                 const token = user.access_token || (user.user && user.user.access_token);
                 if (token) {
@@ -2158,7 +2162,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         manager_response: textEl.value.trim(),
-                        manager_name: state.auditor || 'Key User (Manager)'
+                        manager_name: state.auditor_id || state.auditor || 'Key User (Manager)'
                     })
                 });
                 if (res.ok) {
@@ -3474,8 +3478,8 @@
             const isAnonymous = Boolean(anonCheck && anonCheck.checked);
             const auditorName = isAnonymous 
                 ? "Anonimowy Audytor (Poufne IFS Culture)" 
-                : (state.auditor || "Audytor Operacyjny");
-            const auditorId = isAnonymous ? null : (state.userId || null);
+                : (state.auditor_id || state.auditor || "Audytor Operacyjny");
+            const auditorId = isAnonymous ? null : (state.user_id || state.userId || null);
 
             const payload = {
                 auditor_id: auditorId,
@@ -3733,8 +3737,8 @@
             if (!text) return;
 
             const senderName = state.role === 'MANAGER' 
-                ? (state.user_name || 'Kierownik Jakości (Key User)')
-                : (state.auditor_name || state.auditor || 'Audytor Operacyjny');
+                ? (state.user_name || state.auditor_id || 'Kierownik Jakości (Key User)')
+                : (state.auditor_id || state.auditor_name || state.auditor || 'Audytor Operacyjny');
 
             const payload = {
                 sender_name: senderName,
