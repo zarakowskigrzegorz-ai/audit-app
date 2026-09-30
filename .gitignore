@@ -13,4 +13,7 @@ lora_audit_model*
 adapter_model.safetensors
 adapter_config.json
 *.zip
-PACZKA_PROJEKTU/
+!PACZKA_PROJEKTU/paczka_strona_www.zip
+PACZKA_PROJEKTU/*
+!PACZKA_PROJEKTU/paczka_strona_www.zip
+!PACZKA_PROJEKTU/README.txt
