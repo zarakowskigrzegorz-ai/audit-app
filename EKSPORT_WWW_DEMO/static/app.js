@@ -3389,6 +3389,24 @@
             const autoLines = document.getElementById('autoplan-lines-container');
             if (autoLines) autoLines.innerHTML = productionLinesData.map(l => `<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="auto-line-chk" value="${l.name}" checked> ${l.name}</label>`).join('');
 
+            // Zasilenie rozwijanej listy linii w formularzu inspekcji
+            const preauditSelect = document.getElementById('preaudit-line-select');
+            if (preauditSelect && Array.isArray(productionLinesData) && productionLinesData.length > 0) {
+                if (!state.line || !productionLinesData.some(l => l.name === state.line)) {
+                    state.line = productionLinesData[0].name;
+                }
+                preauditSelect.innerHTML = productionLinesData.map(l => {
+                    const codeStr = l.code ? ` [${l.code}]` : '';
+                    const zoneStr = l.default_zone ? ` (${l.default_zone})` : '';
+                    const isSel = (l.name === state.line) ? 'selected' : '';
+                    return `<option value="${l.name}" ${isSel}>${l.name}${codeStr}${zoneStr}</option>`;
+                }).join('');
+                preauditSelect.value = state.line;
+                const hiddenLine = document.getElementById('hidden-line-input');
+                if (hiddenLine) hiddenLine.value = state.line;
+            }
+
+            // Opcjonalne kafelki (jeśli kontener istnieje w widoku dla wstecznej zgodności)
             const preauditTiles = document.getElementById('preaudit-lines-tiles');
             if (preauditTiles && productionLinesData.length > 0) {
                 if (!state.line || !productionLinesData.some(l => l.name === state.line)) {
@@ -3406,6 +3424,18 @@
                 }).join('');
             }
             syncAgentLineSelector();
+
+        window.onPreauditLineChange = function(lineVal) {
+            state.line = lineVal;
+            const hiddenLine = document.getElementById('hidden-line-input');
+            if (hiddenLine) hiddenLine.value = lineVal;
+            const preauditSelect = document.getElementById('preaudit-line-select');
+            if (preauditSelect && preauditSelect.value !== lineVal) preauditSelect.value = lineVal;
+            if (window.formHistory && typeof formHistory.saveState === 'function') {
+                formHistory.saveState('view-audit-form');
+            }
+            syncAgentLineSelector();
+        };
 
             // Zasilenie listy linii w formularzu Szybkiej Notatki Audytora
             const qnLine = document.getElementById('quick-note-line');
@@ -3885,10 +3915,17 @@
 
         function selectTile(cat, val, btn) {
             document.querySelectorAll(`.tile-${cat}`).forEach(b => b.classList.remove('tile-selected'));
-            btn.classList.add('tile-selected');
+            if (btn) btn.classList.add('tile-selected');
             state[cat] = val;
-            if (cat === 'line') document.getElementById('hidden-line-input').value = val;
-            formHistory.saveState('view-audit-form');
+            if (cat === 'line') {
+                const hiddenLine = document.getElementById('hidden-line-input');
+                if (hiddenLine) hiddenLine.value = val;
+                const preauditSelect = document.getElementById('preaudit-line-select');
+                if (preauditSelect) preauditSelect.value = val;
+            }
+            if (window.formHistory && typeof formHistory.saveState === 'function') {
+                formHistory.saveState('view-audit-form');
+            }
         }
 
         let currentPassportLineId = null;
@@ -5629,6 +5666,8 @@
             
             const hiddenLine = document.getElementById('hidden-line-input');
             if (hiddenLine) hiddenLine.value = state.line;
+            const preauditSelect = document.getElementById('preaudit-line-select');
+            if (preauditSelect && state.line) preauditSelect.value = state.line;
             document.querySelectorAll('.tile-line').forEach(b => {
                 if (b.getAttribute('data-line') === state.line || b.textContent.trim() === state.line) {
                     b.classList.add('tile-selected');
