@@ -2597,11 +2597,11 @@
                     );
 
                     // Formatowanie zmiany
-                    let shiftDisplay = shiftStr;
-                    if (shiftStr === '1' || shiftStr === 'I') shiftDisplay = 'I (06:00 - 14:00)';
-                    else if (shiftStr === '2' || shiftStr === 'II') shiftDisplay = 'II (14:00 - 22:00)';
-                    else if (shiftStr === '3' || shiftStr === 'III') shiftDisplay = 'III (22:00 - 06:00)';
-                    else if (!shiftStr || shiftStr === '---') shiftDisplay = 'I (06:00 - 14:00)';
+                    let shiftDisplay = 'I (06:00 - 14:00)';
+                    const sNorm = String(shiftStr || '').trim().toUpperCase();
+                    if (sNorm === '1' || sNorm === 'I' || sNorm.includes('A')) shiftDisplay = 'I (06:00 - 14:00)';
+                    else if (sNorm === '2' || sNorm === 'II' || sNorm.includes('B')) shiftDisplay = 'II (14:00 - 22:00)';
+                    else if (sNorm === '3' || sNorm === 'III' || sNorm.includes('C')) shiftDisplay = 'III (22:00 - 06:00)';
 
                     // Zgodność IFS %
                     let scorePctVal = 100;
@@ -5003,7 +5003,9 @@
 
                 // Nagłówek
                 document.getElementById('det-audit-id-badge').textContent = '#' + a.id;
-                document.getElementById('det-head-line-shift').textContent = `Linia: ${a.line || '---'} • Zmiana: ${a.shift || 'I'}`;
+                const sVal = String(a.shift || '1').trim().toUpperCase();
+                const shiftRoman = (sVal === '2' || sVal === 'II' || sVal.includes('B')) ? 'II' : ((sVal === '3' || sVal === 'III' || sVal.includes('C')) ? 'III' : 'I');
+                document.getElementById('det-head-line-shift').textContent = `Linia: ${a.line || '---'} • Zmiana: ${shiftRoman}`;
                 document.getElementById('det-head-auditor-date').textContent = `Audytor: ${a.auditor_id || '---'} • Czas: ${(a.timestamp || '').substring(0, 16)}`;
 
                 // Badges
@@ -5196,7 +5198,13 @@
 
                 // TAB 3: Formularz korekty
                 document.getElementById('adm-edit-line').value = a.line || '';
-                if (a.shift) document.getElementById('adm-edit-shift').value = a.shift;
+                if (a.shift) {
+                    const s = String(a.shift).trim().toUpperCase();
+                    let normShift = "1";
+                    if (s === "2" || s === "II" || s.includes("B")) normShift = "2";
+                    else if (s === "3" || s === "III" || s.includes("C")) normShift = "3";
+                    document.getElementById('adm-edit-shift').value = normShift;
+                }
 
                 const lineInput = document.getElementById('adm-edit-line');
                 const shiftInput = document.getElementById('adm-edit-shift');
