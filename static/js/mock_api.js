@@ -561,6 +561,126 @@
             });
         }
 
+        // 11. Asystent AI & Odprawa Przedaudytowa (SLM)
+        const agentBriefingMatch = cleanUrl.match(/\/api\/agent\/briefing\/(.+)$/);
+        if (agentBriefingMatch && method === 'GET') {
+            const rawLine = decodeURIComponent(agentBriefingMatch[1] || 'Linia L1');
+            const audits = getStorage('audits', []);
+            const lineAudits = audits.filter(a => !rawLine || rawLine === 'Cały Zakład' || String(a.line).includes(rawLine));
+            const total = lineAudits.length || 3;
+            const nokCount = lineAudits.filter(a => String(a.compliance_verdict || '').toUpperCase() === 'NIEZGODNY' || String(a.slm_verdict || '').toUpperCase() === 'NOK').length;
+            const ccpIssues = lineAudits.filter(a => String(a.ccp1_fe_ok || '').toUpperCase() === 'NIEZGODNY' || String(a.ccp1_reject_ok || '').toUpperCase() === 'NIEZGODNY').length;
+            const overallStatus = (ccpIssues > 0) ? "KRYTYCZNE" : (nokCount > 0 ? "UWAGA" : "OK");
+            const lastAudit = lineAudits[0] || audits[0];
+            const lastDate = lastAudit && lastAudit.timestamp ? lastAudit.timestamp : new Date().toISOString().replace('T', ' ').slice(0, 16);
+
+            const checkpoints = [
+                "1. Walidacja pętli detektora metali (CCP1): Weryfikacja wzorców testowych Fe 1.5mm, Non-Fe 2.0mm, SS 2.5mm oraz mechanizmu odrzutu",
+                "2. Weryfikacja procedury PR15.01: Kontrola braku objawów chorobowych u personelu oraz wykrywalnych, niebieskich plastrów",
+                "3. Polityka ciał obcych & Szkła: Integralność osłon oświetlenia i stan techniczny form/taśmociągów",
+                "4. Czystość GMP i higiena stanowisk: Brak zalegających resztek masy i prawidłowe oznakowanie pojemników na odpady"
+            ];
+            if (ccpIssues > 0) {
+                checkpoints.unshift("🚨 UWAGA CCP1: W niedawnej historii tej linii wystąpiło odchylenie na detektorze metali! Wymagany natychmiastowy test wzorców przed dopuszczeniem partii.");
+            }
+
+            const briefingMarkdown = `### 📋 ODPRAWA PRZEDAUDYTOWA: ${rawLine}
+**Status Obszaru:** ${overallStatus} | **Przeanalizowano:** ${total} ostatnich sesji audytowych
+
+**Wnioski z historii bazy danych:**
+- Odchylenia jakościowe (NOK): **${nokCount}**
+- Zdarzenia na punktach krytycznych CCP1: **${ccpIssues}**
+- Naruszenia procedury higienicznej PR15.01: **0**
+
+**Wytyczne operacyjne IFS Food v8:**
+• Przed przystąpieniem do oceny wizualnej zażądaj od operatora bieżącej weryfikacji wzorców Fe/Non-Fe/SS.
+• Zweryfikuj, czy pojemnik na wyroby odrzucone jest zamknięty na klucz (procedura zabezpieczenia wyrobów niezgodnych).
+• Skontroluj stan czystości taśmy transportowej i brak ciał obcych w strefie otwartego produktu.`;
+
+            return jsonResponse({
+                line: rawLine,
+                status: overallStatus,
+                total_audits_checked: total,
+                nok_count: nokCount,
+                ccp_issues: ccpIssues,
+                briefing_markdown: briefingMarkdown,
+                checkpoints: checkpoints,
+                last_audit_date: lastDate
+            });
+        }
+
+        if (cleanUrl.endsWith('/api/agent/chat') && method === 'POST') {
+            const userMsg = (bodyObj.message || '').trim();
+            const targetLine = bodyObj.line || 'Cały Zakład';
+            const lowerMsg = userMsg.toLowerCase();
+
+            let replyText = "";
+            if (lowerMsg.includes('ccp') || lowerMsg.includes('detektor') || lowerMsg.includes('metal')) {
+                replyText = `**🔍 Analiza CCP1 dla: ${targetLine}**\n\n` +
+                    `- **Częstotliwość testów:** Co 2 godziny lub przy każdej przezbrojeniu/zmianie asortymentu.\n` +
+                    `- **Wzorce testowe:** Żelazo (Fe) 1.5 mm, Metale nieżelazne (Non-Fe) 2.0 mm, Stal kwasoodporna (SS 316) 2.5 mm.\n` +
+                    `- **Procedura awaryjna:** W przypadku braku detekcji wzorca lub awarii odrzutnika natychmiastowe zatrzymanie linii i blokada magazynowa wyrobów (HOLD LOT) od ostatniego poprawnego testu.`;
+            } else if (lowerMsg.includes('szkł') || lowerMsg.includes('plastik') || lowerMsg.includes('ciał')) {
+                replyText = `**🛡️ Polityka Ciał Obcych i Szkła (IFS Food v8, p. 4.9):**\n\n` +
+                    `- Zakaz wnoszenia przedmiotów szklanych do strefy High Care / otwartego produktu.\n` +
+                    `- Wszystkie osłony oświetlenia i wzierniki muszą być wykonane z poliwęglanu lub zabezpieczone folią antyodłamkową.\n` +
+                    `- W przypadku pęknięcia szkła lub twardego plastiku obowiązuje natychmiastowe zatrzymanie linii i procedura sprzątania z kwarantanną 5 metrów wokół zdarzenia.`;
+            } else if (lowerMsg.includes('higien') || lowerMsg.includes('gmp') || lowerMsg.includes('czysto')) {
+                replyText = `**🧼 Standardy GMP & Higieny dla: ${targetLine}**\n\n` +
+                    `- Czystość taśm transportowych, form i stref styku z produktem.\n` +
+                    `- Prawidłowe stosowanie i oznakowanie chemii myjącej (kolorystyczny podział stref).\n` +
+                    `- Stan ubrań roboczych i kompletność środków ochrony indywidualnej operatorów.`;
+            } else if (lowerMsg.includes('alergen')) {
+                replyText = `**🌾 Zarządzanie Alergenami (IFS Food v8, p. 4.20):**\n\n` +
+                    `- Walidacja czyszczenia linii po przejściu z produktu alergennego na bezalergenny (testy wymazowe białkowe/ATP).\n` +
+                    `- Dedykowany sprzęt sprzątający oznaczony kodem barwnym.\n` +
+                    `- Szczelne zabezpieczenie surowców alergennych w buforze magazynowym.`;
+            } else {
+                replyText = `**Asystent Jakości AI (IFS Food v8 & SLM):**\n\n` +
+                    `Przyjąłem zapytanie dla obszaru **${targetLine}**: *„${userMsg}”*.\n\n` +
+                    `Zgodnie z procedurami zakładowymi i standardem IFS Food v8:\n` +
+                    `- Wszystkie parametry monitorowania procesu muszą być rejestrowane na bieżąco.\n` +
+                    `- W przypadku stwierdzenia jakiejkolwiek niezgodności krytycznej (KO) lub CCP zgłoś natychmiast kierownikowi zmiany i uruchom procedurę blokady partii wyrobu (Hold Lot).\n` +
+                    `- W razie potrzeby skorzystaj z szybkiego szablonu odprawy lub skonsultuj się z Kierownikiem Jakości.`;
+            }
+
+            return jsonResponse({ reply: replyText });
+        }
+
+        if (cleanUrl.endsWith('/api/slm-analyze') && method === 'POST') {
+            const hasCcpFail = bodyObj.ccp1_fe_ok === 'NIEZGODNY' || bodyObj.ccp1_reject_ok === 'NIEZGODNY';
+            const hasHealthFail = bodyObj.health_ok === 'NIE';
+            const isKo = bodyObj.ko_failed || hasCcpFail || hasHealthFail;
+
+            if (isKo) {
+                return jsonResponse({
+                    status: "NOK",
+                    poziom_ryzyka: "KRYTYCZNE",
+                    decyzja: "Wstrzymanie linii i blokada magazynowa partii (HOLD LOT)",
+                    akcje_korygujace: [
+                        "Natychmiastowe zatrzymanie linii produkcyjnej",
+                        "Blokada magazynowa wyrobów od ostatniego poprawnego testu wzorców",
+                        "Powiadomienie Kierownika Jakości i uruchomienie protokołu odchylenia"
+                    ],
+                    podpowiedzi_prewencyjne: [
+                        "Weryfikacja parametrów czułości detektora",
+                        "Audyt procedury PR15.01 personelu"
+                    ]
+                });
+            } else {
+                return jsonResponse({
+                    status: "OK",
+                    poziom_ryzyka: "NISKIE",
+                    decyzja: "Zezwolenie na kontynuację operacji produkcyjnych",
+                    akcje_korygujace: [],
+                    podpowiedzi_prewencyjne: [
+                        "Utrzymanie reżimu sanitarnego GMP",
+                        "Kontrola czystości taśmy transportowej"
+                    ]
+                });
+            }
+        }
+
         // Domyślny fallback dla pozostałych endpointów
         return jsonResponse({ status: "success" });
     };
