@@ -193,8 +193,26 @@ function ensureReportsViewExists() {
 function parseItemDate(item, preferredField) {
     const raw = item[preferredField] || item.timestamp || item.scheduled_date || item.audit_date || item.date || item.created_at;
     if (!raw) return null;
-    const cleanStr = String(raw).trim().replace(' ', 'T');
-    const d = new Date(cleanStr);
+    if (typeof window.parseAuditDate === 'function') {
+        return window.parseAuditDate(raw);
+    }
+    const str = String(raw).trim();
+    const datePartMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (datePartMatch) {
+        const year = parseInt(datePartMatch[1], 10);
+        const month = parseInt(datePartMatch[2], 10) - 1;
+        const day = parseInt(datePartMatch[3], 10);
+        let hours = 0, minutes = 0, seconds = 0;
+        const timePartMatch = str.match(/(?:T|\s+)(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+        if (timePartMatch) {
+            hours = parseInt(timePartMatch[1], 10) || 0;
+            minutes = parseInt(timePartMatch[2], 10) || 0;
+            seconds = parseInt(timePartMatch[3], 10) || 0;
+        }
+        const d = new Date(year, month, day, hours, minutes, seconds);
+        if (!isNaN(d.getTime())) return d;
+    }
+    const d = new Date(str.replace(' ', 'T'));
     return isNaN(d.getTime()) ? null : d;
 }
 

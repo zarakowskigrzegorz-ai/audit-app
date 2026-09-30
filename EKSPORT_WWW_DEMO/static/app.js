@@ -558,6 +558,37 @@
             return `${year}-${month}-${day}`;
         }
 
+        // Bezpieczny parser dat z bazy SQLite (odporny na specyfikę silników WebKit / Safari iOS)
+        function parseAuditDate(timestamp) {
+            if (!timestamp) return null;
+            if (timestamp instanceof Date) return isNaN(timestamp.getTime()) ? null : timestamp;
+            try {
+                const str = String(timestamp).trim();
+                const datePartMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                if (datePartMatch) {
+                    const year = parseInt(datePartMatch[1], 10);
+                    const month = parseInt(datePartMatch[2], 10) - 1;
+                    const day = parseInt(datePartMatch[3], 10);
+                    
+                    let hours = 0, minutes = 0, seconds = 0;
+                    const timePartMatch = str.match(/(?:T|\s+)(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+                    if (timePartMatch) {
+                        hours = parseInt(timePartMatch[1], 10) || 0;
+                        minutes = parseInt(timePartMatch[2], 10) || 0;
+                        seconds = parseInt(timePartMatch[3], 10) || 0;
+                    }
+                    const d = new Date(year, month, day, hours, minutes, seconds);
+                    if (!isNaN(d.getTime())) return d;
+                }
+                const fallbackDate = new Date(str.replace(' ', 'T'));
+                if (!isNaN(fallbackDate.getTime())) return fallbackDate;
+            } catch(e) {
+                console.warn("Błąd parsowania daty:", timestamp, e);
+            }
+            return null;
+        }
+        window.parseAuditDate = parseAuditDate;
+
         function bufferToBase64(buffer) {
             const bytes = new Uint8Array(buffer);
             let binary = '';
@@ -2205,8 +2236,8 @@
                 const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
                 const isRejected = (cv === 'ODRZUCONY' || ps === 'ODRZUCONY');
 
-                const auditDate = a.timestamp ? new Date(a.timestamp.replace(' ', 'T')) : new Date();
-                const isOlderThan5Days = !isNaN(auditDate.getTime()) && (auditDate < fiveDaysAgo);
+                const auditDate = parseAuditDate(a.timestamp);
+                const isOlderThan5Days = Boolean(auditDate && !isNaN(auditDate.getTime()) && (auditDate < fiveDaysAgo));
 
                 if (isApproved) {
                     if (isOlderThan5Days) {
@@ -2435,8 +2466,8 @@
                     const ps = String(a.process_status || '').trim().toUpperCase();
                     const isApproved = (cv === 'ZATWIERDZONY' || ps === 'ZATWIERDZONY');
 
-                    const auditDate = a.timestamp ? new Date(a.timestamp.replace(' ', 'T')) : new Date();
-                    const isOlderThan5Days = !isNaN(auditDate.getTime()) && (auditDate < fiveDaysAgo);
+                    const auditDate = parseAuditDate(a.timestamp);
+                    const isOlderThan5Days = Boolean(auditDate && !isNaN(auditDate.getTime()) && (auditDate < fiveDaysAgo));
 
                     if (isOlderThan5Days) {
                         historyAudits.push(a);
