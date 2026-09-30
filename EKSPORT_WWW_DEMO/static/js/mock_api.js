@@ -5,9 +5,14 @@
 // ============================================================
 
 (function() {
-    // Sprawdzamy czy backend odpowiada. Jeśli nie lub jesteśmy na file://, włączamy Mock API
-    const isFileProto = window.location.protocol === 'file:';
-    let isMockMode = isFileProto;
+    // Sprawdzamy czy backend odpowiada. Jeśli jesteśmy na Netlify/GitHub Pages/Vercel lub file://, włączamy Mock API od razu
+    const isStaticHost = window.location.protocol === 'file:' || 
+                         window.location.hostname.includes('netlify.app') || 
+                         window.location.hostname.includes('github.io') || 
+                         window.location.hostname.includes('vercel.app') || 
+                         window.location.hostname.includes('surge.sh') ||
+                         window.location.hostname.includes('pages.dev');
+    let isMockMode = isStaticHost;
 
     // Początkowe dane demonstracyjne
     const defaultUsers = [
@@ -135,9 +140,12 @@
         if (!isMockMode) {
             try {
                 const realRes = await origFetch.apply(this, arguments);
-                if (realRes.status !== 404 && realRes.status !== 502 && realRes.status !== 503) {
+                const cType = realRes.headers.get('content-type') || '';
+                if (realRes.ok || (realRes.status < 500 && realRes.status !== 404 && realRes.status !== 405 && cType.includes('application/json'))) {
                     return realRes;
                 }
+                console.log(`[Mock API] Serwer zwrócił status ${realRes.status} (${cType}), przełączanie na tryb mock.`);
+                isMockMode = true;
             } catch(err) {
                 console.log("[Mock API] Backend offline, przełączanie na tryb demonstracyjny w przeglądarce.");
                 isMockMode = true;
@@ -242,24 +250,36 @@
         }
 
         // Przenoszenie audytu (drag & drop)
-        if (cleanUrl.match(/\/api\/schedule\/\d+\/reschedule$/) && method === 'PUT') {
-            const parts = cleanUrl.split('/');
-            const id = parseInt(parts[parts.length - 2], 10);
+        const schedReschedMatch = cleanUrl.replace(/\/+$/, '').match(/\/api\/schedule\/([^\/]+)\/reschedule$/);
+        if (schedReschedMatch && method === 'PUT') {
+            const rawId = schedReschedMatch[1];
             const schedules = getStorage('schedules_v3', initDefaultSchedules());
-            const idx = schedules.findIndex(s => s.id === id);
+            const idx = schedules.findIndex(s => String(s.id) === String(rawId));
             if (idx !== -1) {
                 schedules[idx].scheduled_date = bodyObj.new_date || schedules[idx].scheduled_date;
                 setStorage('schedules_v3', schedules);
                 return jsonResponse(schedules[idx]);
             }
-            return jsonResponse({ detail: "Nie znaleziono" }, 404);
+            return jsonResponse({ detail: "Nie znaleziono audytu" }, 404);
+        }
+
+        // Pobranie pojedynczego zlecenia harmonogramu (dla modal-mgr-edit i modal-aud-view)
+        const schedItemMatch = cleanUrl.replace(/\/+$/, '').match(/\/api\/schedule\/([^\/]+)$/);
+        if (schedItemMatch && method === 'GET') {
+            const rawId = schedItemMatch[1];
+            const schedules = getStorage('schedules_v3', initDefaultSchedules());
+            const item = schedules.find(s => String(s.id) === String(rawId));
+            if (item) {
+                return jsonResponse(item);
+            }
+            return jsonResponse({ detail: "Nie znaleziono zlecenia" }, 404);
         }
 
         // Edycja pojedynczego zadania harmonogramu
-        if (cleanUrl.match(/\/api\/schedule\/\d+$/) && method === 'PUT') {
-            const id = parseInt(cleanUrl.split('/').pop(), 10);
+        if (schedItemMatch && method === 'PUT') {
+            const rawId = schedItemMatch[1];
             const schedules = getStorage('schedules_v3', initDefaultSchedules());
-            const idx = schedules.findIndex(s => s.id === id);
+            const idx = schedules.findIndex(s => String(s.id) === String(rawId));
             if (idx !== -1) {
                 Object.assign(schedules[idx], bodyObj);
                 setStorage('schedules_v3', schedules);
@@ -269,19 +289,20 @@
         }
 
         // Usuwanie z harmonogramu
-        if (cleanUrl.match(/\/api\/schedule\/\d+$/) && method === 'DELETE') {
-            const id = parseInt(cleanUrl.split('/').pop(), 10);
+        if (schedItemMatch && method === 'DELETE') {
+            const rawId = schedItemMatch[1];
             let schedules = getStorage('schedules_v3', initDefaultSchedules());
-            schedules = schedules.filter(s => s.id !== id);
+            const countBefore = schedules.length;
+            schedules = schedules.filter(s => String(s.id) !== String(rawId));
             setStorage('schedules_v3', schedules);
-            return jsonResponse({ status: "ok" });
+            return jsonResponse({ status: "ok", deleted: countBefore - schedules.length });
         }
 
         // Czyszczenie wybranego miesiąca lub zakresu miesięcy z harmonogramu
         if (cleanUrl.endsWith('/api/schedule/clear-month') && method === 'POST') {
-            const m = bodyObj.month || (new Date().getMonth() + 1);
-            const y = bodyObj.year || new Date().getFullYear();
-            const period = bodyObj.period_months || 1;
+            const m = parseInt(bodyObj.month, 10) || (new Date().getMonth() + 1);
+            const y = parseInt(bodyObj.year, 10) || new Date().getFullYear();
+            const period = parseInt(bodyObj.period_months, 10) || 1;
             const startDateStr = `${y}-${String(m).padStart(2, '0')}-01`;
             const endTotalMonths = m + period - 1;
             const endYear = y + Math.floor((endTotalMonths - 1) / 12);
@@ -293,7 +314,8 @@
             const countBefore = schedules.length;
             schedules = schedules.filter(s => {
                 if (!s.scheduled_date) return true;
-                if (s.scheduled_date >= startDateStr && s.scheduled_date <= endDateStr) {
+                const sDate = String(s.scheduled_date).slice(0, 10);
+                if (sDate >= startDateStr && sDate <= endDateStr) {
                     return false;
                 }
                 return true;

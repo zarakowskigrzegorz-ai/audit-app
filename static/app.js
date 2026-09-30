@@ -1474,6 +1474,9 @@
 
         async function openManualPlanModal(dateStr = "") {
             if (state.role !== "MANAGER" && state.role !== "AUDITOR") return;
+            const dock = document.getElementById('bottom-dock');
+            if (dock) dock.classList.add('hidden');
+
             const selectedDate = dateStr || getLocalDateString();
             const dateInput = document.getElementById('plan-date');
             if (dateInput) dateInput.value = selectedDate; 
@@ -1501,6 +1504,10 @@
                 }
             }
             
+            if (typeof syncPlanAuditorBackupOptions === 'function') {
+                syncPlanAuditorBackupOptions();
+            }
+
             if (window.formHistory && typeof window.formHistory.saveState === 'function') {
                 formHistory.saveState('modal-plan-form');
             }
@@ -1509,7 +1516,13 @@
         }
         window.openManualPlanModal = openManualPlanModal;
 
-        function closePlanModal() { document.getElementById('modal-plan').classList.add('hidden'); }
+        function closePlanModal() { 
+            const modalEl = document.getElementById('modal-plan');
+            if (modalEl) modalEl.classList.add('hidden');
+            const dock = document.getElementById('bottom-dock');
+            if (dock && state.role) dock.classList.remove('hidden');
+        }
+        window.closePlanModal = closePlanModal;
         function changeMiniMonth(delta) { miniCalDate.setMonth(miniCalDate.getMonth() + delta); renderMiniCalendar(); }
 
         function renderMiniCalendar() {
@@ -4377,11 +4390,48 @@
                 const audSelect = document.getElementById('plan-auditor');
                 const backupSelect = document.getElementById('plan-backup');
                 if (audSelect) audSelect.innerHTML = opts;
-                if (backupSelect) backupSelect.innerHTML = `<option value="Brak">Brak</option>` + opts;
+                if (backupSelect) backupSelect.innerHTML = `<option value="Brak" selected>Brak</option>` + opts;
+                syncPlanAuditorBackupOptions();
             } catch (err) {
                 console.warn("[loadAuditorsDropdown] Błąd pobierania audytorów:", err);
             }
         }
+
+        function syncPlanAuditorBackupOptions() {
+            const lead = document.getElementById('plan-auditor');
+            const backup = document.getElementById('plan-backup');
+            if (!lead || !backup) return;
+            const leadVal = (lead.value || '').trim();
+            Array.from(backup.options).forEach(opt => {
+                if (opt.value !== "Brak" && opt.value.trim() === leadVal) {
+                    opt.disabled = true;
+                    if (backup.value.trim() === leadVal) {
+                        backup.value = "Brak";
+                    }
+                } else {
+                    opt.disabled = false;
+                }
+            });
+        }
+        window.syncPlanAuditorBackupOptions = syncPlanAuditorBackupOptions;
+
+        function syncMgrAuditorBackupOptions() {
+            const lead = document.getElementById('mgr-edit-lead');
+            const backup = document.getElementById('mgr-edit-backup');
+            if (!lead || !backup) return;
+            const leadVal = (lead.value || '').trim();
+            Array.from(backup.options).forEach(opt => {
+                if (opt.value !== "Brak" && opt.value.trim() === leadVal) {
+                    opt.disabled = true;
+                    if (backup.value.trim() === leadVal) {
+                        backup.value = "Brak";
+                    }
+                } else {
+                    opt.disabled = false;
+                }
+            });
+        }
+        window.syncMgrAuditorBackupOptions = syncMgrAuditorBackupOptions;
 
         function filterPlanAuditorsByType(v) { loadAuditorsDropdown(v); }
 
@@ -4771,13 +4821,16 @@
         }
 
         async function openMgrModal(id) {
+            const dock = document.getElementById('bottom-dock');
+            if (dock) dock.classList.add('hidden');
+
             const res = await fetch(`/api/schedule/${id}`);
             const a = await res.json();
-            document.getElementById('mgr-edit-id').value = a.id;
-            document.getElementById('mgr-edit-date').value = a.scheduled_date;
-            document.getElementById('mgr-edit-date').setAttribute('data-original-date', a.scheduled_date);
-            document.getElementById('mgr-edit-type').value = a.audit_type;
-            document.getElementById('mgr-edit-status').value = a.status;
+            document.getElementById('mgr-edit-id').value = (a && a.id !== undefined) ? a.id : id;
+            document.getElementById('mgr-edit-date').value = a.scheduled_date || "";
+            document.getElementById('mgr-edit-date').setAttribute('data-original-date', a.scheduled_date || "");
+            document.getElementById('mgr-edit-type').value = a.audit_type || "HACCP";
+            document.getElementById('mgr-edit-status').value = a.status || "PLANOWANY";
             document.getElementById('mgr-edit-notes').value = a.notes || "";
             
             const linesRes = await fetch('/api/lines');
@@ -4796,10 +4849,21 @@
                 return `<option value="${name}" ${name === a.backup_auditor ? 'selected' : ''}>${name}</option>`;
             }).join('');
 
+            if (typeof syncMgrAuditorBackupOptions === 'function') {
+                syncMgrAuditorBackupOptions();
+            }
+
             document.getElementById('modal-mgr-edit').classList.remove('hidden');
         }
+        window.openMgrModal = openMgrModal;
 
-        function closeMgrModal() { document.getElementById('modal-mgr-edit').classList.add('hidden'); }
+        function closeMgrModal() { 
+            const modalEl = document.getElementById('modal-mgr-edit');
+            if (modalEl) modalEl.classList.add('hidden');
+            const dock = document.getElementById('bottom-dock');
+            if (dock && state.role) dock.classList.remove('hidden');
+        }
+        window.closeMgrModal = closeMgrModal;
 
         async function saveMgrScheduleEdit() {
             const id = document.getElementById('mgr-edit-id').value;
@@ -4840,26 +4904,50 @@
 
         async function deleteMgrSchedule() {
             const id = document.getElementById('mgr-edit-id').value;
+            if (!id || id === 'undefined') {
+                return alert("Błąd: Nie wybrano poprawnego identyfikatora zlecenia do usunięcia.");
+            }
             if (!confirm("Usunąć zlecenie?")) return;
             const res = await apiFetch(`/api/schedule/${id}`, { method: 'DELETE' });
-            if (res.ok) { closeMgrModal(); await loadScheduleAndRender(); }
+            if (res.ok) { 
+                closeMgrModal(); 
+                if (Array.isArray(schedulesData)) {
+                    schedulesData = schedulesData.filter(s => String(s.id) !== String(id));
+                    if (typeof renderCalendar === 'function') renderCalendar();
+                    if (typeof updateAuditorScheduleBadges === 'function') updateAuditorScheduleBadges(schedulesData);
+                }
+                await loadScheduleAndRender(); 
+            }
             else {
                 const err = await res.json().catch(() => ({}));
                 alert("Błąd usuwania: " + (err.detail || "Nie udało się usunąć audytu."));
             }
         }
+        window.deleteMgrSchedule = deleteMgrSchedule;
 
         async function openAudModal(id) {
+            const dock = document.getElementById('bottom-dock');
+            if (dock) dock.classList.add('hidden');
+
             const res = await fetch(`/api/schedule/${id}`);
             const a = await res.json();
             activeSelectedAudit = a;
             state.active_audit_type = a.audit_type || "HACCP";
-            document.getElementById('aud-view-date').innerText = a.scheduled_date;
-            document.getElementById('aud-view-type').innerText = a.audit_type;
-            document.getElementById('aud-view-line').innerText = a.line;
-            document.getElementById('aud-view-status').innerText = a.status;
+            document.getElementById('aud-view-date').innerText = a.scheduled_date || "";
+            document.getElementById('aud-view-type').innerText = a.audit_type || "HACCP";
+            document.getElementById('aud-view-line').innerText = a.line || "";
+            document.getElementById('aud-view-status').innerText = a.status || "";
             document.getElementById('modal-aud-view').classList.remove('hidden');
         }
+        window.openAudModal = openAudModal;
+
+        function closeAudModal() {
+            const modalEl = document.getElementById('modal-aud-view');
+            if (modalEl) modalEl.classList.add('hidden');
+            const dock = document.getElementById('bottom-dock');
+            if (dock && state.role) dock.classList.remove('hidden');
+        }
+        window.closeAudModal = closeAudModal;
 
         
         let currentDetailedAuditId = null;

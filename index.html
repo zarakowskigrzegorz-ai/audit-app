@@ -1338,8 +1338,8 @@
             </div>
 
             <!-- MODAL 2: PLANER RĘCZNY -->
-            <div id="modal-plan" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 view-layer">
-                <div class="glass-card bg-slate-900 border border-cyan-500/50 p-4 rounded-2xl w-full max-w-2xl space-y-3 shadow-2xl">
+            <div id="modal-plan" class="hidden fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 view-layer overflow-y-auto">
+                <div class="glass-card bg-slate-900 border border-cyan-500/50 p-4 rounded-2xl w-full max-w-2xl space-y-3 shadow-2xl my-auto max-h-[92vh] overflow-y-auto pb-4">
                     <div class="flex items-center justify-between border-b border-slate-700 pb-2">
                         <div class="flex items-center gap-3">
                             <h3 class="text-sm font-black text-cyan-300 flex items-center gap-2">
@@ -1395,11 +1395,11 @@
                             </div>
                             <div>
                                 <label class="font-bold text-slate-300 block mb-0.5">Audytor Główny:</label>
-                                <select name="plan-auditor" id="plan-auditor" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-cyan-400 font-bold"></select>
+                                <select name="plan-auditor" id="plan-auditor" onchange="syncPlanAuditorBackupOptions()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-cyan-400 font-bold"></select>
                             </div>
                             <div>
                                 <label class="font-bold text-slate-300 block mb-0.5">Audytor Zastępczy:</label>
-                                <select name="plan-backup" id="plan-backup" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-purple-300 font-bold"></select>
+                                <select name="plan-backup" id="plan-backup" onchange="syncPlanAuditorBackupOptions()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-purple-300 font-bold"></select>
                             </div>
                             <div>
                                 <label class="font-bold text-slate-300 block mb-0.5">Uwagi:</label>
@@ -2320,8 +2320,8 @@
     </div>
 
     <!-- MODAL EDYCJI ZLECENIA (KEY USER) -->
-    <div id="modal-mgr-edit" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="glass-card bg-slate-900 border border-amber-500/50 p-4 rounded-2xl w-full max-w-md space-y-3 shadow-2xl">
+    <div id="modal-mgr-edit" class="hidden fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div class="glass-card bg-slate-900 border border-amber-500/50 p-4 rounded-2xl w-full max-w-md space-y-3 shadow-2xl my-auto max-h-[92vh] overflow-y-auto pb-4">
             <div class="flex items-center justify-between border-b border-slate-700 pb-2">
                 <h3 class="text-sm font-black text-amber-400 flex items-center gap-2">
                     <i class="fa-solid fa-file-pen text-amber-400 text-sm"></i>
@@ -2358,11 +2358,11 @@
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="font-bold text-slate-400 block mb-0.5">Audytor Główny:</label>
-                        <select id="mgr-edit-lead" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-white font-bold"></select>
+                        <select id="mgr-edit-lead" onchange="syncMgrAuditorBackupOptions()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-white font-bold"></select>
                     </div>
                     <div>
                         <label class="font-bold text-slate-400 block mb-0.5">Audytor Zastępczy:</label>
-                        <select id="mgr-edit-backup" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-white font-bold"></select>
+                        <select id="mgr-edit-backup" onchange="syncMgrAuditorBackupOptions()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-1.5 text-white font-bold"></select>
                     </div>
                 </div>
                 <div>
@@ -2703,8 +2703,8 @@
 
 
     <!-- MODAL AUDYTORA Z KALENDARZA -->
-    <div id="modal-aud-view" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="glass-card bg-slate-900 border border-cyan-500/50 p-4 rounded-2xl w-full max-w-md space-y-3 shadow-2xl">
+    <div id="modal-aud-view" class="hidden fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div class="glass-card bg-slate-900 border border-cyan-500/50 p-4 rounded-2xl w-full max-w-md space-y-3 shadow-2xl my-auto max-h-[92vh] overflow-y-auto pb-4">
             <div class="flex items-center justify-between border-b border-slate-700 pb-2">
                 <h3 class="text-sm font-black text-cyan-400 flex items-center gap-2">
                     <i class="fa-solid fa-clipboard-check text-cyan-400 text-sm"></i>
@@ -2727,9 +2727,9 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- FALLBACK MOCK API DLA WERSJI STATYCZNEJ / WWW OFFLINE -->
-    <script src="static/js/mock_api.js?v=20260930_v8"></script>
+    <script src="static/js/mock_api.js?v=20260930_v9"></script>
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="static/js/app.js?v=20260930_v69"></script>
+    <script src="static/js/app.js?v=20260930_v70"></script>
     <script src="static/js/auth_caps.js?v=20260930_v5"></script>
 
     <!-- MODAL: LIVE CHAT OPERACYJNY (HALA ↔ BIURO / AUDYTORZY ↔ KIEROWNIK) -->
