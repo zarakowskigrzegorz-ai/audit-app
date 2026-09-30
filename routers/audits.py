@@ -103,7 +103,9 @@ async def save_audit(
                 if n_text:
                     cl = q_data.get("clause") or f"Pkt {q_id}"
                     chk_notes_list.append(f"[{cl}]: {n_text}")
-                if q_data.get("status") == "NOK" and q_data.get("is_ko"):
+                q_score = q_data.get("score")
+                is_crit_nok = (int(q_score) <= 2) if q_score is not None else (q_data.get("status") == "NOK")
+                if is_crit_nok and q_data.get("is_ko"):
                     ko_failed_flag = 1
     except Exception as e_chk:
         print(f"Błąd parsowania checklist_results: {e_chk}")
@@ -172,8 +174,9 @@ async def save_audit(
     async def process_slm_background(a_id: int, a_line: str, audit_info: dict):
         try:
             analysis_result = await run_agent_turn(audit_info, a_line)
-            v_bg = "NOK" if ("NOK" in analysis_result.upper() or "HOLD LOT" in analysis_result.upper()) else "OK"
-            r_bg = "KRYTYCZNE (HOLD LOT)" if "HOLD LOT" in analysis_result.upper() else ("ŚREDNIE" if v_bg == "NOK" else "NISKIE")
+            is_ko_fail = bool(audit_info.get("ko_failed"))
+            v_bg = "NOK" if (is_ko_fail or "NOK" in analysis_result.upper() or "HOLD LOT" in analysis_result.upper()) else "OK"
+            r_bg = "KRYTYCZNE (HOLD LOT)" if (is_ko_fail or "HOLD LOT" in analysis_result.upper()) else ("ŚREDNIE" if v_bg == "NOK" else "NISKIE")
             async with get_db() as conn_bg:
                 await conn_bg.execute("""
                     UPDATE audits 
@@ -189,7 +192,8 @@ async def save_audit(
         "ccp1_fe_ok": ccp1_fe_ok,
         "ccp1_reject_ok": ccp1_reject_ok,
         "health_ok": health_ok,
-        "notes": full_notes or ""
+        "notes": full_notes or "",
+        "ko_failed": ko_failed_flag == 1
     }
     background_tasks.add_task(process_slm_background, audit_id, line, audit_payload_for_ai)
 

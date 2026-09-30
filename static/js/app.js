@@ -2852,8 +2852,12 @@
             }
 
             if (state.checklist_results && state.checklist_results[id]) {
-                state.checklist_results[id].score = scoreVal;
-                state.checklist_results[id].status = (scoreVal >= 5 ? 'OK' : 'NOK');
+                const it = state.checklist_results[id];
+                it.score = scoreVal;
+                // Zgodnie z normą IFS Food v8: oceny 4 (B - drobne odchylenie) i 3 (C - częściowa niezgodność)
+                // nie stanowią krytycznego złamania Knock-Out (KO).
+                // Status NOK dla pytań KO oraz krytycznych niezgodności ustawiany jest wyłącznie przy scoreVal <= 2.
+                it.status = (scoreVal <= 2 ? 'NOK' : 'OK');
             }
         }
 
@@ -2896,7 +2900,7 @@
             const card = document.getElementById(`chk-card-${id}`);
             if (card) {
                 card.classList.remove('border-rose-500', 'border-amber-500', 'border-emerald-500/50', 'border-slate-800');
-                if (it.score < 5 && it.is_ko) {
+                if (it.is_ko && it.score <= 2) {
                     card.classList.add('border-rose-500');
                 } else if (it.score < 5) {
                     card.classList.add('border-amber-500');
@@ -3053,7 +3057,8 @@
                 const it = state.checklist_results[k];
                 if (it.locked || it.accepted) {
                     acceptedCount++;
-                    if (it.status === "NOK") {
+                    const isCritNok = (it.score !== undefined ? parseInt(it.score) <= 2 : it.status === "NOK");
+                    if (isCritNok) {
                         nokCount++;
                         if (it.is_ko) koFail = true;
                     }
@@ -3144,7 +3149,8 @@
 
             let koFailed = false;
             Object.values(state.checklist_results).forEach(it => {
-                if (it.status === "NOK" && it.is_ko) koFailed = true;
+                const isCritNok = (it.score !== undefined ? parseInt(it.score) <= 2 : it.status === "NOK");
+                if (it.is_ko && isCritNok) koFailed = true;
             });
 
             let slmText = "Audyt zakończony pomyślnie.";
@@ -4866,7 +4872,7 @@
                 document.getElementById('det-ccp3-sieve').innerHTML = fmtOk(a.ccp3_sieve_ok);
 
                 // KO Indicator
-                const koFailed = (a.ko_failed == 1 || (a.checklist_parsed && Object.values(a.checklist_parsed).some(q => q.is_ko && q.status === 'NOK')));
+                const koFailed = (a.ko_failed == 1 || (a.checklist_parsed && Object.values(a.checklist_parsed).some(q => q.is_ko && (q.score !== undefined ? parseInt(q.score) <= 2 : q.status === 'NOK'))));
                 const koEl = document.getElementById('det-ko-status');
                 if (koFailed) {
                     koEl.textContent = 'KO: NARUSZONE (KRYTYCZNE)';
@@ -4920,12 +4926,13 @@
                     chBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500">Brak zarejestrowanych pytań checklisty dla tego audytu.</td></tr>`;
                 } else {
                     chItems.forEach(item => {
-                        const isNok = (item.status === 'NOK' || (item.score !== undefined && item.score < 5));
+                        const isNok = (item.score !== undefined ? parseInt(item.score) <= 2 : item.status === 'NOK');
+                        const isDev = (item.score !== undefined && (parseInt(item.score) === 3 || parseInt(item.score) === 4));
                         if (isNok) nokCount++;
-                        if (item.is_ko) koCount++;
+                        if (item.is_ko && isNok) koCount++;
 
-                        const koBadge = item.is_ko ? `<span class="ml-1 text-[8px] bg-red-950 text-red-400 px-1 py-0.2 rounded border border-red-500/30 font-bold">KO</span>` : '';
-                        const statusColor = isNok ? 'bg-rose-950 text-rose-300 border-rose-500/40' : 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+                        const koBadge = item.is_ko ? `<span class="ml-1 text-[8px] ${isNok ? 'bg-red-950 text-red-400 border border-red-500/40 font-black animate-pulse' : 'bg-slate-800 text-slate-400 border border-slate-700/50 font-bold'} px-1 py-0.2 rounded">KO</span>` : '';
+                        const statusColor = isNok ? 'bg-rose-950 text-rose-300 border-rose-500/40' : (isDev ? 'bg-amber-950 text-amber-300 border-amber-500/40' : 'bg-emerald-950 text-emerald-300 border-emerald-500/40');
                         const scoreDisplay = item.score !== undefined ? `${item.score}/5` : (item.status || 'OK');
                         const notesDisplay = item.notes ? `<span class="text-amber-300 font-medium inline-flex items-center gap-1"><i class="fas fa-comment-dots text-amber-400"></i><span>${item.notes}</span></span>` : `<span class="text-slate-500 italic">Brak uwag</span>`;
 
