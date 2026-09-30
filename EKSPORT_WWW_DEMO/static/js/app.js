@@ -2408,8 +2408,7 @@
                 const myAudits = auditsList.filter(a => {
                     if (!a) return false;
                     if (state.role === 'MANAGER') return true;
-                    if (!state.auditor_id) return true;
-                    return String(a.auditor_id).trim() === String(state.auditor_id).trim() || true;
+                    return String(a.auditor_id || '').trim().toLowerCase() === String(state.auditor_id || '').trim().toLowerCase();
                 });
 
                 // REGUŁA PODZIAŁU AUDYTÓW (IFS FOOD V8):
