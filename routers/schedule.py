@@ -157,16 +157,12 @@ async def clear_range(payload: Dict[str, int], manager: dict = Depends(require_m
 
 @router.post("/auto")
 async def auto_plan_audits(payload: AutoPlanModel, manager: dict = Depends(require_manager)):
-    today = datetime.now().date()
     start_day = payload.start_day or 1
     
     try:
         start_date = datetime(payload.start_year, payload.start_month, start_day).date()
     except ValueError:
         start_date = datetime(payload.start_year, payload.start_month, 1).date()
-        
-    if start_date < today:
-        start_date = today
 
     end_total_m = payload.start_month + payload.period_months - 1
     end_year = payload.start_year + ((end_total_m - 1) // 12)

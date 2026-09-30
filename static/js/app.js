@@ -1647,21 +1647,10 @@
             const m = parseInt(mEl.value) || (new Date().getMonth() + 1);
             const y = parseInt(yEl.value) || new Date().getFullYear();
             const period = state.selected_period_months || 1;
-            const today = new Date();
-            const isCurrentMonth = (y === today.getFullYear() && m === (today.getMonth() + 1));
-            const isPastMonth = (y < today.getFullYear() || (y === today.getFullYear() && m < (today.getMonth() + 1)));
 
-            let startDay = 1;
-            let startM = m;
-            let startY = y;
-
-            if (isCurrentMonth) {
-                startDay = today.getDate();
-            } else if (isPastMonth) {
-                startDay = today.getDate();
-                startM = today.getMonth() + 1;
-                startY = today.getFullYear();
-            }
+            const startDay = 1;
+            const startM = m;
+            const startY = y;
 
             const startDateObj = new Date(startY, startM - 1, startDay);
             const endTotalM = startM + period - 1;
@@ -1850,6 +1839,7 @@
                     const d = await res.json();
                     alert(`Pomyślnie wygenerowano plan audytów: ${d.count} audytów w zakresie ${d.start_date} – ${d.end_date}.`);
                     closeAutoPlanModal();
+                    currentCalDate = new Date(payload.start_year, payload.start_month - 1, 1);
                     showModule('calendar');
                     await loadScheduleAndRender();
                 } else {
