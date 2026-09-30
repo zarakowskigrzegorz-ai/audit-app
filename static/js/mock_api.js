@@ -166,16 +166,17 @@
         // 1. Logowanie PIN
         if ((cleanUrl.endsWith('/api/auth/login') || cleanUrl.endsWith('/api/auth/login-pin')) && method === 'POST') {
             const pin = String(bodyObj.pin || '').trim();
-            const expectedRole = bodyObj.expected_role || '';
-            const users = getStorage('users', defaultUsers);
+            const expectedRole = (bodyObj.expected_role || '').trim().toUpperCase();
+            const allUsers = getStorage('users', defaultUsers);
+            const users = expectedRole ? allUsers.filter(u => String(u.role || '').toUpperCase() === expectedRole) : allUsers;
 
             let matched = null;
-            if (pin === '9999') {
-                matched = users.find(u => u.role === 'MANAGER') || { id: 1, full_name: "Administrator Jakości", role: "MANAGER", qualifications: ["HACCP", "GMP", "GHP", "IFS Food v8"], pin: "9999" };
-            } else if (pin === '0000') {
+            if (pin === '9999' && (!expectedRole || expectedRole === 'MANAGER')) {
+                matched = users.find(u => u.role === 'MANAGER') || (expectedRole === 'MANAGER' ? { id: 1, full_name: "Administrator Jakości", role: "MANAGER", qualifications: ["HACCP", "GMP", "GHP", "IFS Food v8"], pin: "9999" } : null);
+            } else if (pin === '0000' && (!expectedRole || expectedRole === 'AUDITOR')) {
                 matched = users.find(u => u.id === 143) || users.find(u => u.role === 'AUDITOR');
             } else {
-                matched = users.find(u => u.pin === pin);
+                matched = users.find(u => String(u.pin || '').trim() === pin);
             }
 
             if (!matched && expectedRole === 'MANAGER' && pin === '9999') {
@@ -198,7 +199,10 @@
                     }
                 });
             } else {
-                return jsonResponse({ detail: "Nieprawidłowy kod PIN. Użyj 9999 dla Kierownika lub 0000 dla Audytora." }, 401);
+                const detailMsg = expectedRole === 'MANAGER'
+                    ? "Nieprawidłowy kod PIN dla konta Key User (Kierownik Jakości)."
+                    : (expectedRole === 'AUDITOR' ? "Nieprawidłowy kod PIN dla konta Audytora." : "Nieprawidłowy kod PIN.");
+                return jsonResponse({ detail: detailMsg }, 401);
             }
         }
 

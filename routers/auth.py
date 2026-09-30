@@ -32,8 +32,18 @@ class UserCreateModel(BaseModel):
 @router.post("/login-pin")
 async def auth_login(payload: PinLoginModel):
     clean_pin = payload.pin.strip()
+    expected = payload.expected_role.strip().upper() if payload.expected_role else None
+
     async with get_db() as conn:
-        cursor = await conn.execute("SELECT id, pin, full_name, role, qualifications FROM users WHERE is_active = 1")
+        if expected:
+            cursor = await conn.execute(
+                "SELECT id, pin, full_name, role, qualifications FROM users WHERE is_active = 1 AND UPPER(role) = ?",
+                (expected,)
+            )
+        else:
+            cursor = await conn.execute(
+                "SELECT id, pin, full_name, role, qualifications FROM users WHERE is_active = 1"
+            )
         rows = await cursor.fetchall()
         matched = None
         for row in rows:
@@ -43,19 +53,26 @@ async def auth_login(payload: PinLoginModel):
 
         # Awaryjny fallback dla standardowych PINów (Key User: 9999, Audytor: 0000)
         if not matched:
-            if clean_pin == "9999":
+            if clean_pin == "9999" and (not expected or expected == "MANAGER"):
                 for row in rows:
                     if row["role"] == "MANAGER":
                         matched = row
                         break
-            elif clean_pin == "0000":
+            elif clean_pin == "0000" and (not expected or expected == "AUDITOR"):
                 for row in rows:
                     if "Grzegorz" in row["full_name"] or row["role"] == "AUDITOR":
                         matched = row
                         break
 
         if not matched:
-            raise HTTPException(status_code=401, detail="Nieprawidłowy kod PIN. Użyj 9999 dla Key Usera lub 0000 dla Audytora.")
+            detail_msg = (
+                "Nieprawidłowy kod PIN dla konta Key User (Kierownik Jakości)."
+                if expected == "MANAGER"
+                else "Nieprawidłowy kod PIN dla konta Audytora."
+                if expected == "AUDITOR"
+                else "Nieprawidłowy kod PIN."
+            )
+            raise HTTPException(status_code=401, detail=detail_msg)
 
         user_dict = dict(matched)
         token = create_access_token(user_dict)

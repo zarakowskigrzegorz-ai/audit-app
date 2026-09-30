@@ -182,7 +182,6 @@
                                onblur="onAuthPinBlur('MANAGER')" 
                                onkeydown="onAuthPinKeyDown('MANAGER', event)" 
                                class="w-full text-center bg-slate-950/90 border border-blue-400/50 focus:border-blue-300 rounded-xl py-2 px-2 text-lg font-black tracking-widest text-blue-300 focus:outline-none shadow-inner">
-                        <p class="text-[9px] text-blue-300/80 font-bold mt-1">Domyślny PIN: <span class="font-mono text-cyan-300 font-black">9999</span></p>
                     </div>
 
                     <button type="button" onclick="event.stopPropagation(); submitAuthPin('MANAGER');" class="w-full py-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg border border-blue-300/40 flex items-center justify-center gap-1.5 transition-transform active:scale-95">
@@ -236,7 +235,6 @@
                                onblur="onAuthPinBlur('AUDITOR')" 
                                onkeydown="onAuthPinKeyDown('AUDITOR', event)" 
                                class="w-full text-center bg-slate-950/90 border border-emerald-400/50 focus:border-emerald-300 rounded-xl py-2 px-2 text-lg font-black tracking-widest text-emerald-300 focus:outline-none shadow-inner">
-                        <p class="text-[9px] text-emerald-300/80 font-bold mt-1">Domyślny PIN: <span class="font-mono text-emerald-200 font-black">0000</span> <span class="text-slate-400 font-normal">(lub 1002)</span></p>
                     </div>
 
                     <button type="button" onclick="event.stopPropagation(); submitAuthPin('AUDITOR');" class="w-full py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-[11px] uppercase tracking-wider rounded-xl shadow-lg border border-emerald-300/40 flex items-center justify-center gap-1.5 transition-transform active:scale-95">
@@ -2729,10 +2727,10 @@
 
     <!-- GŁÓWNY SKRYPT APLIKACJI -->
     <!-- FALLBACK MOCK API DLA WERSJI STATYCZNEJ / WWW OFFLINE -->
-    <script src="static/js/mock_api.js?v=20260929_v6"></script>
+    <script src="static/js/mock_api.js?v=20260930_v7"></script>
     <!-- GŁÓWNY MODUŁ JS APLIKACJI -->
-    <script src="static/js/app.js?v=20260929_v61"></script>
-    <script src="static/js/auth_caps.js?v=20260920_v4"></script>
+    <script src="static/js/app.js?v=20260930_v62"></script>
+    <script src="static/js/auth_caps.js?v=20260930_v5"></script>
 
     <!-- MODAL: LIVE CHAT OPERACYJNY (HALA ↔ BIURO / AUDYTORZY ↔ KIEROWNIK) -->
     <div id="modal-live-chat" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 hidden">
