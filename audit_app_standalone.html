@@ -4071,7 +4071,7 @@
 
         const state = {
             user_id: 0, auditor_id: "", role: "AUDITOR", token: sessionStorage.getItem('quality_audit_token') || "",
-            line: "", shift: "Zmiana A", zone: "Wysoka Higiena (High Care)",
+            line: "", shift: "1", zone: "Wysoka Higiena (High Care)",
             health_ok: "TAK", dispense_no: "BRAK", glass_plastic_ok: "ZGODNY", allergen_clean_ok: "ZGODNY",
             wood_policy_ok: "ZGODNY", ppe_ok: "ZGODNY", line_status: "Produkcja Ciągła", ccp1_fe_ok: "ZGODNY",
             ccp1_nonfe_ok: "ZGODNY", ccp1_ss_ok: "ZGODNY", ccp1_reject_ok: "ZGODNY", ccp1_bin_locked: "ZGODNY",
@@ -8238,7 +8238,7 @@
         const formData = new FormData();
         formData.append("auditor_id", state.auditor_id || "Audytor");
         formData.append("line", state.line || "Linia 1");
-        formData.append("shift", state.shift || "Zmiana A");
+        formData.append("shift", state.shift || "1");
         formData.append("zone", state.zone || "Wysoka Higiena");
         formData.append("health_ok", healthOk);
         formData.append("dispense_no", state.dispense_no || "BRAK");

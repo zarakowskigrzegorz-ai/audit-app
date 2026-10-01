@@ -771,7 +771,7 @@
         const formData = new FormData();
         formData.append("auditor_id", state.auditor_id || "Audytor");
         formData.append("line", state.line || "Linia 1");
-        formData.append("shift", state.shift || "Zmiana A");
+        formData.append("shift", state.shift || "1");
         formData.append("zone", state.zone || "Wysoka Higiena");
         formData.append("health_ok", healthOk);
         formData.append("dispense_no", state.dispense_no || "BRAK");
