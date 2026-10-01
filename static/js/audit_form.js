@@ -435,7 +435,7 @@
         state.checklist_results = {};
 
         try {
-            const res = await fetch(`/api/checklists/template/${auditType}`);
+            const res = await fetch(`/api/checklist-template/${auditType}`);
             const items = await res.json();
             cont.innerHTML = "";
 

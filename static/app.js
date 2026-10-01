@@ -1063,15 +1063,30 @@
         }
 
         async function deleteAuditor(userId) {
-            if (!confirm("Czy na pewno chcesz usunąć tego audytora?")) return;
-            const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
-            if (res.ok) {
-                await renderAuditorsList();
-            } else {
-                const err = await res.json().catch(() => ({}));
-                alert(`${err.detail || 'Błąd usuwania użytkownika'}`);
+            if (!confirm("Czy na pewno chcesz usunąć tego audytora?")) return false;
+            try {
+                const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await renderAuditorsList();
+                    if (typeof loadAuditorsDropdown === 'function') await loadAuditorsDropdown();
+                    if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
+                    alert("Audytor został pomyślnie usunięty z rejestru.");
+                    return true;
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`${err.detail || 'Błąd usuwania użytkownika'}`);
+                    return false;
+                }
+            } catch(e) {
+                console.error("Błąd deleteAuditor:", e);
+                alert("Wystąpił błąd sieci podczas usuwania audytora.");
+                return false;
             }
         }
+
+        window.deleteAuditor = deleteAuditor;
+        window.renderAuditorsList = renderAuditorsList;
+        window.addNewAuditor = addNewAuditor;
 
         // --- MODUŁ KALENDARZA I HARMONOGRAMU (WYDZIELONY DO static/js/calendar.js) ---
         // Pełna obsługa kalendarza, widoków, świąt oraz planowania znajduje się w dedykowanym module calendar.js.
@@ -1354,6 +1369,15 @@
         const roleEl = document.getElementById('edit-auditor-role');
         const pinInput = document.getElementById('edit-auditor-pin');
         const showPinCb = document.getElementById('edit-auditor-show-pin');
+        const delBtn = document.getElementById('btn-delete-auditor-modal');
+
+        if (delBtn) {
+            if (user.id === 1 || user.role === 'MANAGER') {
+                delBtn.classList.add('hidden');
+            } else {
+                delBtn.classList.remove('hidden');
+            }
+        }
 
         if (nameEl) nameEl.value = user.full_name || '';
         if (roleEl) roleEl.value = user.role || 'AUDITOR';
@@ -1380,6 +1404,19 @@
         });
 
         document.getElementById('auditor-profile-modal').classList.remove('hidden');
+    };
+
+    window.deleteCurrentAuditorFromModal = async function() {
+        const auditorId = window.currentAuditorId;
+        if (!auditorId) return;
+        if (auditorId === 1) {
+            alert("Nie można usunąć głównego konta Administratora Jakości.");
+            return;
+        }
+        const success = await deleteAuditor(auditorId);
+        if (success) {
+            document.getElementById('auditor-profile-modal')?.classList.add('hidden');
+        }
     };
 
     window.saveAuditorProfile = async function() {

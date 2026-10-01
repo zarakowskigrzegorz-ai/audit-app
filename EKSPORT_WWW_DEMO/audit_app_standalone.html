@@ -3458,8 +3458,67 @@
         }
 
         // 4. Linie produkcyjne
+        const lineItemMatch = cleanUrl.match(/\/api\/lines\/(\d+)(?:\/status)?/);
+        if (lineItemMatch) {
+            const lid = parseInt(lineItemMatch[1]);
+            let lines = getStorage('lines', defaultLines);
+
+            if (cleanUrl.endsWith('/status') && method === 'PATCH') {
+                const targetLine = lines.find(l => l.id === lid);
+                if (targetLine) {
+                    targetLine.line_status = bodyObj.line_status || (targetLine.line_status && targetLine.line_status.includes('Zwolniona') ? 'KWARANTANNA (HOLD CCP)' : 'PRODUKCJA (Zwolniona)');
+                    setStorage('lines', lines);
+                    return jsonResponse({ status: "OK", line_status: targetLine.line_status });
+                }
+                return jsonResponse({ detail: "Nie znaleziono linii" }, 404);
+            }
+
+            if (method === 'GET') {
+                const found = lines.find(l => l.id === lid);
+                if (found) {
+                    const audits = getStorage('audits', []);
+                    const recentAudits = audits.filter(a => a.line === found.name).slice(0, 5);
+                    return jsonResponse(Object.assign({}, found, { recent_audits: recentAudits }));
+                }
+                return jsonResponse({ detail: "Nie znaleziono linii" }, 404);
+            }
+
+            if (method === 'PUT') {
+                const idx = lines.findIndex(l => l.id === lid);
+                if (idx !== -1) {
+                    lines[idx] = Object.assign({}, lines[idx], bodyObj);
+                    setStorage('lines', lines);
+                    return jsonResponse({ status: "OK", message: "Paszport zaktualizowany" });
+                }
+                return jsonResponse({ detail: "Nie znaleziono linii" }, 404);
+            }
+
+            if (method === 'DELETE') {
+                lines = lines.filter(l => l.id !== lid);
+                setStorage('lines', lines);
+                return jsonResponse({ status: "OK", message: "Linia usunięta" });
+            }
+        }
+
         if (cleanUrl.endsWith('/api/lines')) {
-            return jsonResponse(getStorage('lines', defaultLines));
+            let lines = getStorage('lines', defaultLines);
+            if (method === 'POST') {
+                const newId = lines.length ? Math.max(...lines.map(l => l.id || 0)) + 1 : 101;
+                const newLine = {
+                    id: newId,
+                    name: bodyObj.name || `Nowa Linia L${newId}`,
+                    code: bodyObj.code || `L${newId}`,
+                    default_zone: bodyObj.default_zone || "High Care",
+                    line_status: bodyObj.line_status || "PRODUKCJA (Zwolniona)",
+                    allergen_profile: bodyObj.allergen_profile || "Dedykowana (Bez alergenów)",
+                    ccp_equipment: bodyObj.ccp_equipment || "Detektor Metali, Sito",
+                    notes: bodyObj.notes || ""
+                };
+                lines.push(newLine);
+                setStorage('lines', lines);
+                return jsonResponse({ status: "OK", id: newId, message: "Dodano nową linię" });
+            }
+            return jsonResponse(lines);
         }
 
         // 5. Użytkownicy / Audytorzy
@@ -3528,7 +3587,97 @@
             return jsonResponse(users);
         }
 
-        // 6. Lista audytów
+        // 6. Audyty (odczyt, szczegóły, statusy, hold lot, korekty)
+        const auditItemMatch = cleanUrl.match(/\/api\/audits\/(\d+)(?:\/(status|hold-lot|audit-trail))?/);
+        if (auditItemMatch) {
+            const aid = parseInt(auditItemMatch[1]);
+            const subAction = auditItemMatch[2];
+            let audits = getStorage('audits', []);
+            const targetAudit = audits.find(a => a.id === aid);
+
+            if (subAction === 'status' && method === 'PATCH') {
+                if (targetAudit) {
+                    targetAudit.record_status = bodyObj.status || "ZAAKCEPTOWANY";
+                    if (bodyObj.reason) targetAudit.manager_comment = bodyObj.reason;
+                    setStorage('audits', audits);
+                    return jsonResponse({ status: "OK", record_status: targetAudit.record_status });
+                }
+                return jsonResponse({ detail: "Audyt nie znaleziony" }, 404);
+            }
+
+            if (subAction === 'hold-lot' && method === 'POST') {
+                if (targetAudit) {
+                    targetAudit.record_status = "HOLD_LOT";
+                    targetAudit.compliance_verdict = "HOLD_LOT";
+                    targetAudit.manager_comment = bodyObj.reason || "Zarządzenie HOLD LOT";
+                    setStorage('audits', audits);
+                    return jsonResponse({ status: "OK", message: "Wstrzymano partię wyrobu (HOLD LOT)" });
+                }
+                return jsonResponse({ detail: "Audyt nie znaleziony" }, 404);
+            }
+
+            if (subAction === 'audit-trail' && method === 'GET') {
+                return jsonResponse([
+                    { timestamp: targetAudit ? targetAudit.timestamp : new Date().toISOString(), user_name: "System", event_type: "CREATE", details: "Utworzenie rekordu audytu" }
+                ]);
+            }
+
+            if (method === 'GET') {
+                return targetAudit ? jsonResponse(targetAudit) : jsonResponse({ detail: "Nie znaleziono" }, 404);
+            }
+
+            if (method === 'DELETE') {
+                audits = audits.filter(a => a.id !== aid);
+                setStorage('audits', audits);
+                return jsonResponse({ status: "OK" });
+            }
+        }
+
+        if (cleanUrl.endsWith('/api/audits/apply-correction') && method === 'PUT') {
+            let audits = getStorage('audits', []);
+            const aid = bodyObj.audit_id;
+            const target = audits.find(a => a.id === aid);
+            if (target && bodyObj.updated_fields) {
+                Object.assign(target, bodyObj.updated_fields);
+                target.correction_applied = true;
+                target.modified_by = bodyObj.modified_by || "Manager";
+                target.change_reason = bodyObj.change_reason || "";
+                setStorage('audits', audits);
+                return jsonResponse({ status: "OK", message: "Korekta audytu została zastosowana." });
+            }
+            return jsonResponse({ detail: "Audyt nie znaleziony" }, 404);
+        }
+
+        if (cleanUrl.endsWith('/api/audits/request-edit') && method === 'POST') {
+            let reqs = getStorage('audit_edit_requests', []);
+            const newReq = {
+                id: Date.now(),
+                audit_id: bodyObj.audit_id,
+                requested_by: bodyObj.requested_by,
+                reason: bodyObj.reason,
+                status: 'PENDING',
+                timestamp: new Date().toISOString()
+            };
+            reqs.push(newReq);
+            setStorage('audit_edit_requests', reqs);
+            return jsonResponse({ status: "OK", request_id: newReq.id });
+        }
+
+        if (cleanUrl.includes('/api/audits/edit-requests')) {
+            return jsonResponse(getStorage('audit_edit_requests', []));
+        }
+
+        if (cleanUrl.endsWith('/api/audits/decide-edit') && method === 'POST') {
+            let reqs = getStorage('audit_edit_requests', []);
+            const target = reqs.find(r => r.id === bodyObj.request_id);
+            if (target) {
+                target.status = bodyObj.decision;
+                target.manager_comment = bodyObj.manager_comment || "";
+                setStorage('audit_edit_requests', reqs);
+            }
+            return jsonResponse({ status: "OK" });
+        }
+
         if (cleanUrl.endsWith('/api/audits') && method === 'GET') {
             return jsonResponse(getStorage('audits', []));
         }
@@ -3632,14 +3781,73 @@
                 return jsonResponse({ status: "success", message: "Czat wyczyszczony" });
             }
 
-            if (cleanUrl.endsWith('/counts')) {
-                return jsonResponse({ unread_count: 0, auditor_unread: 0 });
+            // Obsługa odpowiedzi managera: POST /api/auditor-notes/{id}/reply
+            const replyMatch = cleanUrl.match(/\/api\/auditor-notes\/(\d+)\/reply$/);
+            if (replyMatch && method === 'POST') {
+                const nid = parseInt(replyMatch[1]);
+                let notes = getStorage('auditor_notes', []);
+                const target = notes.find(n => n.id === nid);
+                if (target) {
+                    target.manager_response = bodyObj.manager_response || "";
+                    target.is_read = 1;
+                    setStorage('auditor_notes', notes);
+                }
+                return jsonResponse({ status: "success", message: "Odpowiedź wysłana." });
             }
-            return jsonResponse([]);
-        }
 
-        // 9. Wnioski o edycję audytów
-        if (cleanUrl.includes('/api/audits/edit-requests')) {
+            // Oznaczenie pojedynczej notatki jako przeczytana: PATCH /api/auditor-notes/{id}/read
+            const readMatch = cleanUrl.match(/\/api\/auditor-notes\/(\d+)\/read$/);
+            if (readMatch && method === 'PATCH') {
+                const nid = parseInt(readMatch[1]);
+                let notes = getStorage('auditor_notes', []);
+                const target = notes.find(n => n.id === nid);
+                if (target) {
+                    target.is_read = 1;
+                    setStorage('auditor_notes', notes);
+                }
+                return jsonResponse({ status: "success" });
+            }
+
+            // Oznaczenie wszystkich notatek jako przeczytane: POST /api/auditor-notes/mark-all-read
+            if (cleanUrl.endsWith('/mark-all-read') && method === 'POST') {
+                let notes = getStorage('auditor_notes', []);
+                notes.forEach(n => { n.is_read = 1; });
+                setStorage('auditor_notes', notes);
+                return jsonResponse({ status: "success" });
+            }
+
+            // Zapis nowej notatki audytora: POST /api/auditor-notes
+            if (cleanUrl.endsWith('/api/auditor-notes') && method === 'POST') {
+                let notes = getStorage('auditor_notes', []);
+                const newNote = {
+                    id: Date.now(),
+                    timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+                    auditor_id: bodyObj.auditor_id || 143,
+                    auditor_name: bodyObj.auditor_name || "Grzegorz Zarakowski",
+                    line_id: bodyObj.line_id || "",
+                    line_name: bodyObj.line_name || "Linia L1",
+                    priority: bodyObj.priority || "INFO",
+                    content: bodyObj.content || "",
+                    is_read: 0,
+                    direction: "TO_MANAGER",
+                    manager_response: ""
+                };
+                notes.unshift(newNote);
+                setStorage('auditor_notes', notes);
+                return jsonResponse({ status: "success", message: "Notatka została przekazana do Key Usera.", note_id: newNote.id, timestamp: newNote.timestamp });
+            }
+
+            // Pobieranie listy notatek: GET /api/auditor-notes
+            if (cleanUrl.endsWith('/api/auditor-notes') && method === 'GET') {
+                return jsonResponse(getStorage('auditor_notes', []));
+            }
+
+            if (cleanUrl.endsWith('/counts')) {
+                const notes = getStorage('auditor_notes', []);
+                const unread = notes.filter(n => !n.is_read).length;
+                return jsonResponse({ unread_count: unread, auditor_unread: 0 });
+            }
+
             return jsonResponse([]);
         }
 
@@ -3775,7 +3983,7 @@
         }
 
         // 12. Szablony checklist audytowych (HACCP, GMP, GHP)
-        const chkMatch = cleanUrl.match(/\/api\/checklist(?:-template)?\/([^\/]+)$/);
+        const chkMatch = cleanUrl.match(/\/api\/checklists?(?:-template|\/template)?\/([^\/]+)$/);
         if (chkMatch && method === 'GET') {
             const rawType = decodeURIComponent(chkMatch[1] || 'HACCP').toUpperCase().trim();
             const templates = {
@@ -7694,7 +7902,7 @@
         state.checklist_results = {};
 
         try {
-            const res = await fetch(`/api/checklists/template/${auditType}`);
+            const res = await fetch(`/api/checklist-template/${auditType}`);
             const items = await res.json();
             cont.innerHTML = "";
 

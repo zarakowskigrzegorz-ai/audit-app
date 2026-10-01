@@ -44,6 +44,8 @@ CHECKLIST_TEMPLATES = {
 
 @router.get("/api/checklist-template/{audit_type}")
 @router.get("/api/checklist/{audit_type}")
+@router.get("/api/checklists/template/{audit_type}")
+@router.get("/api/checklists/{audit_type}")
 def get_checklist_template(audit_type: str):
     return CHECKLIST_TEMPLATES.get(audit_type.upper().strip(), CHECKLIST_TEMPLATES["HACCP"])
 

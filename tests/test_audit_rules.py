@@ -3,18 +3,19 @@ import pytest
 def test_checklist_template_endpoint(client):
     """Weryfikuje czy szablony checklist (HACCP, GMP, GHP) zwracają poprawne pytania z flagami KO."""
     for standard in ["HACCP", "GMP", "GHP"]:
-        res = client.get(f"/api/checklist-template/{standard}")
-        assert res.status_code == 200
-        items = res.json()
-        assert isinstance(items, list)
-        assert len(items) >= 9
-        # Sprawdź czy istnieją pytania Knock-Out (is_ko == True)
-        ko_items = [i for i in items if i.get("is_ko") is True]
-        assert len(ko_items) >= 1
-        for item in items:
-            assert "id" in item
-            assert "clause" in item
-            assert "question" in item
+        for ep in [f"/api/checklist-template/{standard}", f"/api/checklists/template/{standard}"]:
+            res = client.get(ep)
+            assert res.status_code == 200
+            items = res.json()
+            assert isinstance(items, list)
+            assert len(items) >= 9
+            # Sprawdź czy istnieją pytania Knock-Out (is_ko == True)
+            ko_items = [i for i in items if i.get("is_ko") is True]
+            assert len(ko_items) >= 1
+            for item in items:
+                assert "id" in item
+                assert "clause" in item
+                assert "question" in item
 
 def test_audit_creation_success_conform(client):
     """Rejestracja w 100% zgodnego audytu z poprawnymi parametrami CCP i brakiem odchyleń KO."""
