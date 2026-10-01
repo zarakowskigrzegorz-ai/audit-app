@@ -427,7 +427,7 @@
     window.setChecklistAnswer = setChecklistAnswer;
 
     async function loadChecklistForAudit(auditType) {
-        const cont = document.getElementById('checklist-questions-container');
+        const cont = document.getElementById('checklist-items-container') || document.getElementById('checklist-questions-container');
         if (!cont) return;
         cont.innerHTML = `<div class="p-8 text-center text-slate-400 flex items-center justify-center gap-2"><i class="fas fa-spinner fa-spin text-cyan-400"></i> Ładowanie pytań checklisty ${auditType}...</div>`;
         
@@ -541,13 +541,62 @@
         });
 
         const percent = Math.round((totalScore / maxScore) * 100);
+        const acceptedCount = results.length - unacceptedCount;
+        const progressPercent = Math.round((acceptedCount / results.length) * 100);
+
+        // 1. Aktualizacja licznika w: document.getElementById('checklist-progress-counter')
+        const counterEl = document.getElementById('checklist-progress-counter');
+        if (counterEl) {
+            counterEl.innerText = `${acceptedCount} / ${results.length} (${progressPercent}%)`;
+            counterEl.className = unacceptedCount === 0 
+                ? "font-mono font-black text-emerald-400" 
+                : "font-mono font-black text-amber-400";
+        }
+
+        // 2. Aktualizacja szerokości paska w: document.getElementById('checklist-progress-fill')
+        const fillEl = document.getElementById('checklist-progress-fill');
+        if (fillEl) {
+            fillEl.style.width = `${progressPercent}%`;
+            fillEl.className = unacceptedCount === 0 
+                ? "h-full bg-emerald-500 transition-all duration-300 rounded-full" 
+                : "h-full bg-amber-500 transition-all duration-300 rounded-full";
+        }
+
+        // 3. Aktualizacja statusu w: document.getElementById('checklist-progress-status')
+        const statusEl = document.getElementById('checklist-progress-status');
+        if (statusEl) {
+            if (unacceptedCount === 0) {
+                if (hasKoFailure) {
+                    statusEl.innerHTML = `<span class="text-rose-400 font-bold flex items-center gap-1"><i class="fas fa-triangle-exclamation text-rose-500"></i> Wykryto naruszenie KO (Hold Lot)</span>`;
+                } else {
+                    statusEl.innerHTML = `<span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle text-emerald-400"></i> Wszystkie punkty ocenione (${percent}%)</span>`;
+                }
+            } else {
+                statusEl.innerHTML = `<span class="text-amber-400 font-bold flex items-center gap-1"><i class="fas fa-exclamation-circle text-amber-400"></i> Pozostało do oceny: ${unacceptedCount}</span>`;
+            }
+        }
+
+        // 4. Aktualizacja plakietki KO w: document.getElementById('ko-status-badge')
+        const koBadge = document.getElementById('ko-status-badge');
+        if (koBadge) {
+            if (hasKoFailure) {
+                koBadge.className = "text-[9px] font-black bg-rose-950 text-rose-300 border border-rose-500/60 px-2.5 py-0.5 rounded-full animate-pulse shadow-sm";
+                koBadge.innerHTML = `<i class="fas fa-triangle-exclamation text-rose-400 mr-1"></i> NARUSZENIE KO (Hold Lot)`;
+            } else if (unacceptedCount === 0) {
+                koBadge.className = "text-[9px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/60 px-2.5 py-0.5 rounded-full shadow-sm";
+                koBadge.innerHTML = `<i class="fas fa-circle-check text-emerald-400 mr-1"></i> Status KO: Zgodny (${percent}%)`;
+            } else {
+                koBadge.className = "text-[9px] font-black bg-slate-900 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full";
+                koBadge.innerHTML = `<i class="fas fa-clock text-amber-400 mr-0.5"></i> Ocena: ${acceptedCount}/${results.length}`;
+            }
+        }
+
+        // Opcjonalne kompatybilne elementy
         const scoreBadge = document.getElementById('checklist-score-percent');
         const countBadge = document.getElementById('checklist-accepted-count');
         const verdictBadge = document.getElementById('checklist-overall-verdict');
-
         if (scoreBadge) scoreBadge.innerText = `${percent}%`;
-        if (countBadge) countBadge.innerText = `${results.length - unacceptedCount}/${results.length}`;
-
+        if (countBadge) countBadge.innerText = `${acceptedCount}/${results.length}`;
         if (verdictBadge) {
             if (hasKoFailure) {
                 verdictBadge.className = "text-xs font-black px-2.5 py-1 rounded-lg bg-rose-950 text-rose-300 border border-rose-500/50 animate-pulse";
