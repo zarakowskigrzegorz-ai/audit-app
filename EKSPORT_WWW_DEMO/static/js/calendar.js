@@ -244,14 +244,7 @@
      */
     function handleAuditCardClick(event, auditId, auditType) {
         if (event) event.stopPropagation();
-        if (activeSelectedFilter !== auditType) {
-            selectSingleFilter(auditType);
-            if (typeof window.showToast === 'function') {
-                window.showToast(`Widok przefiltrowany: tylko audyty ${auditType}`, 'info');
-            }
-        } else {
-            openAuditActionModal(auditId);
-        }
+        openAuditActionModal(auditId);
     }
     window.handleAuditCardClick = handleAuditCardClick;
 
@@ -272,13 +265,7 @@
 
         if (matchingAudits.length > 0) {
             const targetAudit = matchingAudits[0];
-            const aType = String(targetAudit.audit_type || "HACCP").toUpperCase();
-            const targetType = aType.includes("GMP") ? "GMP" : aType.includes("GHP") ? "GHP" : "HACCP";
-            if (activeSelectedFilter !== targetType) {
-                selectSingleFilter(targetType);
-            } else {
-                openAuditActionModal(targetAudit.id);
-            }
+            openAuditActionModal(targetAudit.id);
         } else {
             if (typeof window.openManualPlanModal === 'function') window.openManualPlanModal(dateStr);
         }
@@ -1178,15 +1165,34 @@
         if (dock) dock.classList.add('hidden');
 
         try {
-            const res = await fetch(`/api/schedule/${id}`);
-            const a = await res.json();
+            let a = null;
+            if (Array.isArray(window.schedulesData)) {
+                a = window.schedulesData.find(s => String(s.id) === String(id));
+            }
+            if (!a) {
+                const res = await fetch(`/api/schedule/${id}`);
+                if (res.ok) a = await res.json();
+            }
+            if (!a) {
+                console.error("Błąd openAudModal: nie znaleziono audytu o id:", id);
+                return;
+            }
             window.activeSelectedAudit = a;
             const appState = getAppState();
             appState.active_audit_type = a.audit_type || "HACCP";
-            document.getElementById('aud-view-date').innerText = a.scheduled_date || "";
-            document.getElementById('aud-view-type').innerText = a.audit_type || "HACCP";
-            document.getElementById('aud-view-line').innerText = a.line || "";
-            document.getElementById('aud-view-status').innerText = a.status || "";
+
+            const dateEl = document.getElementById('aud-view-date');
+            if (dateEl) dateEl.innerText = a.scheduled_date || "";
+            const typeEl = document.getElementById('aud-view-type');
+            if (typeEl) typeEl.innerText = a.audit_type || "HACCP";
+            const lineEl = document.getElementById('aud-view-line');
+            if (lineEl) lineEl.innerText = a.line || "";
+            const statusEl = document.getElementById('aud-view-status');
+            if (statusEl) statusEl.innerText = a.status || "";
+
+            const hiddenId = document.getElementById('aud-view-id');
+            if (hiddenId) hiddenId.value = a.id;
+
             const modal = document.getElementById('modal-aud-view');
             if (modal) modal.classList.remove('hidden');
         } catch (err) {
@@ -1194,6 +1200,81 @@
         }
     }
     window.openAudModal = openAudModal;
+
+    function startAuditorTask() {
+        const a = window.activeSelectedAudit || (typeof activeSelectedAudit !== 'undefined' ? activeSelectedAudit : null);
+        if (!a) {
+            const hiddenId = document.getElementById('aud-view-id');
+            const schedId = hiddenId ? hiddenId.value : null;
+            if (schedId && Array.isArray(window.schedulesData)) {
+                const found = window.schedulesData.find(s => String(s.id) === String(schedId));
+                if (found) {
+                    window.activeSelectedAudit = found;
+                    return startAuditorTask();
+                }
+            }
+            alert("Nie wybrano żadnego zaplanowanego audytu do rozpoczęcia.");
+            return;
+        }
+
+        window.activeSelectedAudit = a;
+        const appState = getAppState();
+        appState.schedule_id = a.id;
+        appState.line = a.line;
+        appState.active_audit_type = a.audit_type || "HACCP";
+
+        if (window.state) {
+            window.state.schedule_id = a.id;
+            window.state.line = a.line;
+            window.state.active_audit_type = a.audit_type || "HACCP";
+        }
+
+        // 1. Ustawienie standardu inspekcji i załadowanie checklisty pytań
+        if (typeof window.setInspectionStandard === 'function') {
+            window.setInspectionStandard(appState.active_audit_type);
+        } else if (typeof setInspectionStandard === 'function') {
+            setInspectionStandard(appState.active_audit_type);
+        } else if (typeof window.loadChecklistForAudit === 'function') {
+            window.loadChecklistForAudit(appState.active_audit_type);
+        }
+
+        // 2. Ustawienie wybranej linii produkcyjnej
+        const hiddenLine = document.getElementById('hidden-line-input');
+        if (hiddenLine) hiddenLine.value = appState.line;
+        const preauditSelect = document.getElementById('preaudit-line-select');
+        if (preauditSelect && appState.line) preauditSelect.value = appState.line;
+
+        document.querySelectorAll('.tile-line').forEach(b => {
+            if (b.getAttribute('data-line') === appState.line || b.textContent.trim() === appState.line) {
+                b.classList.add('tile-selected');
+            } else {
+                b.classList.remove('tile-selected');
+            }
+        });
+
+        if (window.formHistory && typeof window.formHistory.saveState === 'function') {
+            window.formHistory.saveState('view-audit-form'); 
+        }
+
+        closeAudModal();
+
+        if (typeof window.showModule === 'function') {
+            window.showModule('audit-main');
+        } else if (typeof showModule === 'function') {
+            showModule('audit-main');
+        }
+
+        const formView = document.getElementById('view-audit-form');
+        if (formView) formView.classList.remove('hidden');
+        const mainView = document.getElementById('view-audit-main');
+        if (mainView) mainView.classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        if (typeof window.showToast === 'function') {
+            window.showToast(`Rozpoczęto audyt: ${appState.active_audit_type} (${appState.line})`, 'success');
+        }
+    }
+    window.startAuditorTask = startAuditorTask;
 
     function closeAudModal() {
         const modalEl = document.getElementById('modal-aud-view');

@@ -81,7 +81,7 @@
             
             let targetId = modId;
             if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor'; }
-            else if (modId === 'audit-main') { targetId = 'view-audit-main'; }
+            else if (modId === 'audit-main' || modId === 'audit-form' || modId === 'view-audit-form') { targetId = 'view-audit-main'; }
             else if (!modId.startsWith('view-') && !modId.startsWith('hub-')) { targetId = 'view-' + modId; }
 
             let target = document.getElementById(targetId);
@@ -104,7 +104,7 @@
             // Zarządzanie widocznością głównego formularza audytu
             const auditForm = document.getElementById('view-audit-form');
             if (auditForm) {
-                if (modId === 'audit-main') {
+                if (modId === 'audit-main' || modId === 'audit-form' || modId === 'view-audit-form' || targetId === 'view-audit-main') {
                     auditForm.classList.remove('hidden');
                 } else {
                     auditForm.classList.add('hidden');
@@ -1318,11 +1318,36 @@
 
         
         function startAuditorTask() {
-            if (!activeSelectedAudit) return;
-            state.schedule_id = activeSelectedAudit.id;
-            state.line = activeSelectedAudit.line;
-            state.active_audit_type = activeSelectedAudit.audit_type || "HACCP";
-            setInspectionStandard(state.active_audit_type);
+            const a = window.activeSelectedAudit || activeSelectedAudit;
+            if (!a) {
+                const hiddenId = document.getElementById('aud-view-id');
+                const schedId = hiddenId ? hiddenId.value : null;
+                if (schedId && Array.isArray(window.schedulesData)) {
+                    const found = window.schedulesData.find(s => String(s.id) === String(schedId));
+                    if (found) {
+                        window.activeSelectedAudit = found;
+                        activeSelectedAudit = found;
+                        return startAuditorTask();
+                    }
+                }
+                alert("Nie wybrano żadnego zaplanowanego audytu do rozpoczęcia.");
+                return;
+            }
+
+            activeSelectedAudit = a;
+            window.activeSelectedAudit = a;
+
+            state.schedule_id = a.id;
+            state.line = a.line;
+            state.active_audit_type = a.audit_type || "HACCP";
+
+            if (typeof window.setInspectionStandard === 'function') {
+                window.setInspectionStandard(state.active_audit_type);
+            } else if (typeof setInspectionStandard === 'function') {
+                setInspectionStandard(state.active_audit_type);
+            } else if (typeof window.loadChecklistForAudit === 'function') {
+                window.loadChecklistForAudit(state.active_audit_type);
+            }
             
             const hiddenLine = document.getElementById('hidden-line-input');
             if (hiddenLine) hiddenLine.value = state.line;
@@ -1341,14 +1366,35 @@
             
             closeAudModal();
             showModule('audit-main');
+
+            const formView = document.getElementById('view-audit-form');
+            if (formView) formView.classList.remove('hidden');
+            const mainView = document.getElementById('view-audit-main');
+            if (mainView) mainView.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            if (typeof window.showToast === 'function') {
+                window.showToast(`Rozpoczęto audyt: ${state.active_audit_type} (${state.line})`, 'success');
+            }
         }
+        window.startAuditorTask = startAuditorTask;
 
         window.startAuditorTaskById = async function(id) {
             try {
-                const res = await fetch(`/api/schedule/${id}`);
-                if (!res.ok) return;
-                const a = await res.json();
+                let a = null;
+                if (Array.isArray(window.schedulesData)) {
+                    a = window.schedulesData.find(s => String(s.id) === String(id));
+                }
+                if (!a) {
+                    const res = await fetch(`/api/schedule/${id}`);
+                    if (res.ok) a = await res.json();
+                }
+                if (!a) {
+                    alert("Nie znaleziono zlecenia audytu #" + id);
+                    return;
+                }
                 activeSelectedAudit = a;
+                window.activeSelectedAudit = a;
                 startAuditorTask();
             } catch(e) { console.warn("Błąd startAuditorTaskById:", e); }
         };

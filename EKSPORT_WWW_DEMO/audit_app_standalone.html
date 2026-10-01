@@ -3023,6 +3023,7 @@
                 </h3>
                 <button onclick="closeAudModal()" class="text-slate-400 hover:text-white text-lg font-bold cursor-pointer">&times;</button>
             </div>
+            <input type="hidden" id="aud-view-id" value="">
             <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2 text-xs">
                 <div class="flex justify-between items-center"><span class="text-slate-400 text-[10px] font-bold">Data:</span> <b id="aud-view-date" class="text-cyan-400 font-black text-sm">---</b></div>
                 <div class="flex justify-between items-center"><span class="text-slate-400 text-[10px] font-bold">Standard:</span> <b id="aud-view-type" class="text-amber-300 font-black text-sm">---</b></div>
@@ -3715,9 +3716,19 @@
             setStorage('audits', audits);
 
             // Zamykanie w harmonogramie
+            let schedulesV3 = getStorage('schedules_v3', initDefaultSchedules());
+            if (scheduleId) {
+                const target = schedulesV3.find(s => String(s.id) === String(scheduleId));
+                if (target) target.status = 'WYKONANY';
+            } else {
+                const target = schedulesV3.find(s => s.line === line && s.status === 'PLANOWANY');
+                if (target) target.status = 'WYKONANY';
+            }
+            setStorage('schedules_v3', schedulesV3);
+
             const schedules = getStorage('schedules', []);
             if (scheduleId) {
-                const target = schedules.find(s => s.id == scheduleId);
+                const target = schedules.find(s => String(s.id) === String(scheduleId));
                 if (target) target.status = 'WYKONANY';
             } else {
                 const target = schedules.find(s => s.line === line && s.status === 'PLANOWANY');
@@ -4119,7 +4130,7 @@
             
             let targetId = modId;
             if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor'; }
-            else if (modId === 'audit-main') { targetId = 'view-audit-main'; }
+            else if (modId === 'audit-main' || modId === 'audit-form' || modId === 'view-audit-form') { targetId = 'view-audit-main'; }
             else if (!modId.startsWith('view-') && !modId.startsWith('hub-')) { targetId = 'view-' + modId; }
 
             let target = document.getElementById(targetId);
@@ -4142,7 +4153,7 @@
             // Zarządzanie widocznością głównego formularza audytu
             const auditForm = document.getElementById('view-audit-form');
             if (auditForm) {
-                if (modId === 'audit-main') {
+                if (modId === 'audit-main' || modId === 'audit-form' || modId === 'view-audit-form' || targetId === 'view-audit-main') {
                     auditForm.classList.remove('hidden');
                 } else {
                     auditForm.classList.add('hidden');
@@ -5356,11 +5367,36 @@
 
         
         function startAuditorTask() {
-            if (!activeSelectedAudit) return;
-            state.schedule_id = activeSelectedAudit.id;
-            state.line = activeSelectedAudit.line;
-            state.active_audit_type = activeSelectedAudit.audit_type || "HACCP";
-            setInspectionStandard(state.active_audit_type);
+            const a = window.activeSelectedAudit || activeSelectedAudit;
+            if (!a) {
+                const hiddenId = document.getElementById('aud-view-id');
+                const schedId = hiddenId ? hiddenId.value : null;
+                if (schedId && Array.isArray(window.schedulesData)) {
+                    const found = window.schedulesData.find(s => String(s.id) === String(schedId));
+                    if (found) {
+                        window.activeSelectedAudit = found;
+                        activeSelectedAudit = found;
+                        return startAuditorTask();
+                    }
+                }
+                alert("Nie wybrano żadnego zaplanowanego audytu do rozpoczęcia.");
+                return;
+            }
+
+            activeSelectedAudit = a;
+            window.activeSelectedAudit = a;
+
+            state.schedule_id = a.id;
+            state.line = a.line;
+            state.active_audit_type = a.audit_type || "HACCP";
+
+            if (typeof window.setInspectionStandard === 'function') {
+                window.setInspectionStandard(state.active_audit_type);
+            } else if (typeof setInspectionStandard === 'function') {
+                setInspectionStandard(state.active_audit_type);
+            } else if (typeof window.loadChecklistForAudit === 'function') {
+                window.loadChecklistForAudit(state.active_audit_type);
+            }
             
             const hiddenLine = document.getElementById('hidden-line-input');
             if (hiddenLine) hiddenLine.value = state.line;
@@ -5379,14 +5415,35 @@
             
             closeAudModal();
             showModule('audit-main');
+
+            const formView = document.getElementById('view-audit-form');
+            if (formView) formView.classList.remove('hidden');
+            const mainView = document.getElementById('view-audit-main');
+            if (mainView) mainView.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            if (typeof window.showToast === 'function') {
+                window.showToast(`Rozpoczęto audyt: ${state.active_audit_type} (${state.line})`, 'success');
+            }
         }
+        window.startAuditorTask = startAuditorTask;
 
         window.startAuditorTaskById = async function(id) {
             try {
-                const res = await fetch(`/api/schedule/${id}`);
-                if (!res.ok) return;
-                const a = await res.json();
+                let a = null;
+                if (Array.isArray(window.schedulesData)) {
+                    a = window.schedulesData.find(s => String(s.id) === String(id));
+                }
+                if (!a) {
+                    const res = await fetch(`/api/schedule/${id}`);
+                    if (res.ok) a = await res.json();
+                }
+                if (!a) {
+                    alert("Nie znaleziono zlecenia audytu #" + id);
+                    return;
+                }
                 activeSelectedAudit = a;
+                window.activeSelectedAudit = a;
                 startAuditorTask();
             } catch(e) { console.warn("Błąd startAuditorTaskById:", e); }
         };
@@ -6401,14 +6458,7 @@
      */
     function handleAuditCardClick(event, auditId, auditType) {
         if (event) event.stopPropagation();
-        if (activeSelectedFilter !== auditType) {
-            selectSingleFilter(auditType);
-            if (typeof window.showToast === 'function') {
-                window.showToast(`Widok przefiltrowany: tylko audyty ${auditType}`, 'info');
-            }
-        } else {
-            openAuditActionModal(auditId);
-        }
+        openAuditActionModal(auditId);
     }
     window.handleAuditCardClick = handleAuditCardClick;
 
@@ -6429,13 +6479,7 @@
 
         if (matchingAudits.length > 0) {
             const targetAudit = matchingAudits[0];
-            const aType = String(targetAudit.audit_type || "HACCP").toUpperCase();
-            const targetType = aType.includes("GMP") ? "GMP" : aType.includes("GHP") ? "GHP" : "HACCP";
-            if (activeSelectedFilter !== targetType) {
-                selectSingleFilter(targetType);
-            } else {
-                openAuditActionModal(targetAudit.id);
-            }
+            openAuditActionModal(targetAudit.id);
         } else {
             if (typeof window.openManualPlanModal === 'function') window.openManualPlanModal(dateStr);
         }
@@ -7335,15 +7379,34 @@
         if (dock) dock.classList.add('hidden');
 
         try {
-            const res = await fetch(`/api/schedule/${id}`);
-            const a = await res.json();
+            let a = null;
+            if (Array.isArray(window.schedulesData)) {
+                a = window.schedulesData.find(s => String(s.id) === String(id));
+            }
+            if (!a) {
+                const res = await fetch(`/api/schedule/${id}`);
+                if (res.ok) a = await res.json();
+            }
+            if (!a) {
+                console.error("Błąd openAudModal: nie znaleziono audytu o id:", id);
+                return;
+            }
             window.activeSelectedAudit = a;
             const appState = getAppState();
             appState.active_audit_type = a.audit_type || "HACCP";
-            document.getElementById('aud-view-date').innerText = a.scheduled_date || "";
-            document.getElementById('aud-view-type').innerText = a.audit_type || "HACCP";
-            document.getElementById('aud-view-line').innerText = a.line || "";
-            document.getElementById('aud-view-status').innerText = a.status || "";
+
+            const dateEl = document.getElementById('aud-view-date');
+            if (dateEl) dateEl.innerText = a.scheduled_date || "";
+            const typeEl = document.getElementById('aud-view-type');
+            if (typeEl) typeEl.innerText = a.audit_type || "HACCP";
+            const lineEl = document.getElementById('aud-view-line');
+            if (lineEl) lineEl.innerText = a.line || "";
+            const statusEl = document.getElementById('aud-view-status');
+            if (statusEl) statusEl.innerText = a.status || "";
+
+            const hiddenId = document.getElementById('aud-view-id');
+            if (hiddenId) hiddenId.value = a.id;
+
             const modal = document.getElementById('modal-aud-view');
             if (modal) modal.classList.remove('hidden');
         } catch (err) {
@@ -7351,6 +7414,81 @@
         }
     }
     window.openAudModal = openAudModal;
+
+    function startAuditorTask() {
+        const a = window.activeSelectedAudit || (typeof activeSelectedAudit !== 'undefined' ? activeSelectedAudit : null);
+        if (!a) {
+            const hiddenId = document.getElementById('aud-view-id');
+            const schedId = hiddenId ? hiddenId.value : null;
+            if (schedId && Array.isArray(window.schedulesData)) {
+                const found = window.schedulesData.find(s => String(s.id) === String(schedId));
+                if (found) {
+                    window.activeSelectedAudit = found;
+                    return startAuditorTask();
+                }
+            }
+            alert("Nie wybrano żadnego zaplanowanego audytu do rozpoczęcia.");
+            return;
+        }
+
+        window.activeSelectedAudit = a;
+        const appState = getAppState();
+        appState.schedule_id = a.id;
+        appState.line = a.line;
+        appState.active_audit_type = a.audit_type || "HACCP";
+
+        if (window.state) {
+            window.state.schedule_id = a.id;
+            window.state.line = a.line;
+            window.state.active_audit_type = a.audit_type || "HACCP";
+        }
+
+        // 1. Ustawienie standardu inspekcji i załadowanie checklisty pytań
+        if (typeof window.setInspectionStandard === 'function') {
+            window.setInspectionStandard(appState.active_audit_type);
+        } else if (typeof setInspectionStandard === 'function') {
+            setInspectionStandard(appState.active_audit_type);
+        } else if (typeof window.loadChecklistForAudit === 'function') {
+            window.loadChecklistForAudit(appState.active_audit_type);
+        }
+
+        // 2. Ustawienie wybranej linii produkcyjnej
+        const hiddenLine = document.getElementById('hidden-line-input');
+        if (hiddenLine) hiddenLine.value = appState.line;
+        const preauditSelect = document.getElementById('preaudit-line-select');
+        if (preauditSelect && appState.line) preauditSelect.value = appState.line;
+
+        document.querySelectorAll('.tile-line').forEach(b => {
+            if (b.getAttribute('data-line') === appState.line || b.textContent.trim() === appState.line) {
+                b.classList.add('tile-selected');
+            } else {
+                b.classList.remove('tile-selected');
+            }
+        });
+
+        if (window.formHistory && typeof window.formHistory.saveState === 'function') {
+            window.formHistory.saveState('view-audit-form'); 
+        }
+
+        closeAudModal();
+
+        if (typeof window.showModule === 'function') {
+            window.showModule('audit-main');
+        } else if (typeof showModule === 'function') {
+            showModule('audit-main');
+        }
+
+        const formView = document.getElementById('view-audit-form');
+        if (formView) formView.classList.remove('hidden');
+        const mainView = document.getElementById('view-audit-main');
+        if (mainView) mainView.classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        if (typeof window.showToast === 'function') {
+            window.showToast(`Rozpoczęto audyt: ${appState.active_audit_type} (${appState.line})`, 'success');
+        }
+    }
+    window.startAuditorTask = startAuditorTask;
 
     function closeAudModal() {
         const modalEl = document.getElementById('modal-aud-view');

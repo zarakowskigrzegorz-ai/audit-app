@@ -674,9 +674,19 @@
             setStorage('audits', audits);
 
             // Zamykanie w harmonogramie
+            let schedulesV3 = getStorage('schedules_v3', initDefaultSchedules());
+            if (scheduleId) {
+                const target = schedulesV3.find(s => String(s.id) === String(scheduleId));
+                if (target) target.status = 'WYKONANY';
+            } else {
+                const target = schedulesV3.find(s => s.line === line && s.status === 'PLANOWANY');
+                if (target) target.status = 'WYKONANY';
+            }
+            setStorage('schedules_v3', schedulesV3);
+
             const schedules = getStorage('schedules', []);
             if (scheduleId) {
-                const target = schedules.find(s => s.id == scheduleId);
+                const target = schedules.find(s => String(s.id) === String(scheduleId));
                 if (target) target.status = 'WYKONANY';
             } else {
                 const target = schedules.find(s => s.line === line && s.status === 'PLANOWANY');

@@ -33,7 +33,7 @@
 
         const state = {
             user_id: 0, auditor_id: "", role: "AUDITOR", token: sessionStorage.getItem('quality_audit_token') || "",
-            line: "", shift: "Zmiana A", zone: "Wysoka Higiena (High Care)",
+            line: "", shift: "1", zone: "Wysoka Higiena (High Care)",
             health_ok: "TAK", dispense_no: "BRAK", glass_plastic_ok: "ZGODNY", allergen_clean_ok: "ZGODNY",
             wood_policy_ok: "ZGODNY", ppe_ok: "ZGODNY", line_status: "Produkcja Ciągła", ccp1_fe_ok: "ZGODNY",
             ccp1_nonfe_ok: "ZGODNY", ccp1_ss_ok: "ZGODNY", ccp1_reject_ok: "ZGODNY", ccp1_bin_locked: "ZGODNY",
@@ -81,7 +81,7 @@
             
             let targetId = modId;
             if (modId === 'hub') { targetId = state.role === 'MANAGER' ? 'hub-manager' : 'hub-auditor'; }
-            else if (modId === 'audit-main') { targetId = 'view-audit-main'; }
+            else if (modId === 'audit-main' || modId === 'audit-form' || modId === 'view-audit-form') { targetId = 'view-audit-main'; }
             else if (!modId.startsWith('view-') && !modId.startsWith('hub-')) { targetId = 'view-' + modId; }
 
             let target = document.getElementById(targetId);
@@ -104,7 +104,7 @@
             // Zarządzanie widocznością głównego formularza audytu
             const auditForm = document.getElementById('view-audit-form');
             if (auditForm) {
-                if (modId === 'audit-main') {
+                if (modId === 'audit-main' || modId === 'audit-form' || modId === 'view-audit-form' || targetId === 'view-audit-main') {
                     auditForm.classList.remove('hidden');
                 } else {
                     auditForm.classList.add('hidden');
@@ -1063,15 +1063,30 @@
         }
 
         async function deleteAuditor(userId) {
-            if (!confirm("Czy na pewno chcesz usunąć tego audytora?")) return;
-            const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
-            if (res.ok) {
-                await renderAuditorsList();
-            } else {
-                const err = await res.json().catch(() => ({}));
-                alert(`${err.detail || 'Błąd usuwania użytkownika'}`);
+            if (!confirm("Czy na pewno chcesz usunąć tego audytora?")) return false;
+            try {
+                const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await renderAuditorsList();
+                    if (typeof loadAuditorsDropdown === 'function') await loadAuditorsDropdown();
+                    if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
+                    alert("Audytor został pomyślnie usunięty z rejestru.");
+                    return true;
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`${err.detail || 'Błąd usuwania użytkownika'}`);
+                    return false;
+                }
+            } catch(e) {
+                console.error("Błąd deleteAuditor:", e);
+                alert("Wystąpił błąd sieci podczas usuwania audytora.");
+                return false;
             }
         }
+
+        window.deleteAuditor = deleteAuditor;
+        window.renderAuditorsList = renderAuditorsList;
+        window.addNewAuditor = addNewAuditor;
 
         // --- MODUŁ KALENDARZA I HARMONOGRAMU (WYDZIELONY DO static/js/calendar.js) ---
         // Pełna obsługa kalendarza, widoków, świąt oraz planowania znajduje się w dedykowanym module calendar.js.
@@ -1303,11 +1318,36 @@
 
         
         function startAuditorTask() {
-            if (!activeSelectedAudit) return;
-            state.schedule_id = activeSelectedAudit.id;
-            state.line = activeSelectedAudit.line;
-            state.active_audit_type = activeSelectedAudit.audit_type || "HACCP";
-            setInspectionStandard(state.active_audit_type);
+            const a = window.activeSelectedAudit || activeSelectedAudit;
+            if (!a) {
+                const hiddenId = document.getElementById('aud-view-id');
+                const schedId = hiddenId ? hiddenId.value : null;
+                if (schedId && Array.isArray(window.schedulesData)) {
+                    const found = window.schedulesData.find(s => String(s.id) === String(schedId));
+                    if (found) {
+                        window.activeSelectedAudit = found;
+                        activeSelectedAudit = found;
+                        return startAuditorTask();
+                    }
+                }
+                alert("Nie wybrano żadnego zaplanowanego audytu do rozpoczęcia.");
+                return;
+            }
+
+            activeSelectedAudit = a;
+            window.activeSelectedAudit = a;
+
+            state.schedule_id = a.id;
+            state.line = a.line;
+            state.active_audit_type = a.audit_type || "HACCP";
+
+            if (typeof window.setInspectionStandard === 'function') {
+                window.setInspectionStandard(state.active_audit_type);
+            } else if (typeof setInspectionStandard === 'function') {
+                setInspectionStandard(state.active_audit_type);
+            } else if (typeof window.loadChecklistForAudit === 'function') {
+                window.loadChecklistForAudit(state.active_audit_type);
+            }
             
             const hiddenLine = document.getElementById('hidden-line-input');
             if (hiddenLine) hiddenLine.value = state.line;
@@ -1326,14 +1366,35 @@
             
             closeAudModal();
             showModule('audit-main');
+
+            const formView = document.getElementById('view-audit-form');
+            if (formView) formView.classList.remove('hidden');
+            const mainView = document.getElementById('view-audit-main');
+            if (mainView) mainView.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            if (typeof window.showToast === 'function') {
+                window.showToast(`Rozpoczęto audyt: ${state.active_audit_type} (${state.line})`, 'success');
+            }
         }
+        window.startAuditorTask = startAuditorTask;
 
         window.startAuditorTaskById = async function(id) {
             try {
-                const res = await fetch(`/api/schedule/${id}`);
-                if (!res.ok) return;
-                const a = await res.json();
+                let a = null;
+                if (Array.isArray(window.schedulesData)) {
+                    a = window.schedulesData.find(s => String(s.id) === String(id));
+                }
+                if (!a) {
+                    const res = await fetch(`/api/schedule/${id}`);
+                    if (res.ok) a = await res.json();
+                }
+                if (!a) {
+                    alert("Nie znaleziono zlecenia audytu #" + id);
+                    return;
+                }
                 activeSelectedAudit = a;
+                window.activeSelectedAudit = a;
                 startAuditorTask();
             } catch(e) { console.warn("Błąd startAuditorTaskById:", e); }
         };
@@ -1354,6 +1415,15 @@
         const roleEl = document.getElementById('edit-auditor-role');
         const pinInput = document.getElementById('edit-auditor-pin');
         const showPinCb = document.getElementById('edit-auditor-show-pin');
+        const delBtn = document.getElementById('btn-delete-auditor-modal');
+
+        if (delBtn) {
+            if (user.id === 1 || user.role === 'MANAGER') {
+                delBtn.classList.add('hidden');
+            } else {
+                delBtn.classList.remove('hidden');
+            }
+        }
 
         if (nameEl) nameEl.value = user.full_name || '';
         if (roleEl) roleEl.value = user.role || 'AUDITOR';
@@ -1380,6 +1450,19 @@
         });
 
         document.getElementById('auditor-profile-modal').classList.remove('hidden');
+    };
+
+    window.deleteCurrentAuditorFromModal = async function() {
+        const auditorId = window.currentAuditorId;
+        if (!auditorId) return;
+        if (auditorId === 1) {
+            alert("Nie można usunąć głównego konta Administratora Jakości.");
+            return;
+        }
+        const success = await deleteAuditor(auditorId);
+        if (success) {
+            document.getElementById('auditor-profile-modal')?.classList.add('hidden');
+        }
     };
 
     window.saveAuditorProfile = async function() {
