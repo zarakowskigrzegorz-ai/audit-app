@@ -422,6 +422,58 @@
         }
 
         // 5. Użytkownicy / Audytorzy
+        const userItemMatch = cleanUrl.match(/\/api\/(?:auth\/)?users\/(\d+)/);
+        if (userItemMatch) {
+            const uid = parseInt(userItemMatch[1]);
+            let users = getStorage('users', defaultUsers);
+
+            if (method === 'DELETE') {
+                if (uid === 1) {
+                    return jsonResponse({ detail: "Nie można usunąć głównego konta Administratora Jakości" }, 400);
+                }
+                users = users.filter(u => u.id !== uid);
+                setStorage('users', users);
+                return jsonResponse({ status: "OK", message: "Użytkownik usunięty" });
+            }
+
+            if (method === 'PUT') {
+                const idx = users.findIndex(u => u.id === uid);
+                if (idx !== -1) {
+                    users[idx] = Object.assign({}, users[idx], bodyObj);
+                    if (bodyObj.qualifications) users[idx].qualifications = bodyObj.qualifications;
+                    if (bodyObj.zones) users[idx].zones = bodyObj.zones;
+                    if (bodyObj.full_name) users[idx].full_name = bodyObj.full_name;
+                    if (bodyObj.role) users[idx].role = bodyObj.role;
+                    if (bodyObj.pin) users[idx].pin = bodyObj.pin;
+                    setStorage('users', users);
+                    return jsonResponse({ status: "OK", message: "Zaktualizowano profil audytora" });
+                } else {
+                    return jsonResponse({ detail: "Użytkownik nie znaleziony" }, 404);
+                }
+            }
+
+            if (method === 'GET') {
+                const found = users.find(u => u.id === uid);
+                return found ? jsonResponse(found) : jsonResponse({ detail: "Nie znaleziono" }, 404);
+            }
+        }
+
+        if (cleanUrl.endsWith('/api/users') && method === 'POST') {
+            let users = getStorage('users', defaultUsers);
+            const newId = users.length ? Math.max(...users.map(u => u.id || 0)) + 1 : 100;
+            const newUser = {
+                id: newId,
+                full_name: bodyObj.full_name || 'Nowy Audytor',
+                role: bodyObj.role || 'AUDITOR',
+                qualifications: bodyObj.qualifications || [],
+                zones: bodyObj.zones || ['ALL'],
+                pin: bodyObj.pin || '1234'
+            };
+            users.push(newUser);
+            setStorage('users', users);
+            return jsonResponse({ status: "OK", id: newId, message: "Dodano audytora" });
+        }
+
         if (cleanUrl.endsWith('/api/auth/auditors') || cleanUrl.endsWith('/api/auditors') || cleanUrl.endsWith('/api/users')) {
             const users = getStorage('users', defaultUsers);
             if (cleanUrl.includes('auditors')) {

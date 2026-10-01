@@ -2955,13 +2955,19 @@
                </div>
            </div>
 
-           <div class="mt-5 pt-3 border-t border-white/10 flex justify-end gap-2">
-               <button onclick="document.getElementById('auditor-profile-modal').classList.add('hidden')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition">
-                   Zamknij
+           <div class="mt-5 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
+               <button type="button" id="btn-delete-auditor-modal" onclick="deleteCurrentAuditorFromModal()" class="px-3.5 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                   <i class="fas fa-trash-can text-rose-400"></i>
+                   <span>Usuń audytora</span>
                </button>
-               <button type="button" onclick="saveAuditorProfile()" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-cyan-950/50">
-                   Zapisz zmiany
-               </button>
+               <div class="flex items-center gap-2">
+                   <button type="button" onclick="document.getElementById('auditor-profile-modal').classList.add('hidden')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer">
+                       Zamknij
+                   </button>
+                   <button type="button" onclick="saveAuditorProfile()" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-cyan-950/50 cursor-pointer">
+                       Zapisz zmiany
+                   </button>
+               </div>
            </div>
        </div>
    </div>

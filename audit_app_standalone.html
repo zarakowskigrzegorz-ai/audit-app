@@ -3463,6 +3463,58 @@
         }
 
         // 5. Użytkownicy / Audytorzy
+        const userItemMatch = cleanUrl.match(/\/api\/(?:auth\/)?users\/(\d+)/);
+        if (userItemMatch) {
+            const uid = parseInt(userItemMatch[1]);
+            let users = getStorage('users', defaultUsers);
+
+            if (method === 'DELETE') {
+                if (uid === 1) {
+                    return jsonResponse({ detail: "Nie można usunąć głównego konta Administratora Jakości" }, 400);
+                }
+                users = users.filter(u => u.id !== uid);
+                setStorage('users', users);
+                return jsonResponse({ status: "OK", message: "Użytkownik usunięty" });
+            }
+
+            if (method === 'PUT') {
+                const idx = users.findIndex(u => u.id === uid);
+                if (idx !== -1) {
+                    users[idx] = Object.assign({}, users[idx], bodyObj);
+                    if (bodyObj.qualifications) users[idx].qualifications = bodyObj.qualifications;
+                    if (bodyObj.zones) users[idx].zones = bodyObj.zones;
+                    if (bodyObj.full_name) users[idx].full_name = bodyObj.full_name;
+                    if (bodyObj.role) users[idx].role = bodyObj.role;
+                    if (bodyObj.pin) users[idx].pin = bodyObj.pin;
+                    setStorage('users', users);
+                    return jsonResponse({ status: "OK", message: "Zaktualizowano profil audytora" });
+                } else {
+                    return jsonResponse({ detail: "Użytkownik nie znaleziony" }, 404);
+                }
+            }
+
+            if (method === 'GET') {
+                const found = users.find(u => u.id === uid);
+                return found ? jsonResponse(found) : jsonResponse({ detail: "Nie znaleziono" }, 404);
+            }
+        }
+
+        if (cleanUrl.endsWith('/api/users') && method === 'POST') {
+            let users = getStorage('users', defaultUsers);
+            const newId = users.length ? Math.max(...users.map(u => u.id || 0)) + 1 : 100;
+            const newUser = {
+                id: newId,
+                full_name: bodyObj.full_name || 'Nowy Audytor',
+                role: bodyObj.role || 'AUDITOR',
+                qualifications: bodyObj.qualifications || [],
+                zones: bodyObj.zones || ['ALL'],
+                pin: bodyObj.pin || '1234'
+            };
+            users.push(newUser);
+            setStorage('users', users);
+            return jsonResponse({ status: "OK", id: newId, message: "Dodano audytora" });
+        }
+
         if (cleanUrl.endsWith('/api/auth/auditors') || cleanUrl.endsWith('/api/auditors') || cleanUrl.endsWith('/api/users')) {
             const users = getStorage('users', defaultUsers);
             if (cleanUrl.includes('auditors')) {
@@ -4841,15 +4893,30 @@
         }
 
         async function deleteAuditor(userId) {
-            if (!confirm("Czy na pewno chcesz usunąć tego audytora?")) return;
-            const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
-            if (res.ok) {
-                await renderAuditorsList();
-            } else {
-                const err = await res.json().catch(() => ({}));
-                alert(`${err.detail || 'Błąd usuwania użytkownika'}`);
+            if (!confirm("Czy na pewno chcesz usunąć tego audytora?")) return false;
+            try {
+                const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await renderAuditorsList();
+                    if (typeof loadAuditorsDropdown === 'function') await loadAuditorsDropdown();
+                    if (typeof loadScheduleAndRender === 'function') await loadScheduleAndRender();
+                    alert("Audytor został pomyślnie usunięty z rejestru.");
+                    return true;
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`${err.detail || 'Błąd usuwania użytkownika'}`);
+                    return false;
+                }
+            } catch(e) {
+                console.error("Błąd deleteAuditor:", e);
+                alert("Wystąpił błąd sieci podczas usuwania audytora.");
+                return false;
             }
         }
+
+        window.deleteAuditor = deleteAuditor;
+        window.renderAuditorsList = renderAuditorsList;
+        window.addNewAuditor = addNewAuditor;
 
         // --- MODUŁ KALENDARZA I HARMONOGRAMU (WYDZIELONY DO static/js/calendar.js) ---
         // Pełna obsługa kalendarza, widoków, świąt oraz planowania znajduje się w dedykowanym module calendar.js.
@@ -5132,6 +5199,15 @@
         const roleEl = document.getElementById('edit-auditor-role');
         const pinInput = document.getElementById('edit-auditor-pin');
         const showPinCb = document.getElementById('edit-auditor-show-pin');
+        const delBtn = document.getElementById('btn-delete-auditor-modal');
+
+        if (delBtn) {
+            if (user.id === 1 || user.role === 'MANAGER') {
+                delBtn.classList.add('hidden');
+            } else {
+                delBtn.classList.remove('hidden');
+            }
+        }
 
         if (nameEl) nameEl.value = user.full_name || '';
         if (roleEl) roleEl.value = user.role || 'AUDITOR';
@@ -5158,6 +5234,19 @@
         });
 
         document.getElementById('auditor-profile-modal').classList.remove('hidden');
+    };
+
+    window.deleteCurrentAuditorFromModal = async function() {
+        const auditorId = window.currentAuditorId;
+        if (!auditorId) return;
+        if (auditorId === 1) {
+            alert("Nie można usunąć głównego konta Administratora Jakości.");
+            return;
+        }
+        const success = await deleteAuditor(auditorId);
+        if (success) {
+            document.getElementById('auditor-profile-modal')?.classList.add('hidden');
+        }
     };
 
     window.saveAuditorProfile = async function() {
@@ -10503,13 +10592,19 @@
                </div>
            </div>
 
-           <div class="mt-5 pt-3 border-t border-white/10 flex justify-end gap-2">
-               <button onclick="document.getElementById('auditor-profile-modal').classList.add('hidden')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition">
-                   Zamknij
+           <div class="mt-5 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
+               <button type="button" id="btn-delete-auditor-modal" onclick="deleteCurrentAuditorFromModal()" class="px-3.5 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                   <i class="fas fa-trash-can text-rose-400"></i>
+                   <span>Usuń audytora</span>
                </button>
-               <button type="button" onclick="saveAuditorProfile()" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-cyan-950/50">
-                   Zapisz zmiany
-               </button>
+               <div class="flex items-center gap-2">
+                   <button type="button" onclick="document.getElementById('auditor-profile-modal').classList.add('hidden')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer">
+                       Zamknij
+                   </button>
+                   <button type="button" onclick="saveAuditorProfile()" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-cyan-950/50 cursor-pointer">
+                       Zapisz zmiany
+                   </button>
+               </div>
            </div>
        </div>
    </div>
