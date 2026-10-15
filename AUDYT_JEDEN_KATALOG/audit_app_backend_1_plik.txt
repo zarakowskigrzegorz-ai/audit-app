@@ -1,0 +1,3160 @@
+================================================================================
+KOMPLETNY BACKEND + LOGIKA BIZNESOWA + TESTY (AUDIT APP)
+Zgodnosc z norma IFS Food v8 oraz standardem bezpieczenstwa ISO 27001 / RBAC / IDOR
+================================================================================
+
+# ==============================================================================
+# PLIK: main.py
+# ==============================================================================
+
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+from database import run_migrations
+
+# Importy dedykowanych routerów
+from routers.auth import router as auth_router
+from routers.users import router as users_router
+from routers.lines import router as lines_router
+from routers.schedule import router as schedule_router
+from routers.checklist import router as checklist_router
+from routers.audits import router as audits_router
+from routers.reports import router as reports_router
+from routers.agent import router as agent_router
+from routers.guidelines import router as guidelines_router
+from routers.notes import router as notes_router
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await run_migrations()
+    yield
+
+app = FastAPI(title="Quality Audit Enterprise", lifespan=lifespan)
+
+# Ograniczenie CORS zgodnie z ISO 27001 A.8.20 / A.8.22
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.netlify\.app|.*\.pages\.dev|.*\.github\.io)(:[0-9]+)?$",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+# Serwowanie plików statycznych i uploadów
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# Rejestracja wszystkich modułów aplikacji
+app.include_router(auth_router)
+app.include_router(users_router, prefix="/api")
+app.include_router(lines_router)
+app.include_router(schedule_router)
+app.include_router(checklist_router)
+app.include_router(audits_router)
+app.include_router(reports_router)
+app.include_router(agent_router)
+app.include_router(guidelines_router)
+app.include_router(notes_router)
+
+@app.get("/", response_class=HTMLResponse)
+def read_root(response: Response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    template_path = os.path.join(BASE_DIR, "templates", "index.html")
+    root_path = os.path.join(BASE_DIR, "index.html")
+    final_path = template_path if os.path.exists(template_path) else root_path
+    with open(final_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+
+# ==============================================================================
+# PLIK: database.py
+# ==============================================================================
+
+import aiosqlite
+import os
+import shutil
+from datetime import datetime
+from contextlib import asynccontextmanager
+
+# Obsługa konfiguracji bazy danych (SQLite lub ścieżka zdefiniowana w środowisku)
+DB_NAME = os.getenv("DATABASE_PATH", "audits.db")
+DB_PATH = DB_NAME
+
+@asynccontextmanager
+async def get_db():
+    async with aiosqlite.connect(DB_NAME) as conn:
+        # Integralność referencyjna (FOREIGN KEY) i tryb WAL (współbieżny odczyt/zapis)
+        await conn.execute("PRAGMA foreign_keys = ON")
+        await conn.execute("PRAGMA journal_mode = WAL")
+        conn.row_factory = aiosqlite.Row
+        yield conn
+
+async def run_migrations_engine(conn):
+    """
+    Lekki, transakcyjny i wersjonowany silnik migracji schematu bazy danych.
+    Zgodny z ISO 27001 oraz zasadą Zero-Regression.
+    """
+    c = await conn.cursor()
+    
+    # Utworzenie tabeli historii migracji, jeśli jeszcze nie istnieje
+    await c.execute("""
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            description TEXT
+        )
+    """)
+    await conn.commit()
+
+    # Pobierz już zaaplikowane wersje
+    await c.execute("SELECT version FROM schema_migrations ORDER BY version ASC")
+    applied_versions = {row[0] for row in await c.fetchall()}
+
+    # Definicje wersji migracji (idempotentne kroki DDL)
+    migrations = [
+        (
+            1,
+            "iso27001_security_audit_logs",
+            "Utworzenie tabeli security_audit_logs dla kontroli ISO 27001 A.8.15",
+            [
+                """
+                CREATE TABLE IF NOT EXISTS security_audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    user_id INTEGER,
+                    user_name TEXT,
+                    ip_address TEXT,
+                    severity TEXT DEFAULT 'INFO',
+                    details TEXT
+                )
+                """
+            ]
+        ),
+        (
+            2,
+            "performance_indexes_v1",
+            "Nałożenie indeksów bazy danych dla przyspieszenia kalendarza, audytów i logów bezpieczeństwa",
+            [
+                "CREATE INDEX IF NOT EXISTS idx_schedules_date_status ON audit_schedules(scheduled_date, status)",
+                "CREATE INDEX IF NOT EXISTS idx_audits_line_ts ON audits(line, timestamp DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_audits_auditor ON audits(auditor_id)",
+                "CREATE INDEX IF NOT EXISTS idx_sec_logs_ts_event ON security_audit_logs(timestamp DESC, event_type)",
+                "CREATE INDEX IF NOT EXISTS idx_users_active_role ON users(is_active, role)"
+            ]
+        ),
+        (
+            3,
+            "guidelines_indexes_v1",
+            "Indeks dla bazy wiedzy i wytycznych IFS Food v8",
+            [
+                "CREATE INDEX IF NOT EXISTS idx_guidelines_category ON checklist_guidelines(category, id)"
+            ]
+        ),
+        (
+            4,
+            "auditor_quick_notes_v1",
+            "Tabela szybkich notatek audytora do Key Usera",
+            [
+                """
+                CREATE TABLE IF NOT EXISTS auditor_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    auditor_id INTEGER,
+                    auditor_name TEXT NOT NULL,
+                    line_id TEXT,
+                    line_name TEXT,
+                    priority TEXT DEFAULT 'INFO',
+                    content TEXT NOT NULL,
+                    is_read INTEGER DEFAULT 0,
+                    read_at TEXT,
+                    manager_response TEXT,
+                    manager_response_at TEXT,
+                    manager_name TEXT,
+                    auditor_read_response INTEGER DEFAULT 0,
+                    direction TEXT DEFAULT 'TO_MANAGER'
+                )
+                """,
+                "CREATE INDEX IF NOT EXISTS idx_notes_ts ON auditor_notes(timestamp DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_notes_read ON auditor_notes(is_read)"
+            ]
+        ),
+        (
+            5,
+            "fix_auditor_notes_columns_v5",
+            "Uzupełnienie kolumn auditor_notes wymaganych przez routers/notes.py (czat / odpowiedzi managera)",
+            [
+                "ALTER TABLE auditor_notes ADD COLUMN direction TEXT DEFAULT 'TO_MANAGER'",
+                "ALTER TABLE auditor_notes ADD COLUMN auditor_read_response INTEGER DEFAULT 0",
+                "ALTER TABLE auditor_notes ADD COLUMN manager_response_at TEXT",
+                "ALTER TABLE auditor_notes ADD COLUMN manager_name TEXT"
+            ]
+        )
+    ]
+
+    # Wykonanie brakujących migracji
+    for ver, name, desc, statements in migrations:
+        if ver not in applied_versions:
+            print(f"[DB MIGRATION] Aplikowanie migracji v{ver} ({name})...")
+            # Bezpieczny backup pliku przed migracją DDL
+            if os.path.exists(DB_NAME):
+                backup_name = f"{DB_NAME}.bak_v{ver}"
+                if not os.path.exists(backup_name):
+                    try:
+                        shutil.copy2(DB_NAME, backup_name)
+                    except Exception as e_bak:
+                        print(f"[DB MIGRATION WARNING] Nie udało się utworzyć kopii zapasowej: {e_bak}")
+
+            for stmt in statements:
+                try:
+                    await c.execute(stmt)
+                except Exception as e_stmt:
+                    # Idempotencja ALTER TABLE ADD COLUMN: kolumna mogła już istnieć
+                    if "duplicate column name" in str(e_stmt).lower():
+                        print(f"[DB MIGRATION] v{ver}: pominięto (kolumna już istnieje): {stmt.strip()[:80]}")
+                        continue
+                    raise
+            await c.execute(
+                "INSERT INTO schema_migrations (version, name, description) VALUES (?, ?, ?)",
+                (ver, name, desc)
+            )
+            await conn.commit()
+            print(f"[DB MIGRATION] Migracja v{ver} ({name}) zakończona sukcesem!")
+
+async def init_db():
+    async with get_db() as conn:
+        c = await conn.cursor()
+        
+        # Sprawdzamy czy tabela users istnieje i czy są w niej rekordy
+        try:
+            await c.execute("SELECT COUNT(*) FROM users")
+            has_users = (await c.fetchone())[0] > 0
+        except Exception:
+            has_users = False
+
+        # Jeśli baza jest pusta lub świeża na serwerze, odtwórz ją 1:1 ze zrzutu
+        if not has_users and os.path.exists("dump_data.sql"):
+            with open("dump_data.sql", "r", encoding="utf-8") as f:
+                sql_dump = f.read()
+            await conn.executescript(sql_dump)
+            await conn.commit()
+            print("Baza danych została w 100% odtworzona z dump_data.sql!")
+
+        # Uruchom silnik wersjonowanych migracji
+        await run_migrations_engine(conn)
+
+        # Automatyczna migracja niesolonych PIN-ów do formatu PBKDF2 (ISO 27001 A.8.24)
+        try:
+            from security import hash_pin
+            await c.execute("SELECT id, pin FROM users WHERE is_active = 1")
+            users = await c.fetchall()
+            migrated_count = 0
+            for u in users:
+                user_id = u["id"]
+                raw_pin = u["pin"]
+                if raw_pin and not str(raw_pin).startswith("$pbkdf2-sha256$"):
+                    hashed = hash_pin(str(raw_pin))
+                    await c.execute("UPDATE users SET pin = ? WHERE id = ?", (hashed, user_id))
+                    migrated_count += 1
+            if migrated_count > 0:
+                await conn.commit()
+                print(f"[ISO 27001 MIGRACJA] Pomyślnie zahaszowano kody PIN dla {migrated_count} użytkowników (PBKDF2-HMAC-SHA256).")
+        except Exception as e_mig:
+            print(f"[MIGRATION WARNING] Błąd migracji haseł użytkowników: {e_mig}")
+
+run_migrations = init_db
+
+
+# ==============================================================================
+# PLIK: security.py
+# ==============================================================================
+
+import os
+import time
+import json
+import base64
+import hmac
+import hashlib
+import secrets
+from datetime import datetime
+from typing import Optional, Dict
+from fastapi import HTTPException, Header, Request, Depends, status
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SECRET_KEY_FILE = os.path.join(BASE_DIR, ".secret_key")
+
+def get_or_create_secret_key() -> bytes:
+    """Ładuje lub generuje 256-bitowy trwały klucz kryptograficzny serwera."""
+    if os.path.exists(SECRET_KEY_FILE):
+        try:
+            with open(SECRET_KEY_FILE, "rb") as f:
+                key = f.read().strip()
+                if len(key) >= 32:
+                    return key
+        except Exception:
+            pass
+    # Generuj nowy bezpieczny klucz
+    new_key = secrets.token_bytes(32)
+    # Zabezpiecz uprawnienia pliku klucza (tylko właściciel procesu 0600)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    mode = 0o600
+    try:
+        fd = os.open(SECRET_KEY_FILE, flags, mode)
+        with os.fdopen(fd, "wb") as f:
+            f.write(new_key)
+    except Exception:
+        with open(SECRET_KEY_FILE, "wb") as f:
+            f.write(new_key)
+        try:
+            os.chmod(SECRET_KEY_FILE, 0o600)
+        except Exception:
+            pass
+    return new_key
+
+SECRET_KEY = get_or_create_secret_key()
+
+# =====================================================================
+# 1. KRYPTOGRAFICZNE HASZOWANIE HASEŁ / PIN (ISO 27001 A.8.24, A.5.17)
+# =====================================================================
+PBKDF2_ITERATIONS = 310000  # Rekomendacja OWASP dla PBKDF2-HMAC-SHA256
+
+def hash_pin(pin: str) -> str:
+    """Haszuje kod PIN przy użyciu PBKDF2-HMAC-SHA256 z 16-bajtową losową solą."""
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac('sha256', pin.strip().encode('utf-8'), salt, PBKDF2_ITERATIONS)
+    salt_hex = salt.hex()
+    hash_hex = dk.hex()
+    return f"$pbkdf2-sha256${PBKDF2_ITERATIONS}${salt_hex}${hash_hex}"
+
+def verify_pin(plain_pin: str, stored_value: str) -> bool:
+    """
+    Weryfikuje PIN w czasie stałym (constant-time).
+    Obsługuje format $pbkdf2-sha256$ oraz chwilowo tekst jawny dla przezroczystej migracji.
+    """
+    if not stored_value or not plain_pin:
+        return False
+    
+    clean_plain = plain_pin.strip()
+    
+    if stored_value.startswith("$pbkdf2-sha256$"):
+        parts = stored_value.split("$")
+        if len(parts) != 5:
+            return False
+        try:
+            iterations = int(parts[2])
+            salt = bytes.fromhex(parts[3])
+            expected_hash = parts[4]
+            dk = hashlib.pbkdf2_hmac('sha256', clean_plain.encode('utf-8'), salt, iterations)
+            return hmac.compare_digest(dk.hex(), expected_hash)
+        except Exception:
+            return False
+    else:
+        # Fallback na plaintext dla automatycznej migracji
+        return hmac.compare_digest(clean_plain, stored_value.strip())
+
+# =====================================================================
+# 2. TOKENY SESYJNE BEARER HMAC-SHA256 (ISO 27001 A.5.15, A.5.18)
+# =====================================================================
+TOKEN_EXPIRY_HOURS = 12
+
+def _b64encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode('utf-8').rstrip('=')
+
+def _b64decode(data: str) -> bytes:
+    rem = len(data) % 4
+    if rem > 0:
+        data += '=' * (4 - rem)
+    return base64.urlsafe_b64decode(data)
+
+def create_access_token(user: dict, expires_hours: int = TOKEN_EXPIRY_HOURS) -> str:
+    """Tworzy kryptograficznie podpisany token sesyjny w formacie URL-safe."""
+    now = int(time.time())
+    payload = {
+        "uid": user["id"],
+        "sub": user["full_name"],
+        "role": user["role"],
+        "iat": now,
+        "exp": now + (expires_hours * 3600),
+        "nonce": secrets.token_hex(8)
+    }
+    payload_bytes = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+    payload_b64 = _b64encode(payload_bytes)
+    
+    signature = hmac.new(SECRET_KEY, payload_b64.encode('utf-8'), hashlib.sha256).digest()
+    sig_b64 = _b64encode(signature)
+    
+    return f"{payload_b64}.{sig_b64}"
+
+def verify_access_token(token: str) -> dict:
+    """Weryfikuje podpis i czas ważności tokenu. Rzuca HTTPException w razie fałszerstwa."""
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Brak tokenu autoryzacyjnego")
+    
+    parts = token.split(".")
+    if len(parts) != 2:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nieprawidłowy format tokenu sesyjnego")
+    
+    payload_b64, sig_b64 = parts
+    
+    # 1. Weryfikacja podpisu w czasie stałym
+    expected_sig = hmac.new(SECRET_KEY, payload_b64.encode('utf-8'), hashlib.sha256).digest()
+    try:
+        actual_sig = _b64decode(sig_b64)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nieprawidłowy podpis tokenu")
+    
+    if not hmac.compare_digest(actual_sig, expected_sig):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Fałszerstwo tokenu autoryzacji")
+    
+    # 2. Parsowanie zawartości
+    try:
+        payload_bytes = _b64decode(payload_b64)
+        payload = json.loads(payload_bytes.decode('utf-8'))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Błąd dekodowania zawartości tokenu")
+    
+    # 3. Weryfikacja wygaśnięcia
+    exp = payload.get("exp", 0)
+    if time.time() > exp:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesja wygasła. Zaloguj się ponownie")
+    
+    return payload
+
+# =====================================================================
+# 3. ZALEŻNOŚCI FASTAPI DLA KONTROLI DOSTĘPU (RBAC)
+# =====================================================================
+async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    """Ekstrahuje i weryfikuje użytkownika z nagłówka Authorization: Bearer <token>."""
+    if not authorization:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Wymagana autoryzacja (brak tokenu Bearer)")
+    
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nieprawidłowy nagłówek autoryzacji. Użyj formatu: Bearer <token>")
+    
+    return verify_access_token(parts[1])
+
+async def require_manager(user: dict = Depends(get_current_user)) -> dict:
+    """Wymaga uprawnień Kierownika Jakości (MANAGER)."""
+    if user.get("role") != "MANAGER":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dostęp zastrzeżony wyłącznie dla Kierownika Jakości (MANAGER)")
+    return user
+
+async def require_auditor_or_manager(user: dict = Depends(get_current_user)) -> dict:
+    """Wymaga uprawnień Audytora lub Managera."""
+    if user.get("role") not in ["AUDITOR", "MANAGER"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień audytowych")
+    return user
+
+# =====================================================================
+# 4. OCHRONA PRZED ATAKAMI BRUTE-FORCE (ISO 27001 A.8.5)
+# =====================================================================
+_login_failures: Dict[str, list] = {}
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_WINDOW_SECONDS = 300  # 5 minut
+
+def check_rate_limit(client_id: str):
+    """Sprawdza czy dany klient nie przekroczył dopuszczalnej liczby nieudanych prób logowania."""
+    now = time.time()
+    failures = _login_failures.get(client_id, [])
+    failures = [t for t in failures if now - t < LOCKOUT_WINDOW_SECONDS]
+    _login_failures[client_id] = failures
+    
+    if len(failures) >= MAX_LOGIN_ATTEMPTS:
+        remaining = int(LOCKOUT_WINDOW_SECONDS - (now - failures[0]))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Zbyt wiele nieudanych prób logowania (ochrona Brute-Force ISO 27001). Spróbuj ponownie za {remaining} sekund."
+        )
+
+def record_login_failure(client_id: str):
+    """Rejestruje nieudaną próbę logowania dla danego klienta."""
+    now = time.time()
+    failures = _login_failures.get(client_id, [])
+    failures.append(now)
+    _login_failures[client_id] = failures
+
+def reset_login_failures(client_id: str):
+    """Czyści historię błędów po poprawnym uwierzytelnieniu."""
+    if client_id in _login_failures:
+        del _login_failures[client_id]
+
+# =====================================================================
+# 5. CENTRALNY REJESTR ZDARZEŃ BEZPIECZEŃSTWA (ISO 27001 A.8.15)
+# =====================================================================
+async def log_security_event(
+    event_type: str,
+    user_id: Optional[int] = None,
+    user_name: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    severity: str = "INFO",
+    details: Optional[str] = None
+):
+    """Zapisuje zdarzenie bezpieczeństwa do audytowalnej tabeli security_audit_logs."""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        from database import get_db
+        async with get_db() as conn:
+            await conn.execute("""
+                INSERT INTO security_audit_logs (timestamp, event_type, user_id, user_name, ip_address, severity, details)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (now_str, event_type, user_id, user_name, ip_address, severity, details))
+            await conn.commit()
+    except Exception as e:
+        print(f"[SECURITY LOG ERROR] {now_str} - {event_type}: {e}")
+
+
+# ==============================================================================
+# PLIK: routers/auth.py
+# ==============================================================================
+
+import json
+import secrets
+import base64
+import aiosqlite
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
+from database import get_db
+
+from security import (
+    verify_pin,
+    hash_pin,
+    create_access_token,
+    log_security_event,
+    check_rate_limit,
+    record_login_failure,
+    reset_login_failures,
+    get_current_user,
+    require_manager,
+)
+
+router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+class PinLoginModel(BaseModel):
+    pin: str
+    expected_role: Optional[str] = None
+
+class BiometricRegisterVerifyModel(BaseModel):
+    user_id: int
+    credential_id: str
+
+class BiometricLoginVerifyModel(BaseModel):
+    credential_id: str
+
+class UserCreateModel(BaseModel):
+    pin: str
+    full_name: str
+    role: str = "AUDITOR"
+    qualifications: List[str] = ["HACCP", "GMP", "GHP"]
+
+@router.post("/login")
+@router.post("/login-pin")
+async def auth_login(payload: PinLoginModel, request: Request):
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    check_rate_limit(client_ip)
+
+    clean_pin = payload.pin.strip()
+    expected = payload.expected_role.strip().upper() if payload.expected_role else None
+
+    async with get_db() as conn:
+        if expected:
+            cursor = await conn.execute(
+                "SELECT id, pin, full_name, role, qualifications FROM users WHERE is_active = 1 AND UPPER(role) = ?",
+                (expected,)
+            )
+        else:
+            cursor = await conn.execute(
+                "SELECT id, pin, full_name, role, qualifications FROM users WHERE is_active = 1"
+            )
+        rows = await cursor.fetchall()
+        matched = None
+        for row in rows:
+            if verify_pin(clean_pin, row["pin"]):
+                matched = row
+                break
+
+        if not matched:
+            record_login_failure(client_ip)
+            await log_security_event(
+                event_type="LOGIN_FAILED",
+                ip_address=client_ip,
+                severity="WARN",
+                details=f"Nieudana próba logowania kodem PIN. Oczekiwana rola: {expected or 'Brak'}"
+            )
+            detail_msg = (
+                "Nieprawidłowy kod PIN dla konta Key User (Kierownik Jakości)."
+                if expected == "MANAGER"
+                else "Nieprawidłowy kod PIN dla konta Audytora."
+                if expected == "AUDITOR"
+                else "Nieprawidłowy kod PIN."
+            )
+            raise HTTPException(status_code=401, detail=detail_msg)
+
+        reset_login_failures(client_ip)
+        user_dict = dict(matched)
+        token = create_access_token(user_dict)
+        user_dict.pop("pin", None)
+        await log_security_event(
+            event_type="LOGIN_SUCCESS",
+            user_id=user_dict["id"],
+            user_name=user_dict["full_name"],
+            ip_address=client_ip,
+            severity="INFO",
+            details=f"Pomyślne logowanie PIN. Rola: {user_dict['role']}"
+        )
+        return {
+            "id": user_dict["id"],
+            "full_name": user_dict["full_name"],
+            "role": user_dict["role"],
+            "qualifications": user_dict.get("qualifications"),
+            "access_token": token,
+            "token_type": "Bearer",
+            "user": user_dict
+        }
+
+@router.post("/biometric/register-challenge")
+def bio_reg_challenge(user_id: int = Query(...)):
+    raw = secrets.token_bytes(32)
+    b64 = base64.urlsafe_b64encode(raw).decode('utf-8').rstrip('=')
+    return {"challenge": b64}
+
+@router.post("/biometric/register-verify")
+async def bio_reg_verify(payload: BiometricRegisterVerifyModel, current_user: dict = Depends(get_current_user)):
+    if not (current_user.get("role") == "MANAGER" or current_user.get("uid") == payload.user_id):
+        raise HTTPException(status_code=403, detail="Brak uprawnień do rejestracji biometrii dla tego użytkownika")
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("UPDATE users SET biometric_cred_id = ? WHERE id = ?", (payload.credential_id, payload.user_id))
+        await conn.commit()
+    return {"status": "OK"}
+
+@router.get("/biometric/login-challenge")
+def bio_login_challenge():
+    raw = secrets.token_bytes(32)
+    b64 = base64.urlsafe_b64encode(raw).decode('utf-8').rstrip('=')
+    return {"challenge": b64}
+
+@router.post("/biometric/login-verify")
+async def bio_login_verify(payload: BiometricLoginVerifyModel):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, pin, full_name, role, qualifications FROM users WHERE biometric_cred_id = ? AND is_active = 1", (payload.credential_id,))
+        row = await c.fetchone()
+    if not row:
+        raise HTTPException(status_code=401, detail="Nieprawidłowe poświadczenie biometryczne")
+    user_dict = dict(row)
+    token = create_access_token(user_dict)
+    user_dict.pop("pin", None)
+    return {
+        "id": user_dict["id"],
+        "full_name": user_dict["full_name"],
+        "role": user_dict["role"],
+        "qualifications": user_dict.get("qualifications"),
+        "access_token": token,
+        "token_type": "Bearer",
+        "user": user_dict
+    }
+
+@router.get("/auditors")
+async def get_auditors_list(type: Optional[str] = None):
+    async with get_db() as conn:
+        cursor = await conn.execute("SELECT full_name, qualifications FROM users WHERE is_active = 1 AND role IN ('AUDITOR', 'MANAGER')")
+        rows = await cursor.fetchall()
+        
+    filtered_rows = []
+    for row in rows:
+        quals = row["qualifications"] or ""
+        if not type or type in quals:
+            filtered_rows.append(row)
+            
+    return [row["full_name"] for row in filtered_rows]
+
+@router.get("/users")
+async def list_users(current_user: dict = Depends(get_current_user)):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, full_name, role, qualifications FROM users WHERE is_active = 1")
+        rows = await c.fetchall()
+    out = []
+    for r in rows:
+        try:
+            quals = json.loads(r["qualifications"]) if r["qualifications"] else []
+        except (json.JSONDecodeError, TypeError):
+            quals = ["HACCP", "GMP", "GHP"]
+
+        out.append({
+            "id": r["id"], 
+            "full_name": r["full_name"],
+            "role": r["role"], 
+            "qualifications": quals
+        })
+    return out
+
+@router.post("/users")
+async def add_user(payload: UserCreateModel, manager: dict = Depends(require_manager)):
+    clean_pin = payload.pin.strip()
+    clean_name = payload.full_name.strip()
+    if len(clean_pin) < 3:
+        raise HTTPException(status_code=400, detail="Kod PIN musi zawierać co najmniej 3 znaki")
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Wprowadź imię i nazwisko użytkownika")
+
+    hashed_pin = hash_pin(clean_pin)
+
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, pin FROM users WHERE is_active = 1")
+        all_users = await c.fetchall()
+        for u in all_users:
+            if verify_pin(clean_pin, u["pin"]):
+                raise HTTPException(status_code=400, detail="Ten kod PIN jest już zajęty przez innego użytkownika")
+
+        try:
+            await c.execute("""
+                INSERT INTO users (pin, full_name, role, qualifications, is_active)
+                VALUES (?, ?, ?, ?, 1)
+            """, (hashed_pin, clean_name, payload.role, json.dumps(payload.qualifications)))
+            await conn.commit()
+        except aiosqlite.IntegrityError:
+            raise HTTPException(status_code=400, detail="Użytkownik z tym PIN już istnieje")
+    return {"status": "OK"}
+
+class UserUpdateModel(BaseModel):
+    pin: Optional[str] = None
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    qualifications: Optional[List[str]] = None
+    zones: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+@router.put("/users/{user_id}")
+async def update_user(user_id: int, payload: UserUpdateModel, manager: dict = Depends(require_manager)):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, pin, full_name, role, qualifications, notes FROM users WHERE id = ?", (user_id,))
+        user = await c.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="Użytkownik nie istnieje")
+        
+        if payload.pin and payload.pin.strip():
+            new_pin_clean = payload.pin.strip()
+            if len(new_pin_clean) < 3:
+                raise HTTPException(status_code=400, detail="Kod PIN musi zawierać co najmniej 3 znaki")
+            
+            await c.execute("SELECT id, pin FROM users WHERE id != ? AND is_active = 1", (user_id,))
+            others = await c.fetchall()
+            for o in others:
+                if verify_pin(new_pin_clean, o["pin"]):
+                    raise HTTPException(status_code=400, detail="Ten kod PIN jest już przypisany do innego użytkownika")
+            stored_pin_val = hash_pin(new_pin_clean)
+        else:
+            stored_pin_val = user["pin"]
+            
+        new_name = payload.full_name.strip() if payload.full_name else user["full_name"]
+        new_role = payload.role if payload.role else user["role"]
+        
+        if payload.qualifications is not None:
+            new_quals = json.dumps(payload.qualifications)
+        else:
+            new_quals = user["qualifications"]
+            
+        new_notes = payload.notes if payload.notes is not None else user["notes"]
+        
+        try:
+            await c.execute("""
+                UPDATE users 
+                SET pin = ?, full_name = ?, role = ?, qualifications = ?, notes = ?
+                WHERE id = ?
+            """, (stored_pin_val, new_name, new_role, new_quals, new_notes, user_id))
+            
+            old_name = user["full_name"].strip() if user["full_name"] else ""
+            if old_name and new_name and old_name != new_name:
+                try:
+                    await c.execute("UPDATE audit_schedules SET lead_auditor = ? WHERE lead_auditor = ?", (new_name, old_name))
+                except Exception:
+                    pass
+                try:
+                    await c.execute("UPDATE audits SET auditor = ? WHERE auditor = ?", (new_name, old_name))
+                except Exception:
+                    pass
+                    
+            await conn.commit()
+        except aiosqlite.IntegrityError:
+            raise HTTPException(status_code=400, detail="Błąd integralności: PIN musi być unikalny")
+            
+    return {"status": "OK", "message": "Zaktualizowano profil audytora"}
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: int, manager: dict = Depends(require_manager)):
+    if user_id == 1:
+        raise HTTPException(status_code=400, detail="Nie można usunąć głównego konta administratora/managera (ID=1)")
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+        await conn.commit()
+    return {"status": "OK"}
+
+
+
+# ==============================================================================
+# PLIK: routers/audits.py
+# ==============================================================================
+
+import os
+import json
+import uuid
+import shutil
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException, Request, Form, UploadFile, File, Depends, status, BackgroundTasks
+from pydantic import BaseModel
+
+from database import get_db
+from agent import analyze_audit_risk, run_agent_turn
+from security import (
+    get_current_user,
+    require_manager,
+    require_auditor_or_manager,
+    log_security_event
+)
+from routers.checklist import CHECKLIST_TEMPLATES
+
+router = APIRouter(tags=["Audits"])
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".xlsx"}
+MAX_UPLOAD_SIZE = 15 * 1024 * 1024
+
+class AuditEditRequestCreate(BaseModel):
+    audit_id: int
+    requested_by: str
+    reason: str
+
+class AuditEditDecision(BaseModel):
+    request_id: int
+    decision: str
+    manager_comment: Optional[str] = ""
+
+class AuditUpdateRequest(BaseModel):
+    audit_id: int
+    modified_by: str
+    change_reason: str
+    updated_fields: Dict[str, Any]
+
+class AuditStatusUpdate(BaseModel):
+    status: str
+    reason: Optional[str] = ""
+    manager_name: Optional[str] = "Manager Jakości"
+
+class HoldLotRequest(BaseModel):
+    reason: Optional[str] = "Zarządzenie procedury wstrzymania partii (HOLD LOT)"
+    manager_name: Optional[str] = "Manager Jakości"
+
+
+@router.post("/api/audit")
+async def save_audit(
+    auditor_id: str = Form(...), line: str = Form(...), shift: str = Form(...), zone: str = Form(...),
+    health_ok: str = Form("TAK"), dispense_no: str = Form("BRAK"), glass_plastic_ok: str = Form("ZGODNY"),
+    allergen_clean_ok: str = Form("ZGODNY"), wood_policy_ok: str = Form("ZGODNY"), ppe_ok: str = Form("ZGODNY"),
+    line_status: str = Form("Produkcja Ciągła"), ccp1_fe_ok: str = Form("ZGODNY"), ccp1_nonfe_ok: str = Form("ZGODNY"),
+    ccp1_ss_ok: str = Form("ZGODNY"), ccp1_reject_ok: str = Form("ZGODNY"), ccp1_bin_locked: str = Form("ZGODNY"),
+    ccp2_magnet_ok: str = Form("ZGODNY"), ccp3_sieve_ok: str = Form("ZGODNY"), gmp_cleanliness_ok: str = Form("ZGODNY"),
+    gmp_wood_score: int = Form(5), gmp_foreign_score: int = Form(5), gmp_waste_ok: str = Form("ZGODNY"),
+    bhp_estop_ok: str = Form("ZGODNY"), bhp_atex_ok: str = Form("ZGODNY"), bhp_hot_cip_ok: str = Form("ZGODNY"),
+    bhp_evac_ppoz_ok: str = Form("ZGODNY"), bhp_status: str = Form("BRAK ZGŁOSZEŃ"), slm_analysis: str = Form(""),
+    checklist_results: str = Form("{}"), photo: Optional[UploadFile] = File(None), notes: Optional[str] = Form(None),
+    audit_type: str = Form("HACCP"), schedule_id: Optional[int] = Form(None), ko_failed: Optional[Any] = Form(False),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    photo_path = None
+    if photo and photo.filename:
+        ext = os.path.splitext(photo.filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Niedozwolony format pliku")
+        
+        content = await photo.read(MAX_UPLOAD_SIZE + 1)
+        if len(content) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=400, detail="Plik przekracza 15 MB")
+
+        # Walidacja Magic Bytes (ISO 27001 A.8.28)
+        header_bytes = content[:8]
+        is_valid_magic = False
+        if ext in [".jpg", ".jpeg"] and header_bytes.startswith(b"\xff\xd8\xff"):
+            is_valid_magic = True
+        elif ext == ".png" and header_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            is_valid_magic = True
+        elif ext == ".pdf" and header_bytes.startswith(b"%PDF"):
+            is_valid_magic = True
+        elif ext == ".xlsx" and header_bytes.startswith(b"PK\x03\x04"):
+            is_valid_magic = True
+
+        if not is_valid_magic:
+            raise HTTPException(status_code=400, detail="Plik odrzucony: sygnatura binarna nie zgadza się z deklarowanym rozszerzeniem (ochrona MIME ISO 27001)")
+
+        fname = f"{uuid.uuid4()}{ext}"
+        dst = os.path.join(UPLOAD_DIR, fname)
+        with open(dst, "wb") as f: 
+            f.write(content)
+        photo_path = f"/uploads/{fname}"
+
+    clean_audit_type = (audit_type or "HACCP").strip().upper()
+    template_questions = CHECKLIST_TEMPLATES.get(clean_audit_type, CHECKLIST_TEMPLATES.get("HACCP", []))
+    ko_ids_in_template = {str(q["id"]) for q in template_questions if q.get("is_ko")}
+
+    # Ekstrakcja uwag (w tym podyktowanych głosem) z pytań checklisty dla RAG i SLM
+    chk_notes_list = []
+    ko_failed_flag = 0
+    try:
+        parsed_chk = json.loads(checklist_results) if checklist_results else {}
+        if isinstance(parsed_chk, dict) and len(parsed_chk) > 0:
+            if len(parsed_chk) < len(template_questions):
+                raise HTTPException(status_code=400, detail="Wymagane zatwierdzenie 100% pytań checklisty")
+            for q_id, q_data in parsed_chk.items():
+                if isinstance(q_data, dict):
+                    if not q_data.get("accepted") and not q_data.get("locked"):
+                        raise HTTPException(status_code=400, detail="Wymagane zatwierdzenie 100% pytań checklisty")
+                    n_text = str(q_data.get("notes", "")).strip()
+                    if n_text:
+                        cl = q_data.get("clause") or f"Pkt {q_id}"
+                        chk_notes_list.append(f"[{cl}]: {n_text}")
+                    q_score = q_data.get("score")
+                    is_crit_nok = (int(q_score) <= 2) if q_score is not None else (q_data.get("status") == "NOK")
+                    if is_crit_nok and (str(q_id) in ko_ids_in_template or q_data.get("is_ko")):
+                        ko_failed_flag = 1
+    except HTTPException:
+        raise
+    except Exception as e_chk:
+        print(f"Błąd parsowania checklist_results: {e_chk}")
+
+    extracted_notes = "; ".join(chk_notes_list) if chk_notes_list else ""
+    full_notes = ((notes.strip() + " | " + extracted_notes) if (notes and notes.strip() and extracted_notes) else (notes.strip() if (notes and notes.strip()) else extracted_notes)) or None
+
+    # Wstępna natychmiastowa ocena regułowa (< 1 ms) zgodna z normą IFS Food v8
+    ko_param_failed = bool(ko_failed) and str(ko_failed).lower() not in ["false", "0", "f"]
+    ko_failed_val = ko_param_failed or (ko_failed_flag == 1)
+
+    ccp_nok = any(str(val or '').strip().upper() in ["NOK", "NIEZGODNY"] for val in [
+        ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp2_magnet_ok, ccp3_sieve_ok
+    ])
+    health_nok = str(health_ok or '').strip().upper() not in ["TAK", "ZGODNY", "OK"]
+    slm_analysis_nok = bool(slm_analysis and ("NOK" in slm_analysis.upper() or "HOLD LOT" in slm_analysis.upper()))
+
+    # Obliczenie wskaźnika zgodności procentowej total_score_pct (IFS Food v8)
+    total_score_pct = 100.0
+    if isinstance(parsed_chk, dict) and len(parsed_chk) > 0:
+        sum_scores = 0.0
+        for q_id, q_data in parsed_chk.items():
+            if isinstance(q_data, dict):
+                sc = q_data.get("score")
+                if sc is not None:
+                    try:
+                        sum_scores += float(sc)
+                    except (ValueError, TypeError):
+                        sum_scores += 5.0
+                else:
+                    sum_scores += 1.0 if q_data.get("status") == "NOK" else 5.0
+            else:
+                sum_scores += 5.0
+        total_score_pct = round((sum_scores / (len(parsed_chk) * 5.0)) * 100.0, 1)
+    else:
+        if ccp_nok or ko_failed_val:
+            total_score_pct = 50.0
+        elif health_nok or slm_analysis_nok:
+            total_score_pct = 70.0
+        else:
+            total_score_pct = 100.0
+
+    score_nok = total_score_pct < 75.0
+    rule_nok = ccp_nok or health_nok or ko_failed_val or slm_analysis_nok or score_nok
+    initial_verdict = "NOK" if rule_nok else "OK"
+    is_critical_hold = ko_failed_val or ccp_nok or health_nok or (bool(slm_analysis) and "HOLD LOT" in slm_analysis.upper())
+    initial_risk = "KRYTYCZNE (HOLD LOT)" if is_critical_hold else ("ŚREDNIE" if rule_nok else "NISKIE")
+    initial_analysis = slm_analysis if slm_analysis else ("Wykryto odchylenie krytyczne CCP / procedury PR15.01. Uruchomiono protokół blokady partii (Hold Lot)." if rule_nok else "Weryfikacja regułowa zakończona. Analiza asystenta SLM AI trwa w tle...")
+    ko_failed_flag = 1 if is_critical_hold else 0
+
+    # BŁYSKAWICZNY ZAPIS DO BAZY DANYCH (< 30 ms)
+    async with get_db() as db:
+        cursor = await db.execute("""
+            INSERT INTO audits (timestamp, 
+                auditor_id, line, shift, zone, audit_type, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
+                line_status, ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked, ccp2_magnet_ok, ccp3_sieve_ok,
+                gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok, bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, 
+                bhp_evac_ppoz_ok, bhp_status, slm_analysis, slm_verdict, risk_level, checklist_results, photo_path, notes, ko_failed, total_score_pct
+            ) VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            auditor_id, line, shift, zone, clean_audit_type, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
+            line_status, ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked, ccp2_magnet_ok, ccp3_sieve_ok,
+            gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok, bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, 
+            bhp_evac_ppoz_ok, bhp_status, initial_analysis, initial_verdict, initial_risk, checklist_results, photo_path, full_notes, ko_failed_flag, total_score_pct
+        ))
+        audit_id = cursor.lastrowid
+        today_str = datetime.now().strftime("%Y-%m-%d")
+
+        if schedule_id:
+            await db.execute("""
+                UPDATE audit_schedules 
+                SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            """, (schedule_id,))
+        else:
+            upd = await db.execute("""
+                UPDATE audit_schedules 
+                SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP 
+                WHERE id = (
+                    SELECT id FROM audit_schedules 
+                    WHERE line = ? AND audit_type = ? AND status = 'PLANOWANY' AND scheduled_date <= ? 
+                    ORDER BY scheduled_date ASC LIMIT 1
+                )
+            """, (line, clean_audit_type, today_str))
+            if upd.rowcount == 0:
+                await db.execute("""
+                    UPDATE audit_schedules 
+                    SET status = 'WYKONANY', completed_at = CURRENT_TIMESTAMP 
+                    WHERE id = (
+                        SELECT id FROM audit_schedules 
+                        WHERE line = ? AND status = 'PLANOWANY' AND scheduled_date <= ? 
+                        ORDER BY scheduled_date ASC LIMIT 1
+                    )
+                """, (line, today_str))
+        await db.commit()
+
+    # ASYNCHRONICZNE TŁO (BACKGROUND TASK): Uruchomienie modelu SLM AI bez blokowania odpowiedzi HTTP
+    async def process_slm_background(a_id: int, a_line: str, audit_info: dict, rule_nok_val: bool, is_critical_hold_val: bool):
+        try:
+            analysis_result = await run_agent_turn(audit_info, a_line)
+            is_ko_fail = bool(audit_info.get("ko_failed"))
+            v_bg = "NOK" if (rule_nok_val or is_ko_fail or "NOK" in analysis_result.upper() or "HOLD LOT" in analysis_result.upper()) else "OK"
+            r_bg = "KRYTYCZNE (HOLD LOT)" if (is_critical_hold_val or is_ko_fail or "HOLD LOT" in analysis_result.upper()) else ("ŚREDNIE" if v_bg == "NOK" else "NISKIE")
+            async with get_db() as conn_bg:
+                await conn_bg.execute("""
+                    UPDATE audits 
+                    SET slm_analysis = ?, slm_verdict = ?, risk_level = ? 
+                    WHERE id = ?
+                """, (analysis_result, v_bg, r_bg, a_id))
+                await conn_bg.commit()
+        except Exception as e_bg:
+            print(f"[BACKGROUND SLM ERROR] Błąd w tle dla audytu #{a_id}: {e_bg}")
+
+    audit_payload_for_ai = {
+        "line": line,
+        "ccp1_fe_ok": ccp1_fe_ok,
+        "ccp1_reject_ok": ccp1_reject_ok,
+        "health_ok": health_ok,
+        "notes": full_notes or "",
+        "ko_failed": ko_failed_flag == 1
+    }
+    background_tasks.add_task(process_slm_background, audit_id, line, audit_payload_for_ai, rule_nok, is_critical_hold)
+
+    return {
+        "status": "OK",
+        "audit_id": audit_id,
+        "slm_verdict": initial_verdict,
+        "risk_level": initial_risk,
+        "total_score_pct": total_score_pct,
+        "message": "Audyt został natychmiastowo zarejestrowany. Analiza SLM przetwarzana asynchronicznie w tle."
+    }
+
+
+# --- AUDIT TRAIL / WNIOSKOWANIE O ZMIANĘ (WARIANT 3) ---
+@router.post("/api/audits/request-edit")
+async def request_audit_edit(
+    payload: AuditEditRequestCreate,
+    current_user: dict = Depends(require_auditor_or_manager)
+):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, record_status FROM audits WHERE id = ?", (payload.audit_id,))
+        audit = await c.fetchone()
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audyt nie istnieje.")
+        
+        await c.execute("SELECT id FROM audit_edit_requests WHERE audit_id = ? AND status = 'OCZEKUJE'", (payload.audit_id,))
+        pending = await c.fetchone()
+        if pending:
+            raise HTTPException(status_code=400, detail="Wniosek dla tego audytu już oczekuje na decyzję Managera.")
+
+        await c.execute(
+            "INSERT INTO audit_edit_requests (audit_id, requested_by, reason, status) VALUES (?, ?, ?, 'OCZEKUJE')",
+            (payload.audit_id, payload.requested_by, payload.reason.strip())
+        )
+        await conn.commit()
+    return {"status": "OK", "message": "Wniosek przesłany do Managera Jakości."}
+
+@router.get("/api/audits/edit-requests")
+async def list_edit_requests(
+    status_filter: Optional[str] = None,
+    manager: dict = Depends(require_manager)
+):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        if status_filter:
+            await c.execute("""
+                SELECT r.id, r.audit_id, r.requested_by, r.reason, r.status, r.manager_comment, r.created_at, r.resolved_at, a.line, a.timestamp as audit_date
+                FROM audit_edit_requests r
+                JOIN audits a ON a.id = r.audit_id
+                WHERE r.status = ?
+                ORDER BY r.id DESC
+            """, (status_filter,))
+        else:
+            await c.execute("""
+                SELECT r.id, r.audit_id, r.requested_by, r.reason, r.status, r.manager_comment, r.created_at, r.resolved_at, a.line, a.timestamp as audit_date
+                FROM audit_edit_requests r
+                JOIN audits a ON a.id = r.audit_id
+                ORDER BY r.id DESC
+            """)
+        rows = await c.fetchall()
+    return [dict(r) for r in rows]
+
+@router.post("/api/audits/decide-edit")
+async def decide_audit_edit(
+    payload: AuditEditDecision,
+    request: Request,
+    manager: dict = Depends(require_manager)
+):
+    if payload.decision not in ["ZATWIERDZONY", "ODRZUCONY"]:
+        raise HTTPException(status_code=400, detail="Nieprawidłowa decyzja.")
+
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT audit_id FROM audit_edit_requests WHERE id = ?", (payload.request_id,))
+        req = await c.fetchone()
+        if not req:
+            raise HTTPException(status_code=404, detail="Wniosek nie istnieje.")
+
+        await c.execute("""
+            UPDATE audit_edit_requests 
+            SET status = ?, manager_comment = ?, resolved_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (payload.decision, payload.manager_comment, payload.request_id))
+
+        if payload.decision == "ZATWIERDZONY":
+            await c.execute("UPDATE audits SET record_status = 'ODBLOKOWANY_DO_KOREKTY' WHERE id = ?", (req["audit_id"],))
+
+        await conn.commit()
+    return {"status": "OK", "decision": payload.decision}
+
+@router.put("/api/audits/apply-correction")
+async def apply_audit_correction(payload: AuditUpdateRequest, current_user: dict = Depends(require_auditor_or_manager)):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT * FROM audits WHERE id = ?", (payload.audit_id,))
+        audit = await c.fetchone()
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audyt nie istnieje.")
+        
+        if audit["record_status"] != "ODBLOKOWANY_DO_KOREKTY":
+            raise HTTPException(status_code=403, detail="Audyt jest zablokowany. Wymagana zgoda Managera.")
+
+        user_name = current_user.get("full_name") or current_user.get("sub") or "Użytkownik"
+        is_manager = current_user.get("role") == "MANAGER"
+
+        ALLOWED_AUDIT_COLUMNS = {
+            "auditor_id", "line", "shift", "zone", "audit_type", "total_score_pct",
+            "health_ok", "dispense_no", "ppe_ok", "allergen_clean_ok", "wood_policy_ok", "line_status",
+            "ccp1_fe_ok", "ccp1_nonfe_ok", "ccp1_ss_ok", "ccp1_reject_ok", "ccp1_bin_locked", "ccp2_magnet_ok",
+            "ccp3_sieve_ok", "cleanliness_rating", "notes", "glass_plastic_ok",
+            "gmp_cleanliness_ok", "gmp_wood_score", "gmp_foreign_score", "gmp_waste_ok", "bhp_estop_ok",
+            "bhp_atex_ok", "bhp_hot_cip_ok", "bhp_evac_ppoz_ok", "bhp_status", "checklist_results"
+        }
+        if is_manager:
+            ALLOWED_AUDIT_COLUMNS.update({"compliance_verdict", "risk_level", "slm_verdict", "ko_failed"})
+        else:
+            forbidden_fields = {"compliance_verdict", "risk_level", "slm_verdict", "ko_failed"}
+            if any(f in payload.updated_fields for f in forbidden_fields):
+                raise HTTPException(status_code=403, detail="Brak uprawnień do edycji pól krytycznych werdyktu i ryzyka.")
+
+        audit_dict = dict(audit)
+        for field, new_val in payload.updated_fields.items():
+            if field in audit_dict and field in ALLOWED_AUDIT_COLUMNS:
+                old_val = str(audit_dict[field]) if audit_dict[field] is not None else ""
+                new_val_str = str(new_val) if new_val is not None else ""
+                if old_val != new_val_str:
+                    await c.execute("""
+                        INSERT INTO audit_change_logs (audit_id, modified_by, field_name, old_value, new_value, change_reason)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (payload.audit_id, user_name, field, old_val, new_val_str, payload.change_reason))
+                    await c.execute(f"UPDATE audits SET {field} = ? WHERE id = ?", (new_val, payload.audit_id))
+
+        # Ponowna blokada po zapisie zmian
+        await c.execute("UPDATE audits SET record_status = 'ZABLOKOWANY' WHERE id = ?", (payload.audit_id,))
+        await conn.commit()
+
+    await log_security_event(
+        event_type="AUDIT_CORRECTION_APPLIED",
+        user_id=current_user.get("uid", 0),
+        user_name=current_user.get("sub", user_name),
+        severity="INFO",
+        details=f"Użytkownik {user_name} zapisał korektę audytu #{payload.audit_id} (powód: {payload.change_reason})"
+    )
+    return {"status": "OK", "message": "Korekta została zarejestrowana w dzienniku Audit Trail."}
+
+@router.get("/api/audits/{audit_id}/audit-trail")
+async def get_audit_trail(audit_id: int):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            SELECT modified_by, field_name, old_value, new_value, change_reason, timestamp 
+            FROM audit_change_logs 
+            WHERE audit_id = ? 
+            ORDER BY id DESC
+        """, (audit_id,))
+        logs = await c.fetchall()
+    return [dict(l) for l in logs]
+
+@router.get("/api/audits/{audit_id}")
+async def get_audit_detail(audit_id: int):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT * FROM audits WHERE id = ?", (audit_id,))
+        row = await c.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Audyt nie został odnaleziony.")
+        audit_data = dict(row)
+
+        await c.execute("""
+            SELECT modified_by, field_name, old_value, new_value, change_reason, timestamp 
+            FROM audit_change_logs 
+            WHERE audit_id = ? 
+            ORDER BY id DESC
+        """, (audit_id,))
+        logs = await c.fetchall()
+        audit_data["change_logs"] = [dict(l) for l in logs]
+
+        # Bezpieczne parsowanie checklist_results
+        if audit_data.get("checklist_results"):
+            try:
+                audit_data["checklist_parsed"] = json.loads(audit_data["checklist_results"])
+            except Exception:
+                audit_data["checklist_parsed"] = {}
+        else:
+            audit_data["checklist_parsed"] = {}
+
+        # Bezpieczne parsowanie slm_analysis
+        if audit_data.get("slm_analysis"):
+            try:
+                audit_data["slm_analysis_parsed"] = json.loads(audit_data["slm_analysis"])
+            except Exception:
+                audit_data["slm_analysis_parsed"] = None
+        else:
+            audit_data["slm_analysis_parsed"] = None
+
+    return audit_data
+
+@router.patch("/api/audits/{audit_id}/status")
+async def update_audit_status(
+    audit_id: int,
+    payload: AuditStatusUpdate,
+    request: Request,
+    manager: dict = Depends(require_manager)
+):
+    if payload.status not in ["ZATWIERDZONY", "ODRZUCONY", "WERYFIKACJA"]:
+        raise HTTPException(status_code=400, detail="Nieprawidłowy status audytu.")
+
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, compliance_verdict, process_status FROM audits WHERE id = ?", (audit_id,))
+        audit = await c.fetchone()
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audyt nie istnieje.")
+
+        old_status = audit["compliance_verdict"] or audit["process_status"] or "NOWY"
+        mgr = manager.get("full_name") or manager.get("sub") or "Manager Jakości"
+        await c.execute("""
+            UPDATE audits 
+            SET compliance_verdict = ?, process_status = ?, signoff_quality = ?
+            WHERE id = ?
+        """, (payload.status, payload.status, mgr, audit_id))
+
+        reason = payload.reason.strip() if payload.reason else f"Formalna zmiana statusu audytu na: {payload.status}"
+        await c.execute("""
+            INSERT INTO audit_change_logs (audit_id, modified_by, field_name, old_value, new_value, change_reason)
+            VALUES (?, ?, 'status_zatwierdzenia', ?, ?, ?)
+        """, (audit_id, mgr, old_status, payload.status, reason))
+
+        await conn.commit()
+
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    await log_security_event(
+        event_type="AUDIT_STATUS_CHANGED",
+        user_id=manager.get("uid", 0),
+        user_name=manager.get("sub", mgr),
+        ip_address=client_ip,
+        severity="INFO",
+        details=f"Zmiana statusu audytu #{audit_id} na {payload.status} ({reason})"
+    )
+    return {"status": "OK", "new_status": payload.status}
+
+@router.post("/api/audits/{audit_id}/hold-lot")
+async def trigger_hold_lot(
+    audit_id: int,
+    payload: HoldLotRequest,
+    request: Request,
+    manager: dict = Depends(require_manager)
+):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, line, slm_verdict FROM audits WHERE id = ?", (audit_id,))
+        audit = await c.fetchone()
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audyt nie istnieje.")
+
+        mgr = manager["sub"]
+        await c.execute("""
+            UPDATE audits 
+            SET risk_level = 'KRYTYCZNE (HOLD LOT)', compliance_verdict = 'HOLD_LOT'
+            WHERE id = ?
+        """, (audit_id,))
+
+        reason = payload.reason or "Natychmiastowe zarządzenie procedury wstrzymania partii (HOLD LOT) przez Managera Jakości."
+        await c.execute("""
+            INSERT INTO audit_change_logs (audit_id, modified_by, field_name, old_value, new_value, change_reason)
+            VALUES (?, ?, 'HOLD_LOT_PROCEDURA', 'NORMALNA', 'KWARANTANNA_HOLD_LOT', ?)
+        """, (audit_id, mgr, reason))
+
+        await conn.commit()
+
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    await log_security_event(
+        event_type="HOLD_LOT_TRIGGERED",
+        user_id=manager["uid"],
+        user_name=manager["sub"],
+        ip_address=client_ip,
+        severity="CRITICAL",
+        details=f"Wstrzymanie partii (HOLD LOT) dla audytu #{audit_id} na linii {audit['line']}"
+    )
+    return {"status": "OK", "message": f"Wstrzymanie partii (HOLD LOT) zostało zarejestrowane dla linii {audit['line']}."}
+
+@router.get("/api/audits")
+async def get_all_audits(limit: int = 300):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            SELECT id, auditor_id, line, shift, slm_verdict, risk_level, timestamp, record_status,
+                   compliance_verdict, process_status, notes, total_score_pct, audit_score, audit_points,
+                   checklist_results
+            FROM audits 
+            ORDER BY id DESC LIMIT ?
+        """, (limit,))
+        rows = [dict(r) for r in await c.fetchall()]
+    return rows
+
+@router.delete("/api/audits/{audit_id}")
+async def undo_last_audit(
+    audit_id: int,
+    request: Request,
+    current_user: dict = Depends(require_manager)
+):
+    """Pozwala usunąć wpis przez managera z audytem ISO 27001"""
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, line, record_status FROM audits WHERE id = ?", (audit_id,))
+        row = await c.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Nie odnaleziono audytu")
+            
+        await c.execute("DELETE FROM audits WHERE id = ?", (audit_id,))
+        await c.execute("""
+            UPDATE audit_schedules 
+            SET status = 'PLANOWANY', completed_at = NULL 
+            WHERE id = (
+                SELECT id FROM audit_schedules 
+                WHERE line = ? AND status = 'WYKONANY' 
+                ORDER BY completed_at DESC LIMIT 1
+            )
+        """, (row["line"],))
+        await conn.commit()
+
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    await log_security_event(
+        event_type="AUDIT_DELETED",
+        user_id=current_user["uid"],
+        user_name=current_user["sub"],
+        ip_address=client_ip,
+        severity="WARN",
+        details=f"Usunięto rekord audytu ID={audit_id} na linii {row['line']}"
+    )
+    return {"status": "OK", "message": "Audyt został usunięty."}
+
+
+
+# ==============================================================================
+# PLIK: routers/schedule.py
+# ==============================================================================
+
+from fastapi import APIRouter, HTTPException, Query, Depends, Header, Response
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
+from database import get_db
+from datetime import timedelta, datetime
+import calendar
+from security import require_manager, require_auditor_or_manager, get_current_user
+
+router = APIRouter(prefix="/api/schedule", tags=["Schedule"])
+
+class ScheduleCreateModel(BaseModel):
+    scheduled_date: str
+    audit_type: str
+    line: str
+    lead_auditor: str
+    backup_auditor: str
+    notes: Optional[str] = ""
+
+class ScheduleUpdateModel(BaseModel):
+    scheduled_date: str
+    audit_type: str
+    line: str
+    lead_auditor: str
+    backup_auditor: str
+    status: str
+    notes: Optional[str] = ""
+
+class AutoPlanModel(BaseModel):
+    start_year: int
+    start_month: int
+    start_day: Optional[int] = 1
+    period_months: int = 1
+    lines: List[str]
+    audit_types: List[str]
+    include_weekends: bool = False
+
+@router.get("")
+@router.get("/")
+async def list_schedules(response: Response, auditor: Optional[str] = None, role: Optional[str] = "MANAGER", status: Optional[str] = None):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    async with get_db() as conn:
+        c = await conn.cursor()
+        if role == "MANAGER" or not auditor:
+            if status:
+                await c.execute("SELECT * FROM audit_schedules WHERE status = ? ORDER BY scheduled_date ASC", (status,))
+            else:
+                await c.execute("SELECT * FROM audit_schedules ORDER BY scheduled_date ASC")
+        else:
+            clean_aud = auditor.strip()
+            # Wyodrębnienie nazwiska i inicjałów, aby dopasować warianty: "Grzegorz Zarakowski", "G. Zarakowski", "Grzegorz Zarakowski (Lead Auditor)"
+            parts = [p.strip() for p in clean_aud.replace("(", " ").replace(")", " ").split() if p.strip()]
+            last_name = parts[-1] if parts else clean_aud
+            first_init = (parts[0][0] + ".") if parts else ""
+
+            query_conditions = """
+                (
+                    lead_auditor LIKE ? OR backup_auditor LIKE ?
+                    OR lead_auditor LIKE ? OR backup_auditor LIKE ?
+                    OR lead_auditor LIKE ? OR backup_auditor LIKE ?
+                )
+            """
+            params = [
+                f"%{clean_aud}%", f"%{clean_aud}%",
+                f"%{last_name}%", f"%{last_name}%",
+                f"%{first_init}%{last_name}%", f"%{first_init}%{last_name}%"
+            ]
+            if status:
+                await c.execute(f"SELECT * FROM audit_schedules WHERE {query_conditions} AND status = ? ORDER BY scheduled_date ASC", (*params, status))
+            else:
+                await c.execute(f"SELECT * FROM audit_schedules WHERE {query_conditions} ORDER BY scheduled_date ASC", tuple(params))
+        rows = [dict(r) for r in await c.fetchall()]
+    return rows
+
+@router.post("")
+@router.post("/")
+async def create_schedule(payload: ScheduleCreateModel, user: dict = Depends(require_auditor_or_manager)):
+    async with get_db() as conn:
+        await conn.execute(
+            "INSERT INTO audit_schedules (scheduled_date, line, audit_type, lead_auditor, backup_auditor, notes) VALUES (?, ?, ?, ?, ?, ?)",
+            (payload.scheduled_date, payload.line, payload.audit_type, payload.lead_auditor, payload.backup_auditor, payload.notes)
+        )
+        await conn.commit()
+    return {"status": "success"}
+
+@router.get("/{sched_id}")
+async def get_schedule(sched_id: int):
+    async with get_db() as conn:
+        cursor = await conn.execute("SELECT id, scheduled_date, line, audit_type, lead_auditor, backup_auditor, status, notes, completed_at FROM audit_schedules WHERE id = ?", (sched_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+        return dict(row)
+
+@router.put("/{sched_id}")
+async def update_schedule(sched_id: int, payload: ScheduleUpdateModel, user: dict = Depends(require_auditor_or_manager)):
+    async with get_db() as conn:
+        cursor = await conn.execute("SELECT id, lead_auditor, backup_auditor FROM audit_schedules WHERE id = ?", (sched_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+
+        if user.get("role") != "MANAGER":
+            sub = (user.get("sub") or "").strip()
+            lead = (row["lead_auditor"] or "").strip()
+            backup = (row["backup_auditor"] or "").strip()
+            sub_parts = sub.split()
+            last_name = sub_parts[-1] if sub_parts else sub
+            if not (sub in lead or sub in backup or (last_name and (last_name in lead or last_name in backup))):
+                raise HTTPException(status_code=403, detail="Brak uprawnień do edycji zadania innego audytora")
+
+        await conn.execute(
+            "UPDATE audit_schedules SET scheduled_date = ?, line = ?, audit_type = ?, lead_auditor = ?, backup_auditor = ?, status = ?, notes = ? WHERE id = ?",
+            (payload.scheduled_date, payload.line, payload.audit_type, payload.lead_auditor, payload.backup_auditor, payload.status, payload.notes, sched_id)
+        )
+        await conn.commit()
+    return {"status": "success"}
+
+@router.put("/{sched_id}/reschedule")
+async def reschedule_audit(sched_id: int, payload: Dict[str, str], user: dict = Depends(require_auditor_or_manager)):
+    new_date = payload.get("new_date")
+    if not new_date:
+        raise HTTPException(status_code=400, detail="Brak daty")
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if new_date < today_str:
+        raise HTTPException(status_code=400, detail="Nie można przesuwać audytu na datę wsteczną")
+        
+    async with get_db() as conn:
+        cursor = await conn.execute("SELECT scheduled_date, lead_auditor, backup_auditor FROM audit_schedules WHERE id = ?", (sched_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+            
+        if user.get("role") != "MANAGER":
+            sub = (user.get("sub") or "").strip()
+            lead = (row["lead_auditor"] or "").strip()
+            backup = (row["backup_auditor"] or "").strip()
+            sub_parts = sub.split()
+            last_name = sub_parts[-1] if sub_parts else sub
+            if not (sub in lead or sub in backup or (last_name and (last_name in lead or last_name in backup))):
+                raise HTTPException(status_code=403, detail="Brak uprawnień do edycji zadania innego audytora")
+
+        await conn.execute("UPDATE audit_schedules SET scheduled_date = ? WHERE id = ?", (new_date, sched_id))
+        await conn.commit()
+    return {"status": "success"}
+
+@router.delete("/{sched_id}")
+async def delete_schedule(sched_id: int, manager: dict = Depends(require_manager)):
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    async with get_db() as conn:
+        cursor = await conn.execute("SELECT scheduled_date, status FROM audit_schedules WHERE id = ?", (sched_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+        
+        if row["status"] == "WYKONANY":
+            raise HTTPException(status_code=400, detail="Nie można usunąć zrealizowanego audytu")
+
+        # Blokada usuwania historycznych
+        if row["scheduled_date"] < today_str:
+            raise HTTPException(status_code=400, detail="Nie można usunąć audytu z przeszłości")
+            
+        await conn.execute("DELETE FROM audit_schedules WHERE id = ?", (sched_id,))
+        await conn.commit()
+    return {"status": "success"}
+
+@router.post("/clear-range")
+async def clear_range(payload: Dict[str, int], manager: dict = Depends(require_manager)):
+    months = payload.get("months", 1)
+    today = datetime.now()
+    end_date = (today + timedelta(days=30 * months)).strftime("%Y-%m-%d")
+    today_str = today.strftime("%Y-%m-%d")
+    
+    async with get_db() as conn:
+        await conn.execute(
+            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ? AND status != 'WYKONANY'",
+            (today_str, end_date)
+        )
+        await conn.commit()
+    return {"status": "success"}
+
+@router.post("/auto")
+async def auto_plan_audits(payload: AutoPlanModel, manager: dict = Depends(require_manager)):
+    start_day = payload.start_day or 1
+    
+    try:
+        start_date = datetime(payload.start_year, payload.start_month, start_day).date()
+    except ValueError:
+        start_date = datetime(payload.start_year, payload.start_month, 1).date()
+
+    end_total_m = payload.start_month + payload.period_months - 1
+    end_year = payload.start_year + ((end_total_m - 1) // 12)
+    end_month = ((end_total_m - 1) % 12) + 1
+    
+    _, last_day_of_month = calendar.monthrange(end_year, end_month)
+    end_date = datetime(end_year, end_month, last_day_of_month).date()
+
+    async with get_db() as conn:
+        cursor = await conn.execute(
+            "SELECT full_name FROM users WHERE is_active = 1 AND role IN ('AUDITOR', 'MANAGER') ORDER BY id ASC"
+        )
+        auditor_rows = await cursor.fetchall()
+        auditor_names = [r["full_name"] for r in auditor_rows] if auditor_rows else ["Audytor Jakości"]
+
+        await conn.execute(
+            """
+            DELETE FROM audit_schedules 
+            WHERE scheduled_date >= ? AND scheduled_date <= ? AND (status != 'WYKONANY' OR status IS NULL)
+            """,
+            (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+        )
+
+        scheduled_audits = []
+        cur_date = start_date
+        aud_idx = 0
+
+        while cur_date <= end_date:
+            if not payload.include_weekends and cur_date.weekday() >= 5:
+                cur_date += timedelta(days=1)
+                continue
+
+            for line in payload.lines:
+                for audit_type in payload.audit_types:
+                    lead_aud = auditor_names[aud_idx % len(auditor_names)]
+                    backup_aud = auditor_names[(aud_idx + 1) % len(auditor_names)] if len(auditor_names) > 1 else lead_aud
+                    aud_idx += 1
+                    
+                    s_date_str = cur_date.strftime("%Y-%m-%d")
+                    scheduled_audits.append({"scheduled_date": s_date_str, "line": line, "audit_type": audit_type})
+                    await conn.execute(
+                        """
+                        INSERT INTO audit_schedules (scheduled_date, line, audit_type, lead_auditor, backup_auditor, status, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (s_date_str, line, audit_type, lead_aud, backup_aud, "PLANOWANY", "Wygenerowano automatycznie")
+                    )
+            cur_date += timedelta(days=1)
+        
+        await conn.commit()
+
+    return {
+        "status": "success",
+        "count": len(scheduled_audits),
+        "start_date": start_date.strftime("%d.%m.%Y"),
+        "end_date": end_date.strftime("%d.%m.%Y")
+    }
+
+
+class ClearMonthModel(BaseModel):
+    month: int
+    year: int
+    period_months: Optional[int] = 1
+
+@router.post("/clear-month")
+async def router_clear_month(payload: ClearMonthModel, manager: dict = Depends(require_manager)):
+    period = payload.period_months if (payload.period_months and payload.period_months > 0) else 1
+    start_date = f"{payload.year:04d}-{payload.month:02d}-01"
+
+    end_total_m = payload.month + period - 1
+    end_year = payload.year + ((end_total_m - 1) // 12)
+    end_month = ((end_total_m - 1) % 12) + 1
+    _, last_day = calendar.monthrange(end_year, end_month)
+    end_date = f"{end_year:04d}-{end_month:02d}-{last_day:02d}"
+
+    async with get_db() as conn:
+        cursor = await conn.execute(
+            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ?",
+            (start_date, end_date)
+        )
+        deleted_count = cursor.rowcount
+        await conn.commit()
+
+    label = "1 miesiąc" if period == 1 else (f"{period} miesiące" if period < 5 else f"{period} miesięcy")
+    return {
+        "status": "success",
+        "deleted": deleted_count,
+        "start_date": start_date,
+        "end_date": end_date,
+        "message": f"Usunięto {deleted_count} zaplanowanych audytów na okres: {label} ({start_date} – {end_date})"
+    }
+
+@router.post("/clear-all")
+async def router_clear_all(manager: dict = Depends(require_manager)):
+    async with get_db() as conn:
+        cursor = await conn.execute("DELETE FROM audit_schedules")
+        deleted_count = cursor.rowcount
+        await conn.commit()
+
+    return {
+        "status": "success",
+        "deleted": deleted_count,
+        "message": f"Wyczyszczono wszystkie audyty z harmonogramu (usunięto {deleted_count})"
+    }
+
+
+# ==============================================================================
+# PLIK: routers/notes.py
+# ==============================================================================
+
+import os
+from datetime import datetime
+from typing import Optional, List
+from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Depends
+from database import get_db
+from security import require_manager
+
+router = APIRouter(prefix="/api/auditor-notes", tags=["Auditor Notes"])
+
+class NoteCreateModel(BaseModel):
+    auditor_id: Optional[int] = None
+    auditor_name: str
+    line_id: Optional[str] = ""
+    line_name: Optional[str] = ""
+    priority: Optional[str] = "INFO"  # INFO, WARNING, CRITICAL (HOLD)
+    content: str
+
+class NoteReplyModel(BaseModel):
+    manager_response: str
+    manager_name: Optional[str] = "Key User (Manager)"
+
+@router.post("", response_model=dict)
+async def create_auditor_note(note: NoteCreateModel):
+    if not note.content or not note.content.strip():
+        raise HTTPException(status_code=400, detail="Treść notatki nie może być pusta.")
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            INSERT INTO auditor_notes (
+                timestamp, auditor_id, auditor_name, line_id, line_name, priority, content, is_read, direction, auditor_read_response
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'TO_MANAGER', 0)
+        """, (
+            timestamp,
+            note.auditor_id,
+            note.auditor_name.strip(),
+            note.line_id.strip() if note.line_id else "",
+            note.line_name.strip() if note.line_name else "",
+            note.priority or "INFO",
+            note.content.strip()
+        ))
+        note_id = c.lastrowid
+        await conn.commit()
+
+        try:
+            await c.execute("""
+                INSERT INTO security_audit_logs (timestamp, event_type, user_name, severity, details)
+                VALUES (?, 'AUDITOR_NOTE_SENT', ?, ?, ?)
+            """, (
+                timestamp,
+                note.auditor_name,
+                note.priority,
+                f"Szybka notatka (id={note_id}) dla linii {note.line_name or 'Ogólna'}: {note.content[:80]}"
+            ))
+            await conn.commit()
+        except Exception:
+            pass
+
+    return {
+        "status": "success",
+        "message": "Notatka została przekazana do Key Usera.",
+        "note_id": note_id,
+        "timestamp": timestamp
+    }
+
+@router.get("", response_model=List[dict])
+async def get_auditor_notes(
+    auditor: Optional[str] = None, 
+    unread_only: bool = False, 
+    limit: int = 50,
+    mode: Optional[str] = None
+):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        query = "SELECT * FROM auditor_notes WHERE 1=1 AND (priority != 'CHAT' OR priority IS NULL)"
+        params = []
+        
+        if mode == "inbox":
+            # Skrzynka odbiorcza audytora: odpowiedzi od Key Usera lub komunikaty do audytorów
+            query += " AND ((manager_response IS NOT NULL AND TRIM(manager_response) != '') OR direction = 'TO_AUDITORS')"
+            if auditor:
+                query += " AND (auditor_name = ? OR direction = 'TO_AUDITORS')"
+                params.append(auditor.strip())
+        elif mode == "sent":
+            # Wysłane przez audytora
+            if auditor:
+                query += " AND auditor_name = ?"
+                params.append(auditor.strip())
+        else:
+            # Domyślny widok Key Usera
+            if auditor:
+                query += " AND auditor_name = ?"
+                params.append(auditor.strip())
+            if unread_only:
+                query += " AND is_read = 0"
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        await c.execute(query, tuple(params))
+        rows = await c.fetchall()
+        return [dict(r) for r in rows]
+
+@router.get("/counts")
+async def get_notes_counts(auditor: Optional[str] = None):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        
+        # Nieprzeczytane przez menedżera
+        await c.execute("SELECT COUNT(*) FROM auditor_notes WHERE is_read = 0 AND direction = 'TO_MANAGER'")
+        mgr_unread = (await c.fetchone())[0]
+
+        # Nieprzeczytane odpowiedzi dla audytora
+        aud_query = """
+            SELECT COUNT(*) FROM auditor_notes 
+            WHERE manager_response IS NOT NULL 
+              AND TRIM(manager_response) != '' 
+              AND auditor_read_response = 0
+        """
+        aud_params = []
+        if auditor:
+            aud_query += " AND (auditor_name = ? OR direction = 'TO_AUDITORS')"
+            aud_params.append(auditor.strip())
+        
+        await c.execute(aud_query, tuple(aud_params))
+        aud_unread = (await c.fetchone())[0]
+
+    return {
+        "manager_unread": mgr_unread,
+        "auditor_unread": aud_unread
+    }
+
+@router.post("/{note_id}/reply")
+async def reply_to_auditor_note(note_id: int, reply: NoteReplyModel, manager: dict = Depends(require_manager)):
+    if not reply.manager_response or not reply.manager_response.strip():
+        raise HTTPException(status_code=400, detail="Treść odpowiedzi nie może być pusta.")
+    
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    mgr_name = reply.manager_name or manager.get("full_name") or manager.get("sub") or "Key User (Manager)"
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            UPDATE auditor_notes
+            SET manager_response = ?,
+                manager_response_at = ?,
+                manager_name = ?,
+                is_read = 1,
+                read_at = COALESCE(read_at, ?),
+                auditor_read_response = 0
+            WHERE id = ?
+        """, (reply.manager_response.strip(), now_str, mgr_name, now_str, note_id))
+        await conn.commit()
+
+        try:
+            await c.execute("""
+                INSERT INTO security_audit_logs (timestamp, event_type, user_name, severity, details)
+                VALUES (?, 'AUDITOR_NOTE_REPLY', ?, 'INFO', ?)
+            """, (
+                now_str,
+                mgr_name,
+                f"Odpowiedź na notatkę (id={note_id}): {reply.manager_response[:80]}"
+            ))
+            await conn.commit()
+        except Exception:
+            pass
+
+    return {
+        "status": "success",
+        "message": "Odpowiedź została wysłana do skrzynki odbiorczej audytora.",
+        "note_id": note_id,
+        "manager_response_at": now_str
+    }
+
+@router.patch("/{note_id}/auditor-read")
+async def mark_note_as_read_by_auditor(note_id: int):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            UPDATE auditor_notes 
+            SET auditor_read_response = 1
+            WHERE id = ?
+        """, (note_id,))
+        await conn.commit()
+    return {"status": "success", "note_id": note_id}
+
+@router.post("/auditor-mark-all-read")
+async def mark_all_as_read_by_auditor(auditor: Optional[str] = None):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        if auditor:
+            await c.execute("""
+                UPDATE auditor_notes 
+                SET auditor_read_response = 1
+                WHERE (auditor_name = ? OR direction = 'TO_AUDITORS')
+                  AND auditor_read_response = 0
+            """, (auditor.strip(),))
+        else:
+            await c.execute("""
+                UPDATE auditor_notes 
+                SET auditor_read_response = 1
+                WHERE auditor_read_response = 0
+            """)
+        await conn.commit()
+    return {"status": "success"}
+
+@router.patch("/{note_id}/read")
+async def mark_note_as_read(note_id: int):
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            UPDATE auditor_notes 
+            SET is_read = 1, read_at = ?
+            WHERE id = ?
+        """, (now_str, note_id))
+        await conn.commit()
+    return {"status": "success", "note_id": note_id, "read_at": now_str}
+
+@router.post("/mark-all-read")
+async def mark_all_notes_as_read(manager: dict = Depends(require_manager)):
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            UPDATE auditor_notes 
+            SET is_read = 1, read_at = ?
+            WHERE is_read = 0
+        """, (now_str,))
+        await conn.commit()
+    return {"status": "success", "read_at": now_str}
+
+# =====================================================================
+# MODUŁ: LIVE CHAT (KOMUNIKATOR AUDYTORZY <-> KIEROWNIK JAKOŚCI)
+# =====================================================================
+class ChatMessageModel(BaseModel):
+    sender_name: str
+    sender_role: Optional[str] = "AUDITOR"
+    line_name: Optional[str] = "Hala Produkcyjna"
+    priority: Optional[str] = "CHAT"  # CHAT, INFO, WARNING, HOLD
+    message: str
+
+@router.get("/chat-messages")
+async def get_chat_messages(limit: int = 100):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            SELECT id, timestamp, auditor_name AS sender_name,
+                   direction AS sender_role, line_name, priority, content AS message, is_read
+            FROM auditor_notes
+            ORDER BY id ASC LIMIT ?
+        """, (limit,))
+        rows = await c.fetchall()
+        return [dict(r) for r in rows]
+
+@router.post("/chat-send")
+async def send_chat_message(payload: ChatMessageModel):
+    if not payload.message or not payload.message.strip():
+        raise HTTPException(status_code=400, detail="Wiadomość nie może być pusta.")
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    direction = "MANAGER" if (payload.sender_role and payload.sender_role.upper() == "MANAGER") else "AUDITOR"
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            INSERT INTO auditor_notes (
+                timestamp, auditor_name, line_name, priority, content, is_read, direction
+            ) VALUES (?, ?, ?, ?, ?, 1, ?)
+        """, (
+            timestamp,
+            payload.sender_name.strip(),
+            payload.line_name.strip() if payload.line_name else "Hala Produkcyjna",
+            payload.priority or "CHAT",
+            payload.message.strip(),
+            direction
+        ))
+        msg_id = c.lastrowid
+        await conn.commit()
+    
+    return {
+        "status": "success",
+        "id": msg_id,
+        "timestamp": timestamp,
+        "sender_name": payload.sender_name,
+        "sender_role": direction,
+        "line_name": payload.line_name or "Hala Produkcyjna",
+        "priority": payload.priority or "CHAT",
+        "message": payload.message.strip()
+    }
+
+@router.post("/chat-clear")
+async def clear_chat_messages(manager: dict = Depends(require_manager)):
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("DELETE FROM auditor_notes WHERE priority = 'CHAT' OR direction IN ('MANAGER', 'AUDITOR')")
+        await conn.commit()
+    return {"status": "success", "message": "Historia Live Chatu wyczyszczona."}
+
+
+
+
+# ==============================================================================
+# PLIK: routers/lines.py
+# ==============================================================================
+
+import sqlite3
+from fastapi import APIRouter, HTTPException, Depends
+from typing import Optional, List
+from pydantic import BaseModel
+from database import get_db
+from security import require_manager, require_auditor_or_manager
+
+router = APIRouter(prefix="/api/lines", tags=["Production Lines"])
+
+class LineCreateModel(BaseModel):
+    name: str
+    code: Optional[str] = ""
+    default_zone: str
+    line_status: Optional[str] = "PRODUKCJA (Zwolniona)"
+    allergen_profile: Optional[str] = "Dedykowana (Bez alergenów)"
+    ccp_equipment: Optional[str] = "Detektor Metali, Sito"
+    notes: Optional[str] = ""
+
+class LineStatusUpdateModel(BaseModel):
+    line_status: str
+    notes: Optional[str] = None
+
+def generate_backend_line_code(name: str) -> str:
+    import re
+    if not name or not name.strip():
+        return "LIN-01"
+    clean = name.strip()
+    tr = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+    clean = clean.translate(tr)
+    num_match = re.search(r'(?:linia\s*|l\s*|#\s*)(\d+)', clean, re.IGNORECASE) or re.search(r'(\d+)', clean)
+    line_num = num_match.group(1) if num_match else None
+    
+    stop_words = {'linia', 'line', 'i', 'w', 'na', 'oraz', 'z', 'do', 'dla', 'nr', 'the', 'and'}
+    words = [w for w in re.sub(r'[^a-zA-Z0-9\s]', ' ', clean).split() if w.lower() not in stop_words]
+    # Filtrujemy również słowa będące samym numerem linii lub l1/l2
+    proc_words = [w for w in words if not w.isdigit() and not (line_num and w.lower() == f"l{line_num}".lower())]
+    keyword = proc_words[0][:5].upper() if proc_words else ""
+    
+    if line_num and keyword:
+        return f"L{line_num}-{keyword}"
+    elif line_num:
+        return f"LIN-{line_num}"
+    elif words:
+        return "LIN-" + "-".join([w[:4].upper() for w in words[:3]])
+    return "LIN-01"
+
+@router.get("")
+@router.get("/")
+async def list_lines():
+    async with get_db() as conn:
+        cursor = await conn.execute("""
+            SELECT id, name, code, default_zone, line_status, allergen_profile, ccp_equipment, last_clearance_date, notes 
+            FROM production_lines 
+            WHERE is_active = 1 
+            ORDER BY name ASC
+        """)
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+@router.get("/{line_id}")
+async def get_line_passport(line_id: int):
+    async with get_db() as conn:
+        cursor = await conn.execute("""
+            SELECT id, name, code, default_zone, line_status, allergen_profile, ccp_equipment, last_clearance_date, notes 
+            FROM production_lines 
+            WHERE id = ? AND is_active = 1
+        """, (line_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Linia nie odnaleziona.")
+        line_data = dict(row)
+        
+        # Pobierz historię ostatnich 5 audytów na tej linii
+        c_audits = await conn.execute("""
+            SELECT id, timestamp, auditor_id, shift, slm_verdict, total_score_pct, record_status 
+            FROM audits 
+            WHERE line = ? 
+            ORDER BY id DESC LIMIT 5
+        """, (line_data["name"],))
+        line_data["recent_audits"] = [dict(r) for r in await c_audits.fetchall()]
+        
+        return line_data
+
+@router.post("")
+@router.post("/")
+async def create_line(payload: LineCreateModel, current_user: dict = Depends(require_manager)):
+    final_code = payload.code.strip() if payload.code and payload.code.strip() else generate_backend_line_code(payload.name)
+    async with get_db() as conn:
+        try:
+            await conn.execute("""
+                INSERT INTO production_lines 
+                (name, code, default_zone, line_status, allergen_profile, ccp_equipment, notes, is_active) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            """, (
+                payload.name.strip(),
+                final_code,
+                payload.default_zone,
+                payload.line_status or "PRODUKCJA (Zwolniona)",
+                payload.allergen_profile or "Dedykowana (Bez alergenów)",
+                payload.ccp_equipment or "Detektor Metali, Sito",
+                payload.notes or ""
+            ))
+            await conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                status_code=400,
+                detail="Linia o podanej nazwie lub kodzie już istnieje w systemie."
+            )
+    return {"status": "success"}
+
+@router.patch("/{line_id}/status")
+async def update_line_status(line_id: int, payload: LineStatusUpdateModel, current_user: dict = Depends(require_auditor_or_manager)):
+    async with get_db() as conn:
+        await conn.execute("""
+            UPDATE production_lines 
+            SET line_status = ?, notes = COALESCE(?, notes) 
+            WHERE id = ?
+        """, (payload.line_status, payload.notes, line_id))
+        await conn.commit()
+    return {"status": "success"}
+
+@router.delete("/{line_id}")
+async def delete_line(line_id: int, current_user: dict = Depends(require_manager)):
+    async with get_db() as conn:
+        await conn.execute("UPDATE production_lines SET is_active = 0 WHERE id = ?", (line_id,))
+        await conn.commit()
+    return {"status": "success"}
+
+@router.put("/{line_id}")
+async def update_line(
+    line_id: int,
+    payload: LineCreateModel,
+    current_user: dict = Depends(require_manager)
+):
+    final_code = payload.code.strip() if payload.code and payload.code.strip() else generate_backend_line_code(payload.name)
+    async with get_db() as conn:
+        try:
+            await conn.execute("""
+                UPDATE production_lines 
+                SET name = ?, code = ?, default_zone = ?, line_status = ?, 
+                    allergen_profile = ?, ccp_equipment = ?, notes = ?
+                WHERE id = ?
+            """, (
+                payload.name.strip(),
+                final_code,
+                payload.default_zone,
+                payload.line_status or "PRODUKCJA (Zwolniona)",
+                payload.allergen_profile or "Dedykowana (Bez alergenów)",
+                payload.ccp_equipment or "Detektor Metali, Sito",
+                payload.notes or "",
+                line_id
+            ))
+            await conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                status_code=400,
+                detail="Linia o podanej nazwie lub kodzie już istnieje w systemie."
+            )
+    return {"status": "success", "message": "Linia została pomyślnie zaktualizowana."}
+
+
+# ==============================================================================
+# PLIK: routers/reports.py
+# ==============================================================================
+
+import os
+import io
+import csv
+from collections import Counter
+from fastapi import APIRouter, Response
+from fastapi.responses import FileResponse
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.chart import BarChart, PieChart, Reference
+from openpyxl.worksheet.table import Table, TableStyleInfo
+
+from database import get_db
+
+router = APIRouter(tags=["Reports"])
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+@router.get("/api/reports/kpi")
+async def get_kpi():
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT COUNT(*) FROM audits")
+        total = (await c.fetchone())[0]
+
+        await c.execute("SELECT COUNT(*) FROM audits WHERE slm_verdict = 'NOK'")
+        incidents = (await c.fetchone())[0]
+
+        compliant = total - incidents
+        rate = round((compliant / total * 100), 1) if total > 0 else 100.0
+
+        await c.execute("SELECT line, timestamp, slm_analysis FROM audits ORDER BY id DESC LIMIT 10")
+        recent = [{"line": r[0], "timestamp": r[1], "slm_analysis": r[2]} for r in await c.fetchall()]
+    
+    return {
+        "total_audits": total,
+        "compliance_rate": rate,
+        "incidents_count": incidents,
+        "recent_audits": recent
+    }
+
+@router.get("/api/audits/export/excel")
+async def export_excel():
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT * FROM audits ORDER BY id DESC")
+        rows = [dict(r) for r in await c.fetchall()]
+
+    wb = openpyxl.Workbook()
+    
+    # --- ARKUSZ 1: DASHBOARD  ---
+    ws_dash = wb.active
+    ws_dash.title = "Dashboard Admin"
+    ws_dash.sheet_view.showGridLines = False
+    
+    # Nagłówek Dashboardu
+    ws_dash.merge_cells('A1:J2')
+    title_cell = ws_dash['A1']
+    title_cell.value = "QUALITY AUDIT ENTERPRISE - DASHBOARD Admin IFS FOOD v8"
+    title_cell.font = Font(name="Calibri", size=18, bold=True, color="FFFFFF")
+    title_cell.fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    
+    # Obliczenia 
+    total_audits = len(rows)
+    nok_audits = sum(1 for r in rows if r.get("slm_verdict", "") == "NOK")
+    ok_audits = total_audits - nok_audits
+    compliance = round((ok_audits / total_audits * 100), 1) if total_audits > 0 else 100.0
+    
+    kpi_data = [
+        ("Suma przeprowadzonych audytów:", total_audits),
+        ("Wskaźnik zgodności IFS (Compliance):", f"{compliance}%"),
+        ("Audyty w pełni zgodne (OK):", ok_audits),
+        ("Złamania KO / Niezgodności (NOK):", nok_audits)
+    ]
+    
+    for idx, (label, val) in enumerate(kpi_data, start=4):
+        ws_dash.merge_cells(f'B{idx}:D{idx}')
+        ws_dash[f'B{idx}'] = label
+        ws_dash[f'B{idx}'].font = Font(size=12, bold=True, color="334155")
+        ws_dash[f'B{idx}'].alignment = Alignment(horizontal="right")
+        
+        ws_dash[f'E{idx}'] = val
+        ws_dash[f'E{idx}'].font = Font(size=14, bold=True, color="16A34A" if idx != 7 else "DC2626")
+        ws_dash[f'E{idx}'].alignment = Alignment(horizontal="left")
+
+    lines_counter = Counter([r.get("line", "Nieznana") for r in rows])
+    
+    ws_dash['A30'] = "Linia"
+    ws_dash['B30'] = "Liczba Audytów"
+    row_idx = 31
+    for line, count in lines_counter.items():
+        ws_dash[f'A{row_idx}'] = line
+        ws_dash[f'B{row_idx}'] = count
+        row_idx += 1
+        
+    ws_dash['D30'] = "Status"
+    ws_dash['E30'] = "Ilość"
+    ws_dash['D31'] = "ZGODNE (OK)"
+    ws_dash['E31'] = ok_audits
+    ws_dash['D32'] = "NIEZGODNE (NOK)"
+    ws_dash['E32'] = nok_audits
+
+    # Wykres Słupkowy
+    if lines_counter:
+        bar_chart = BarChart()
+        bar_chart.type = "col"
+        bar_chart.style = 10
+        bar_chart.title = "Liczba Inspekcji na Linie"
+        bar_chart.width = 14
+        bar_chart.height = 7
+        data1 = Reference(ws_dash, min_col=2, min_row=30, max_row=row_idx-1)
+        cats1 = Reference(ws_dash, min_col=1, min_row=31, max_row=row_idx-1)
+        bar_chart.add_data(data1, titles_from_data=True)
+        bar_chart.set_categories(cats1)
+        ws_dash.add_chart(bar_chart, "B10")
+    
+    # Wykres Kołowy
+    if total_audits > 0:
+        pie_chart = PieChart()
+        pie_chart.title = "Podział Zgodności"
+        pie_chart.width = 10
+        pie_chart.height = 7
+        labels = Reference(ws_dash, min_col=4, min_row=31, max_row=32)
+        data2 = Reference(ws_dash, min_col=5, min_row=30, max_row=32)
+        pie_chart.add_data(data2, titles_from_data=True)
+        pie_chart.set_categories(labels)
+        ws_dash.add_chart(pie_chart, "G10")
+
+    # --- ARKUSZ 2: SZCZEGÓŁOWE DANE ---
+    ws_data = wb.create_sheet(title="Rejestr Danych Audytowych")
+    
+    headers = [
+        "ID", "Data i Czas", "Audytor", "Linia", "Zmiana", "Strefa", "Zdrowie PR15",
+        "CCP1 Fe", "CCP1 Non-Fe", "CCP1 SS", "Ramię Odrzutu", "Kosz Zamknięty", 
+        "Czystość (GMP)", "Orzeczenie AI", "Status Zapisu"
+    ]
+    ws_data.append(headers)
+    
+    for r in rows:
+        ws_data.append([
+            r.get("id", ""), r.get("timestamp", ""), r.get("auditor_id", ""), r.get("line", ""), 
+            r.get("shift", ""), r.get("zone", ""), r.get("health_ok", ""), r.get("ccp1_fe_ok", ""), 
+            r.get("ccp1_nonfe_ok", ""), r.get("ccp1_ss_ok", ""), r.get("ccp1_reject_ok", ""), 
+            r.get("ccp1_bin_locked", ""), r.get("gmp_cleanliness_ok", ""), r.get("slm_analysis", ""), 
+            r.get("record_status", "ZABLOKOWANY")
+        ])
+        
+    if total_audits > 0:
+        tab = Table(displayName="TabelaAudytow", ref=f"A1:O{total_audits+1}")
+        style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False,
+                               showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+        tab.tableStyleInfo = style
+        ws_data.add_table(tab)
+    
+    for col_idx in range(1, len(headers)+1):
+        ws_data.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = 22
+
+    out_file = os.path.join(BASE_DIR, "Raport_Dashboard_IFS_Enterprise.xlsx")
+    wb.save(out_file)
+    
+    return FileResponse(
+        out_file, 
+        filename="Raport_Dashboard_IFS_Enterprise.xlsx", 
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+@router.get("/api/audits/export/powerbi/csv")
+async def export_powerbi_csv():
+    """Generuje zoptymalizowany pod kątem Microsoft Power BI plik CSV (kodowanie UTF-8-SIG z BOM)"""
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            SELECT id, timestamp, auditor_id, line, shift, zone,
+                   health_ok, dispense_no, line_status,
+                   ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked,
+                   ccp2_magnet_ok, ccp3_sieve_ok,
+                   gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok,
+                   bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, bhp_evac_ppoz_ok, bhp_status,
+                   slm_verdict, risk_level, record_status, compliance_verdict,
+                   total_score_pct, audit_score, ko_failed, notes
+            FROM audits ORDER BY id DESC
+        """)
+        rows = [dict(r) for r in await c.fetchall()]
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    
+    headers = [
+        "Audit_ID", "Timestamp", "Data", "Godzina", "Rok", "Miesiac", "Kwartal",
+        "Audytor", "Linia_Produkcyjna", "Zmiana", "Strefa", "Status_Linii",
+        "Werdykt_SLM", "Poziom_Ryzyka", "Status_Decyzji", "Zgodnosc_Standardu",
+        "CCP_Zgodny", "GMP_Zgodny", "BHP_Zgodny", "Blokada_KO",
+        "Wynik_Punktowy", "Uwagi"
+    ]
+    writer.writerow(headers)
+
+    for r in rows:
+        ts = r.get("timestamp") or ""
+        date_part = ts.split(" ")[0] if " " in ts else ts
+        time_part = ts.split(" ")[1] if " " in ts else ""
+        year_part = date_part.split("-")[0] if "-" in date_part else ""
+        month_part = date_part.split("-")[1] if "-" in date_part else ""
+        
+        q_part = ""
+        if month_part.isdigit():
+            m_int = int(month_part)
+            q_part = f"Q{(m_int - 1) // 3 + 1}"
+
+        ccp_ok = "TAK" if all(r.get(k) in ("ZGODNY", "OK") for k in ("ccp1_fe_ok", "ccp1_nonfe_ok", "ccp1_ss_ok", "ccp1_reject_ok", "ccp2_magnet_ok", "ccp3_sieve_ok")) else "NIE"
+        gmp_ok = "TAK" if r.get("gmp_cleanliness_ok") in ("ZGODNY", "OK") else "NIE"
+        bhp_ok = "TAK" if r.get("bhp_status") in ("BRAK ZGŁOSZEŃ", "ZGODNY", "OK") else "NIE"
+        ko_flag = "TAK" if r.get("ko_failed") == 1 else "NIE"
+
+        writer.writerow([
+            r.get("id"),
+            ts,
+            date_part,
+            time_part,
+            year_part,
+            month_part,
+            q_part,
+            r.get("auditor_id") or "Nieprzypisany",
+            r.get("line") or "Nieznana",
+            r.get("shift") or "1",
+            r.get("zone") or "Standard",
+            r.get("line_status") or "PRODUKCJA",
+            r.get("slm_verdict") or "OK",
+            r.get("risk_level") or "NISKIE",
+            r.get("compliance_verdict") or "ZATWIERDZONY",
+            r.get("record_status") or "ZABLOKOWANY",
+            ccp_ok,
+            gmp_ok,
+            bhp_ok,
+            ko_flag,
+            r.get("total_score_pct") or 100,
+            (r.get("notes") or "").replace("\n", " ").replace("\r", "")
+        ])
+
+    csv_data = output.getvalue()
+    encoded_bytes = csv_data.encode("utf-8-sig")
+
+    return Response(
+        content=encoded_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=Raport_Audyty_IFS_PowerBI.csv",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
+@router.get("/api/audits/export/powerbi/feed")
+async def export_powerbi_feed():
+    """Zwraca tabelaryczny JSON zoptymalizowany pod kątem Power BI Web Connector"""
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("""
+            SELECT id, timestamp, auditor_id, line, shift, zone,
+                   slm_verdict, risk_level, record_status, compliance_verdict,
+                   total_score_pct, ko_failed, notes
+            FROM audits ORDER BY id DESC
+        """)
+        rows = [dict(r) for r in await c.fetchall()]
+
+    for r in rows:
+        ts = r.get("timestamp") or ""
+        date_part = ts.split(" ")[0] if " " in ts else ts
+        r["date"] = date_part
+        r["year"] = date_part.split("-")[0] if "-" in date_part else ""
+        r["month"] = date_part.split("-")[1] if "-" in date_part else ""
+
+    return {"value": rows}
+
+
+
+# ==============================================================================
+# PLIK: routers/checklist.py
+# ==============================================================================
+
+from fastapi import APIRouter, HTTPException
+from typing import Dict, List, Any
+from database import get_db
+
+router = APIRouter(tags=["Checklists"])
+
+CHECKLIST_TEMPLATES = {
+    "HACCP": [
+        {"id": 101, "is_ko": False, "clause": "1.1 Analiza", "question": "Aktualność Planu HACCP: Schemat technologiczny na linii (flow diagram) odzwierciedla faktyczny przebieg procesu."},
+        {"id": 102, "is_ko": False, "clause": "1.2 Świadomość", "question": "Operatorzy znają główne zagrożenia (biologiczne, chemiczne, fizyczne, alergeny) dla ich stanowiska."},
+        {"id": 103, "is_ko": False, "clause": "2.1 Limity CCP", "question": "Wartości docelowe i limity krytyczne są jasno zdefiniowane i widoczne przy stanowisku CCP."},
+        {"id": 104, "is_ko": False, "clause": "2.2 Walidacja", "question": "Urządzenia kontrolno-pomiarowe używane w CCP posiadają ważne świadectwa kalibracji/wzorcowania."},
+        {"id": 105, "is_ko": False, "clause": "3.1 Logi", "question": "Rejestracja wyników: Arkusze CCP są wypełniane na bieżąco, w czasie rzeczywistym, a nie wstecz."},
+        {"id": 106, "is_ko": True, "clause": "3.2 Częstotliwość (KO)", "question": "Częstotliwość zapisów jest w 100% zgodna z Planem HACCP (np. test detektora co 1h)."},
+        {"id": 107, "is_ko": False, "clause": "3.3 Autoryzacja", "question": "Podpisy: Dokumenty z CCP są czytelnie podpisane przez wyznaczonego operatora."},
+        {"id": 108, "is_ko": False, "clause": "4.1 Proc. Awaryjne", "question": "Działania korygujące: Operatorzy wiedzą, co zrobić przy przekroczeniu limitu (zatrzymanie linii)."},
+        {"id": 109, "is_ko": True, "clause": "4.2 Hold Lot (KO)", "question": "Status produktu: Wyroby niezgodne z CCP są natychmiast fizycznie i systemowo izolowane (Hold/Zablokowane)."},
+        {"id": 110, "is_ko": False, "clause": "4.3 Raportowanie", "question": "Każde odchylenie na CCP jest w pełni udokumentowane w Raporcie Niezgodności."}
+    ],
+    "GMP": [
+        {"id": 201, "is_ko": False, "clause": "1.1 Odzież", "question": "Personel: Pracownicy noszą czystą odzież. Włosy osłonięte. Brak biżuterii, zegarków, sztucznych paznokci."},
+        {"id": 202, "is_ko": False, "clause": "1.2 Higiena rąk", "question": "Stacje higieniczne (śluzy) są w pełni sprawne, wyposażone w mydło i środek dezynfekujący."},
+        {"id": 203, "is_ko": True, "clause": "1.3 Zdrowie (KO)", "question": "Stan zdrowia: Przestrzeganie procedur zgłaszania infekcji. Skaleczenia zaklejone niebieskimi plastrami."},
+        {"id": 204, "is_ko": False, "clause": "2.1 Infrastruktura", "question": "Stan techniczny: Posadzki, ściany i sufity nad linią szczelne, nienasiąkliwe, wolne od pęknięć/odprysków."},
+        {"id": 205, "is_ko": True, "clause": "2.2 Zabezpieczenia (KO)", "question": "Oprawy oświetleniowe i elementy szklane nad otwartym procesem są zabezpieczone przed stłuczeniem."},
+        {"id": 206, "is_ko": False, "clause": "2.3 Klimat/Kurz", "question": "Wentylacja: Odpowiednia temperatura/wilgotność zachowane. Kratki wentylacyjne wolne od kurzu."},
+        {"id": 207, "is_ko": False, "clause": "3.1 Wycieki", "question": "Maszyny: Mieszadła, formy i orurowanie wolne od wycieków, korozji, uszkodzeń i taśm (trytytek)."},
+        {"id": 208, "is_ko": False, "clause": "3.2 Czystość/CIP", "question": "Czyszczenie: Instalacja jest czysta, weryfikacja CIP udokumentowana. Brak zalegającej starej masy."},
+        {"id": 209, "is_ko": True, "clause": "3.3 Detekcja (KO)", "question": "Ciała obce: Detektory, X-Ray, magnesy i sita włączone, sprawne i regularnie testowane wzorcami."},
+        {"id": 210, "is_ko": False, "clause": "3.4 Kalibracja", "question": "Nadzór nad parametrami: Czujniki temperatury w tankach i wagi mają świadectwa wzorcowania."}
+    ],
+    "GHP": [
+        {"id": 301, "is_ko": True, "clause": "1.1 Higiena Rąk (KO)", "question": "Procedura mycia i dezynfekcji rąk: Personel poprawnie realizuje procedurę przed wejściem do strefy High Care (brak biżuterii, zegarków, sztucznych paznokci)."},
+        {"id": 302, "is_ko": False, "clause": "1.2 Odzież Osobista", "question": "Czystość i kompletność odzieży: Fartuchy, czepki, osłony brody i obuwie robocze są czyste, nieuszkodzone i w 100% zakrywają włosy oraz odzież prywatną."},
+        {"id": 303, "is_ko": True, "clause": "1.3 Stan Zdrowia (KO)", "question": "Kontrola stanu zdrowia i zranień (PR15.01): Brak osób z objawami infekcji pokarmowych/kataralnych; wszelkie skaleczenia zabezpieczone wykrywalnymi, niebieskimi plastrami z paskiem metalowym."},
+        {"id": 304, "is_ko": False, "clause": "2.1 Śluzy Higieniczne", "question": "Infrastruktura śluz wejściowych: Dozowniki mydła, środka do dezynfekcji rąk oraz maty dezynfekujące/myjki do obuwia są w pełni zaopatrzone i sprawne."},
+        {"id": 305, "is_ko": False, "clause": "2.2 Higiena Procesu", "question": "Zasady zachowania czystości na stanowisku: Brak spożywania posiłków, napojów, żucia gumy oraz palenia tytoniu w strefie produkcyjnej i magazynowej."},
+        {"id": 306, "is_ko": False, "clause": "3.1 Czystość Środowiska", "question": "Porządek wokół stanowiska: Brak zalegających odpadów produkcyjnych, opakowań i surowców poza wyznaczonymi, oznakowanymi pojemnikami (zamykanymi)."},
+        {"id": 307, "is_ko": False, "clause": "3.2 Sanitariat / Sprzęt", "question": "Narzędzia i sprzęt myjący: Szczotki, węże i ściągaczki są czyste, zidentyfikowane kolorystycznie (kod barwny stref) i przechowywane w sposób uniemożliwiający wtórne zanieczyszczenie."},
+        {"id": 308, "is_ko": False, "clause": "4.1 Szkodniki", "question": "Zabezpieczenie przed szkodnikami: Okna i drzwi zewnętrzne są szczelnie zamknięte lub posiadają sprawne kurtyny powietrzne/moskitiery; stacje deratyzacyjne nienaruszone."},
+        {"id": 309, "is_ko": False, "clause": "4.2 Chemia Myjąca", "question": "Nadzór nad środkami chemicznymi: Środki myjące i dezynfekujące używane na produkcji są zatwierdzone do kontaktu z żywnością, oznakowane i bezpiecznie przechowywane."}
+    ]
+}
+
+@router.get("/api/checklist-template/{audit_type}")
+@router.get("/api/checklist/{audit_type}")
+@router.get("/api/checklists/template/{audit_type}")
+@router.get("/api/checklists/{audit_type}")
+def get_checklist_template(audit_type: str):
+    return CHECKLIST_TEMPLATES.get(audit_type.upper().strip(), CHECKLIST_TEMPLATES["HACCP"])
+
+
+
+# ==============================================================================
+# PLIK: routers/users.py
+# ==============================================================================
+
+import json
+import aiosqlite
+from fastapi import APIRouter, HTTPException, Query, Depends, Request, status
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
+from database import get_db
+from security import (
+    hash_pin,
+    verify_pin,
+    get_current_user,
+    require_manager,
+    log_security_event
+)
+
+router = APIRouter(tags=["Users"])
+
+class UserCreateModel(BaseModel):
+    pin: str
+    full_name: str
+    role: str = "AUDITOR"
+    qualifications: List[str] = ["HACCP", "GMP", "GHP"]
+    notes: Optional[str] = ""
+
+class UserUpdateModel(BaseModel):
+    pin: Optional[str] = None
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    qualifications: Optional[List[str]] = None
+    zones: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+@router.get("/users")
+async def list_users(current_user: dict = Depends(get_current_user)):
+    """Pobiera listę użytkowników. Wymaga uwierzytelnienia (ISO 27001 A.5.15)."""
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, full_name, role, qualifications, notes FROM users WHERE is_active = 1")
+        rows = await c.fetchall()
+    out = []
+    for r in rows:
+        try:
+            quals = json.loads(r["qualifications"]) if r["qualifications"] else []
+        except (json.JSONDecodeError, TypeError):
+            quals = ["HACCP", "GMP", "GHP"]
+
+        out.append({
+            "id": r["id"], 
+            "full_name": r["full_name"],
+            "role": r["role"], 
+            "qualifications": quals,
+            "notes": r["notes"] or ""
+        })
+    return out
+
+@router.post("/users")
+async def add_user(
+    payload: UserCreateModel,
+    request: Request,
+    manager: dict = Depends(require_manager)
+):
+    """Tworzy nowego użytkownika z kryptograficznie solonym PIN (ISO 27001 A.8.24)."""
+    clean_pin = payload.pin.strip()
+    clean_name = payload.full_name.strip()
+    if len(clean_pin) < 3:
+        raise HTTPException(status_code=400, detail="Kod PIN musi zawierać co najmniej 3 znaki")
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Wprowadź imię i nazwisko użytkownika")
+
+    # Haszowanie PIN przed zapisem do bazy
+    hashed_pin = hash_pin(clean_pin)
+
+    async with get_db() as conn:
+        c = await conn.cursor()
+        # Sprawdź czy PIN nie koliduje z istniejącym użytkownikiem
+        await c.execute("SELECT id, pin FROM users WHERE is_active = 1")
+        all_users = await c.fetchall()
+        for u in all_users:
+            if verify_pin(clean_pin, u["pin"]):
+                raise HTTPException(status_code=400, detail="Ten kod PIN jest już zajęty przez innego użytkownika")
+
+        try:
+            await c.execute("""
+                INSERT INTO users (pin, full_name, role, qualifications, notes, is_active)
+                VALUES (?, ?, ?, ?, ?, 1)
+            """, (hashed_pin, clean_name, payload.role, json.dumps(payload.qualifications), payload.notes or ""))
+            new_id = c.lastrowid
+            await conn.commit()
+        except aiosqlite.IntegrityError:
+            raise HTTPException(status_code=400, detail="Błąd zapisu: użytkownik z tymi danymi już istnieje")
+        
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    await log_security_event(
+        event_type="USER_CREATED",
+        user_id=manager["uid"],
+        user_name=manager["sub"],
+        ip_address=client_ip,
+        severity="INFO",
+        details=f"Utworzono konto użytkownika: {clean_name} (Rola: {payload.role})"
+    )
+    return {"status": "OK", "id": new_id}
+
+@router.put("/users/{user_id}")
+async def update_user(
+    user_id: int,
+    payload: UserUpdateModel,
+    request: Request,
+    manager: dict = Depends(require_manager)
+):
+    """Aktualizuje profil pracownika. Wymaga uprawnień Managera (ISO 27001 A.5.18)."""
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, pin, full_name, role, qualifications, notes FROM users WHERE id = ?", (user_id,))
+        user = await c.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="Użytkownik nie istnieje")
+        
+        # Obsługa zmiany PIN z haszowaniem
+        if payload.pin and payload.pin.strip():
+            new_pin_clean = payload.pin.strip()
+            if len(new_pin_clean) < 3:
+                raise HTTPException(status_code=400, detail="Kod PIN musi zawierać co najmniej 3 znaki")
+            
+            # Sprawdź unikalność
+            await c.execute("SELECT id, pin FROM users WHERE id != ? AND is_active = 1", (user_id,))
+            others = await c.fetchall()
+            for o in others:
+                if verify_pin(new_pin_clean, o["pin"]):
+                    raise HTTPException(status_code=400, detail="Ten kod PIN jest już przypisany do innego użytkownika")
+            
+            stored_pin_val = hash_pin(new_pin_clean)
+        else:
+            stored_pin_val = user["pin"]
+            
+        new_name = payload.full_name.strip() if payload.full_name else user["full_name"]
+        new_role = payload.role if payload.role else user["role"]
+        
+        if payload.qualifications is not None:
+            new_quals = json.dumps(payload.qualifications)
+        else:
+            new_quals = user["qualifications"]
+            
+        new_notes = payload.notes if payload.notes is not None else user["notes"]
+        
+        try:
+            await c.execute("""
+                UPDATE users 
+                SET pin = ?, full_name = ?, role = ?, qualifications = ?, notes = ?
+                WHERE id = ?
+            """, (stored_pin_val, new_name, new_role, new_quals, new_notes, user_id))
+            
+            old_name = user["full_name"].strip() if user["full_name"] else ""
+            if old_name and new_name and old_name != new_name:
+                try:
+                    await c.execute("UPDATE audit_schedules SET lead_auditor = ? WHERE lead_auditor = ?", (new_name, old_name))
+                except Exception:
+                    pass
+                try:
+                    await c.execute("UPDATE audits SET auditor_id = ? WHERE auditor_id = ?", (new_name, old_name))
+                except Exception:
+                    pass
+                    
+            await conn.commit()
+        except aiosqlite.IntegrityError:
+            raise HTTPException(status_code=400, detail="Błąd integralności danych użytkownika")
+            
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    await log_security_event(
+        event_type="USER_UPDATED",
+        user_id=manager["uid"],
+        user_name=manager["sub"],
+        ip_address=client_ip,
+        severity="INFO",
+        details=f"Zaktualizowano profil użytkownika ID={user_id} ({new_name})"
+    )
+    return {"status": "OK", "message": "Zaktualizowano profil audytora"}
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    request: Request,
+    manager: dict = Depends(require_manager)
+):
+    """Dezaktywuje konto użytkownika (ISO 27001 A.5.18)."""
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id, full_name, pin FROM users WHERE id = ?", (user_id,))
+        target_user = await c.fetchone()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Użytkownik nie znaleziony")
+
+        # Zabezpieczenie konta głównego Managera (ID=1)
+        if target_user["id"] == 1:
+            raise HTTPException(status_code=400, detail="Nie można usunąć głównego konta Administratora Jakości")
+
+        await c.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+        await conn.commit()
+    
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    await log_security_event(
+        event_type="USER_DELETED",
+        user_id=manager["uid"],
+        user_name=manager["sub"],
+        ip_address=client_ip,
+        severity="WARN",
+        details=f"Dezaktywowano konto użytkownika ID={user_id} ({target_user['full_name']})"
+    )
+    return {"status": "OK"}
+
+
+
+# ==============================================================================
+# PLIK: routers/guidelines.py
+# ==============================================================================
+
+import sqlite3
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+
+from database import get_db
+from security import require_manager
+
+router = APIRouter(tags=["Checklist Guidelines"])
+
+class GuidelineUpdate(BaseModel):
+    title: Optional[str] = None
+    question: Optional[str] = None
+    ifs_clause: Optional[str] = None
+    criteria: Optional[str] = None
+    correct_action: Optional[str] = None
+    deviation_action: Optional[str] = None
+    risk_level: Optional[str] = None
+
+@router.get("/api/checklist/guidelines")
+async def get_checklist_guidelines():
+    async with get_db() as conn:
+        cur = await conn.cursor()
+        await cur.execute("""
+            SELECT id, category, category_label, title, question, 
+                   ifs_clause, criteria, correct_action, deviation_action, 
+                   risk_level, updated_at
+            FROM checklist_guidelines
+            ORDER BY 
+                CASE category 
+                    WHEN 'CCP' THEN 1 
+                    WHEN 'GMP' THEN 2 
+                    WHEN 'FOREIGN_MATTER' THEN 3 
+                    ELSE 4 
+                END, id
+        """)
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+@router.put("/api/checklist/guidelines/{guideline_id}")
+async def update_checklist_guideline(
+    guideline_id: str,
+    data: GuidelineUpdate,
+    manager: dict = Depends(require_manager)
+):
+    ALLOWED_GUIDELINE_FIELDS = {
+        "title", "question", "ifs_clause", "criteria",
+        "correct_action", "deviation_action", "risk_level"
+    }
+    
+    async with get_db() as conn:
+        c = await conn.cursor()
+        await c.execute("SELECT id FROM checklist_guidelines WHERE id = ?", (guideline_id,))
+        if not await c.fetchone():
+            raise HTTPException(status_code=404, detail="Wytyczna nie istnieje")
+
+        fields = []
+        values = []
+        for k, v in data.dict(exclude_unset=True).items():
+            if k in ALLOWED_GUIDELINE_FIELDS:
+                fields.append(f"{k} = ?")
+                values.append(v)
+
+        if not fields:
+            return {"status": "no_changes"}
+
+        fields.append("updated_at = datetime('now', 'localtime')")
+        values.append(guideline_id)
+        query = f"UPDATE checklist_guidelines SET {', '.join(fields)} WHERE id = ?"
+        await c.execute(query, tuple(values))
+        await conn.commit()
+        
+    return {"status": "ok", "updated_id": guideline_id}
+
+
+# ==============================================================================
+# PLIK: routers/agent.py
+# ==============================================================================
+
+from fastapi import APIRouter, HTTPException
+from typing import Optional, Dict, Any, List
+from pydantic import BaseModel
+from database import get_db
+from agent import analyze_audit_risk, run_agent_turn, generate_pre_audit_briefing
+
+router = APIRouter(tags=["AI Agent & SLM"])
+
+class AgentChatModel(BaseModel):
+    message: str
+    user_name: str
+    user_role: str
+    line: Optional[str] = None
+    history: Optional[List[Dict[str, Any]]] = []
+
+@router.post("/api/agent/chat")
+async def agent_chat(payload: AgentChatModel):
+    target_line = payload.line or "Cały Zakład"
+    reply = await run_agent_turn(
+        audit_payload={
+            "line": target_line, 
+            "notes": payload.message, 
+            "user": payload.user_name, 
+            "role": payload.user_role,
+            "history": payload.history or []
+        },
+        line_name=target_line,
+        chat_history=payload.history or []
+    )
+    return {"reply": reply}
+
+@router.get("/api/agent/briefing/{line_name}")
+async def agent_line_briefing(line_name: str):
+    briefing = await generate_pre_audit_briefing(line_name)
+    return briefing
+
+@router.post("/api/slm-analyze")
+async def slm_analyze(payload: dict):
+    res = await analyze_audit_risk(payload)
+    return res
+
+
+# ==============================================================================
+# PLIK: tests/test_security_audit_fixes.py
+# ==============================================================================
+
+import io
+import pytest
+from datetime import datetime
+
+def get_manager_token(client):
+    res = client.post("/api/auth/login", json={"pin": "9999", "expected_role": "MANAGER"})
+    assert res.status_code == 200
+    return res.json()["access_token"]
+
+def get_auditor_token(client):
+    res = client.post("/api/auth/login", json={"pin": "0000", "expected_role": "AUDITOR"})
+    assert res.status_code == 200
+    return res.json()["access_token"]
+
+def test_large_upload_rejected(client):
+    """Przesłanie pliku przekraczającego 15MB musi zostać odrzucone kodem 413."""
+    aud_token = get_auditor_token(client)
+    headers = {"Authorization": f"Bearer {aud_token}"}
+    
+    # Symulacja pliku 16MB
+    large_content = b"0" * (16 * 1024 * 1024)
+    files = {
+        "photo": ("test_huge.jpg", io.BytesIO(large_content), "image/jpeg")
+    }
+    data = {
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "Test upload limit"
+    }
+    res = client.post("/api/audit", data=data, files=files, headers=headers)
+    assert res.status_code in [400, 413]
+    assert "15 MB" in res.json().get("detail", "")
+
+def test_patch_status_manager_only(client):
+    """Zmiana statusu audytu jest dozwolona wyłącznie dla roli MANAGER."""
+    # 1. Tworzenie audytu testowego
+    audit_res = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "ccp1_fe_ok": "ZGODNY",
+        "notes": "Test status RBAC"
+    })
+    assert audit_res.status_code == 200
+    audit_id = audit_res.json()["audit_id"]
+
+    aud_token = get_auditor_token(client)
+    mgr_token = get_manager_token(client)
+
+    # 2. Próba zmiany przez audytora -> 403 Forbidden
+    aud_res = client.patch(
+        f"/api/audits/{audit_id}/status",
+        json={"status": "ZATWIERDZONY", "reason": "Proba zatwierdzenia przez audytora"},
+        headers={"Authorization": f"Bearer {aud_token}"}
+    )
+    assert aud_res.status_code == 403
+
+    # 3. Zmiana przez Managera -> 200 OK
+    mgr_res = client.patch(
+        f"/api/audits/{audit_id}/status",
+        json={"status": "ZATWIERDZONY", "reason": "Zatwierdzenie przez Managera Jakości"},
+        headers={"Authorization": f"Bearer {mgr_token}"}
+    )
+    assert mgr_res.status_code == 200
+    assert mgr_res.json()["status"] == "OK"
+
+def test_delete_audit_manager_only(client):
+    """Usunięcie audytu jest dozwolone wyłącznie dla roli MANAGER."""
+    audit_res = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "Test delete RBAC"
+    })
+    assert audit_res.status_code == 200
+    audit_id = audit_res.json()["audit_id"]
+
+    aud_token = get_auditor_token(client)
+    mgr_token = get_manager_token(client)
+
+    # Audytor próbuje usunąć audyt -> 403
+    aud_res = client.delete(f"/api/audits/{audit_id}", headers={"Authorization": f"Bearer {aud_token}"})
+    assert aud_res.status_code == 403
+
+    # Manager usuwa audyt -> 200
+    mgr_res = client.delete(f"/api/audits/{audit_id}", headers={"Authorization": f"Bearer {mgr_token}"})
+    assert mgr_res.status_code == 200
+    assert mgr_res.json()["status"] == "OK"
+
+def test_schedule_clear_endpoints_manager_only(client):
+    """Czyszczenie harmonogramu (/clear-month i /clear-all) wymaga uprawnień Managera."""
+    aud_token = get_auditor_token(client)
+    mgr_token = get_manager_token(client)
+
+    # 1. Audytor bez uprawnień managera -> 403
+    res_m = client.post("/api/schedule/clear-month", json={"month": 1, "year": 2026}, headers={"Authorization": f"Bearer {aud_token}"})
+    assert res_m.status_code == 403
+
+    res_a = client.post("/api/schedule/clear-all", headers={"Authorization": f"Bearer {aud_token}"})
+    assert res_a.status_code == 403
+
+    # 2. Manager z uprawnieniami -> 200
+    res_mgr_m = client.post("/api/schedule/clear-month", json={"month": 1, "year": 2026}, headers={"Authorization": f"Bearer {mgr_token}"})
+    assert res_mgr_m.status_code == 200
+    assert res_mgr_m.json()["status"] == "success"
+
+def test_schedule_idor_protection(client):
+    """Audytor nie może modyfikować zadania innego audytora (ochrona IDOR)."""
+    mgr_token = get_manager_token(client)
+    aud_token = get_auditor_token(client)
+
+    # Tworzymy zadanie przypisane do kogoś innego (np. Jan Kowalski)
+    c_res = client.post("/api/schedule", json={
+        "scheduled_date": "2026-11-20",
+        "audit_type": "HACCP",
+        "line": "Linia L1",
+        "lead_auditor": "Jan Kowalski",
+        "backup_auditor": "Anna Nowak",
+        "notes": "Zadanie Jana"
+    }, headers={"Authorization": f"Bearer {mgr_token}"})
+    assert c_res.status_code == 200
+
+    # Pobieramy ID
+    schedules = client.get("/api/schedule").json()
+    jan_sched = next(s for s in schedules if s["lead_auditor"] == "Jan Kowalski")
+    sched_id = jan_sched["id"]
+
+    # Audytor Grzegorz próbuje zmienić wpis Jana Kowalskiego -> 403
+    put_res = client.put(f"/api/schedule/{sched_id}", json={
+        "scheduled_date": "2026-11-21",
+        "audit_type": "HACCP",
+        "line": "Linia L1",
+        "lead_auditor": "Jan Kowalski",
+        "backup_auditor": "Anna Nowak",
+        "status": "PLANOWANY",
+        "notes": "Złośliwa próba edycji"
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert put_res.status_code == 403
+    assert "innego audytora" in put_res.json()["detail"]
+
+    # Próba przełożenia terminu (reschedule) -> 403
+    resched_res = client.put(f"/api/schedule/{sched_id}/reschedule", json={
+        "new_date": "2026-11-25"
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert resched_res.status_code == 403
+
+    # Manager bez problemu może edytować zadanie
+    mgr_put_res = client.put(f"/api/schedule/{sched_id}", json={
+        "scheduled_date": "2026-11-22",
+        "audit_type": "HACCP",
+        "line": "Linia L1",
+        "lead_auditor": "Jan Kowalski",
+        "backup_auditor": "Anna Nowak",
+        "status": "PLANOWANY",
+        "notes": "Edycja przez managera"
+    }, headers={"Authorization": f"Bearer {mgr_token}"})
+    assert mgr_put_res.status_code == 200
+
+def test_powerbi_csv_export(client):
+    """Eksport PowerBI CSV poprawnie interpretuje statusy ZGODNY i OK."""
+    res = client.get("/api/audits/export/powerbi/csv")
+    assert res.status_code == 200
+    assert "text/csv" in res.headers["content-type"]
+    content = res.text
+    assert "ccp_zgodny" in content.lower()
+    assert "gmp_zgodny" in content.lower()
+
+def test_total_score_pct_calculated_and_stored(client):
+    """Obliczanie wskaźnika total_score_pct i zapis do bazy."""
+    res = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "ccp1_fe_ok": "ZGODNY",
+        "notes": "Test total score"
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert "total_score_pct" in data
+    assert data["total_score_pct"] == 100.0
+
+def test_request_edit_requires_auth(client):
+    """POST /api/audits/request-edit wymaga zalogowania (401 bez tokenu)."""
+    # 1. Bez tokenu
+    res_no_auth = client.post("/api/audits/request-edit", json={
+        "audit_id": 1,
+        "requested_by": "Anon",
+        "reason": "Test bez tokenu"
+    })
+    assert res_no_auth.status_code == 401
+
+    # 2. Z tokenem audytora
+    aud_token = get_auditor_token(client)
+    res_auth = client.post("/api/audits/request-edit", json={
+        "audit_id": 1,
+        "requested_by": "Audytor",
+        "reason": "Test z tokenem audytora"
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert res_auth.status_code in [200, 400]  # 200 lub 400 jeśli wniosek już oczekuje
+
+def test_apply_audit_correction_rbac_and_fullname_keyerror(client):
+    """Weryfikacja braku KeyError: full_name oraz blokady edycji pól krytycznych przez audytora."""
+    mgr_token = get_manager_token(client)
+    aud_token = get_auditor_token(client)
+
+    # 1. Tworzymy audyt
+    a_res = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "Test correction RBAC"
+    })
+    audit_id = a_res.json()["audit_id"]
+
+    # 2. Zgłoszenie wniosku i zatwierdzenie przez managera (odblokowanie)
+    req_res = client.post("/api/audits/request-edit", json={
+        "audit_id": audit_id,
+        "requested_by": "Audytor",
+        "reason": "Potrzebna zmiana notatek"
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert req_res.status_code == 200
+
+    # Pobieramy ID wniosku
+    edit_reqs = client.get("/api/audits/edit-requests", headers={"Authorization": f"Bearer {mgr_token}"}).json()
+    req_obj = next(r for r in edit_reqs if r["audit_id"] == audit_id)
+    dec_res = client.post("/api/audits/decide-edit", json={
+        "request_id": req_obj["id"],
+        "decision": "ZATWIERDZONY",
+        "manager_comment": "Zgoda"
+    }, headers={"Authorization": f"Bearer {mgr_token}"})
+    assert dec_res.status_code == 200
+
+    # 3. Audytor próbuje zmienić pola krytyczne (np. compliance_verdict) -> 403
+    aud_corr_res = client.put("/api/audits/apply-correction", json={
+        "audit_id": audit_id,
+        "modified_by": "Audytor",
+        "change_reason": "Próba zmiany werdyktu",
+        "updated_fields": {"compliance_verdict": "ZGODNY"}
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert aud_corr_res.status_code == 403
+
+    # 4. Audytor zmienia dozwolone pole (np. notes) -> 200 i brak błędu KeyError: full_name
+    aud_corr_ok = client.put("/api/audits/apply-correction", json={
+        "audit_id": audit_id,
+        "modified_by": "Audytor",
+        "change_reason": "Poprawka literówki w notatce",
+        "updated_fields": {"notes": "Poprawiona notatka"}
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert aud_corr_ok.status_code == 200
+    assert aud_corr_ok.json()["status"] == "OK"
+
+def test_notes_endpoints_manager_auth_and_chat_clear(client):
+    """Zabezpieczenie endpointów notatek oraz ochrona notatek TO_MANAGER przy chat-clear."""
+    mgr_token = get_manager_token(client)
+    aud_token = get_auditor_token(client)
+
+    # 1. Tworzymy oficjalną notatkę audytora
+    n_res = client.post("/api/auditor-notes", json={
+        "auditor_name": "Testowy Audytor",
+        "content": "Oficjalna notatka audytowa nie do skasowania przez chat"
+    })
+    assert n_res.status_code == 200
+    note_id = n_res.json()["note_id"]
+
+    # 2. Tworzymy wiadomość na Live Chacie
+    c_res = client.post("/api/auditor-notes/chat-send", json={
+        "sender_name": "Testowy Audytor",
+        "sender_role": "AUDITOR",
+        "message": "Wiadomość na czacie"
+    })
+    assert c_res.status_code == 200
+
+    # 3. Próba reply przez audytora bez uprawnień managera -> 403
+    reply_aud = client.post(f"/api/auditor-notes/{note_id}/reply", json={
+        "manager_response": "Próba odpowiedzi"
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert reply_aud.status_code == 403
+
+    # 4. Próba mark-all-read przez audytora -> 403
+    mark_aud = client.post("/api/auditor-notes/mark-all-read", headers={"Authorization": f"Bearer {aud_token}"})
+    assert mark_aud.status_code == 403
+
+    # 5. Próba chat-clear przez audytora -> 403
+    clear_aud = client.post("/api/auditor-notes/chat-clear", headers={"Authorization": f"Bearer {aud_token}"})
+    assert clear_aud.status_code == 403
+
+    # 6. Manager czyści czat -> 200
+    clear_mgr = client.post("/api/auditor-notes/chat-clear", headers={"Authorization": f"Bearer {mgr_token}"})
+    assert clear_mgr.status_code == 200
+
+    # 7. Weryfikacja: oficjalna notatka nadal istnieje w skrzynce notatek!
+    notes_list = client.get("/api/auditor-notes").json()
+    assert any(n["id"] == note_id for n in notes_list)
+
+def test_auditor_forbidden_on_line_delete_and_chat_clear(client):
+    """Rola AUDITOR otrzymuje 403 Forbidden przy próbie wywołania DELETE /api/lines/1 oraz POST /api/auditor-notes/chat-clear."""
+    aud_token = get_auditor_token(client)
+    headers = {"Authorization": f"Bearer {aud_token}"}
+
+    # 1. DELETE /api/lines/1 przez audytora -> 403 Forbidden
+    del_line_res = client.delete("/api/lines/1", headers=headers)
+    assert del_line_res.status_code == 403
+
+    # 2. POST /api/auditor-notes/chat-clear przez audytora -> 403 Forbidden
+    chat_clear_res = client.post("/api/auditor-notes/chat-clear", headers=headers)
+    assert chat_clear_res.status_code == 403
+
+
+
