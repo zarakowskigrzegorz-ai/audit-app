@@ -4,6 +4,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends
 from database import get_db
+from security import require_manager
 
 router = APIRouter(prefix="/api/auditor-notes", tags=["Auditor Notes"])
 
@@ -73,7 +74,7 @@ async def get_auditor_notes(
 ):
     async with get_db() as conn:
         c = await conn.cursor()
-        query = "SELECT * FROM auditor_notes WHERE 1=1"
+        query = "SELECT * FROM auditor_notes WHERE 1=1 AND (priority != 'CHAT' OR priority IS NULL)"
         params = []
         
         if mode == "inbox":
@@ -132,11 +133,12 @@ async def get_notes_counts(auditor: Optional[str] = None):
     }
 
 @router.post("/{note_id}/reply")
-async def reply_to_auditor_note(note_id: int, reply: NoteReplyModel):
+async def reply_to_auditor_note(note_id: int, reply: NoteReplyModel, manager: dict = Depends(require_manager)):
     if not reply.manager_response or not reply.manager_response.strip():
         raise HTTPException(status_code=400, detail="Treść odpowiedzi nie może być pusta.")
     
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    mgr_name = reply.manager_name or manager.get("full_name") or manager.get("sub") or "Key User (Manager)"
     async with get_db() as conn:
         c = await conn.cursor()
         await c.execute("""
@@ -148,7 +150,7 @@ async def reply_to_auditor_note(note_id: int, reply: NoteReplyModel):
                 read_at = COALESCE(read_at, ?),
                 auditor_read_response = 0
             WHERE id = ?
-        """, (reply.manager_response.strip(), now_str, reply.manager_name or "Key User (Manager)", now_str, note_id))
+        """, (reply.manager_response.strip(), now_str, mgr_name, now_str, note_id))
         await conn.commit()
 
         try:
@@ -157,7 +159,7 @@ async def reply_to_auditor_note(note_id: int, reply: NoteReplyModel):
                 VALUES (?, 'AUDITOR_NOTE_REPLY', ?, 'INFO', ?)
             """, (
                 now_str,
-                reply.manager_name or "Key User",
+                mgr_name,
                 f"Odpowiedź na notatkę (id={note_id}): {reply.manager_response[:80]}"
             ))
             await conn.commit()
@@ -217,7 +219,7 @@ async def mark_note_as_read(note_id: int):
     return {"status": "success", "note_id": note_id, "read_at": now_str}
 
 @router.post("/mark-all-read")
-async def mark_all_notes_as_read():
+async def mark_all_notes_as_read(manager: dict = Depends(require_manager)):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     async with get_db() as conn:
         c = await conn.cursor()
@@ -288,10 +290,10 @@ async def send_chat_message(payload: ChatMessageModel):
     }
 
 @router.post("/chat-clear")
-async def clear_chat_messages():
+async def clear_chat_messages(manager: dict = Depends(require_manager)):
     async with get_db() as conn:
         c = await conn.cursor()
-        await c.execute("DELETE FROM auditor_notes")
+        await c.execute("DELETE FROM auditor_notes WHERE priority = 'CHAT' OR direction IN ('MANAGER', 'AUDITOR')")
         await conn.commit()
     return {"status": "success", "message": "Historia Live Chatu wyczyszczona."}
 

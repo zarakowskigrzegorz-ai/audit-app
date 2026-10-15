@@ -435,7 +435,8 @@
         state.checklist_results = {};
 
         try {
-            const res = await fetch(`/api/checklist-template/${auditType}`);
+            const httpFetch = getHttpFetch();
+            const res = await httpFetch(`/api/checklist-template/${auditType}`);
             const items = await res.json();
             cont.innerHTML = "";
 
@@ -808,7 +809,8 @@
                 glass_plastic_ok: glassPlasticOk,
                 wood_policy_ok: woodPolicyOk
             };
-            const sRes = await fetch('/api/slm-analyze', { 
+            const httpFetch = getHttpFetch();
+            const sRes = await httpFetch('/api/slm-analyze', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
                 body: JSON.stringify(slmReq) 
@@ -869,7 +871,8 @@
             }
         }, 900);
 
-        const res = await fetch('/api/audit', { method: 'POST', body: formData });
+        const httpFetch = getHttpFetch();
+        const res = await httpFetch('/api/audit', { method: 'POST', body: formData });
 
         if (res.ok) {
             state.schedule_id = null;
@@ -911,7 +914,8 @@
 
         const state = getAppState();
         try {
-            const res = await fetch('/api/audits/request-edit', {
+            const httpFetch = getHttpFetch();
+            const res = await httpFetch('/api/audits/request-edit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

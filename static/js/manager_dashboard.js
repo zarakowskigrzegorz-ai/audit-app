@@ -98,7 +98,8 @@
     async function markAllAuditorNotesAsRead() {
         if (!confirm('Czy na pewno chcesz oznaczyć wszystkie notatki jako przeczytane?')) return;
         try {
-            const res = await fetch('/api/auditor-notes/mark-all-read', { method: 'POST' });
+            const apiFetch = window.apiFetch || fetch;
+            const res = await apiFetch('/api/auditor-notes/mark-all-read', { method: 'POST' });
             if (res.ok) {
                 await loadManagerAuditorNotes();
             }
@@ -209,7 +210,8 @@
 
     async function loadManagerAuditorNotes() {
         try {
-            const res = await fetch('/api/auditor-notes?limit=100');
+            const apiFetch = window.apiFetch || fetch;
+            const res = await apiFetch('/api/auditor-notes?limit=100');
             if (!res.ok) return;
             cachedManagerNotes = await res.json();
             window.cachedManagerNotes = cachedManagerNotes;
@@ -243,7 +245,8 @@
 
     async function markAuditorNoteAsRead(noteId) {
         try {
-            const res = await fetch(`/api/auditor-notes/${noteId}/read`, { method: 'PATCH' });
+            const apiFetch = window.apiFetch || fetch;
+            const res = await apiFetch(`/api/auditor-notes/${noteId}/read`, { method: 'PATCH' });
             if (res.ok) {
                 await loadManagerAuditorNotes();
             }
@@ -300,7 +303,8 @@
         const state = window.state || {};
 
         try {
-            const res = await fetch(`/api/auditor-notes/${activeReplyNoteId}/reply`, {
+            const apiFetch = window.apiFetch || fetch;
+            const res = await apiFetch(`/api/auditor-notes/${activeReplyNoteId}/reply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -481,13 +485,57 @@
             window.cachedManagerAudits = cachedManagerAudits;
             renderManagerAuditsTable();
             await loadManagerAuditorNotes();
+            await loadManagerEditRequests();
         } catch(e) { 
             console.error(e); 
             if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-xs text-rose-400">Błąd ładowania danych audytów.</td></tr>';
         }
     }
 
-    async function loadManagerEditRequests() {}
+    async function loadManagerEditRequests() {
+        const container = document.getElementById('manager-edit-requests-container') || 
+                          document.getElementById('edit-requests-list') || 
+                          document.getElementById('manager-requests-container');
+        if (!container) return;
+
+        try {
+            const apiFetch = window.apiFetch || fetch;
+            const res = await apiFetch('/api/audits/edit-requests?status_filter=OCZEKUJE');
+            if (!res.ok) return;
+            const requests = await res.json();
+
+            if (!Array.isArray(requests) || requests.length === 0) {
+                container.innerHTML = '<p class="text-[10px] text-slate-500 italic p-2">Brak oczekujących wniosków o odblokowanie wpisów.</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="space-y-2 p-2 bg-slate-900/60 rounded-xl border border-amber-500/30">
+                    <div class="flex items-center justify-between text-xs font-bold text-amber-400">
+                        <span><i class="fas fa-unlock-keyhole mr-1"></i> Oczekujące wnioski o korektę / odblokowanie (${requests.length})</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${requests.map(r => `
+                            <div class="bg-slate-950/90 border border-amber-500/40 p-2.5 rounded-xl space-y-1.5 text-xs">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-cyan-400 font-bold">${r.line || ''} (Audyt #${r.audit_id})</span>
+                                    <span class="text-[9px] text-slate-400">${(r.created_at || '').substring(0, 16)}</span>
+                                </div>
+                                <p class="text-[10px] text-slate-300"><b>Wnioskuje:</b> ${r.requested_by || 'Audytor'}</p>
+                                <p class="text-[10px] text-amber-200 bg-amber-950/40 p-1.5 rounded border border-amber-500/20"><b>Powód:</b> ${r.reason || ''}</p>
+                                <div class="flex gap-2 pt-1">
+                                    <button onclick="decideEditRequest(${r.id}, 'ZATWIERDZONY')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] py-1.5 rounded-lg transition cursor-pointer">✓ Zatwierdź</button>
+                                    <button onclick="decideEditRequest(${r.id}, 'ODRZUCONY')" class="flex-1 bg-rose-900 hover:bg-rose-800 text-rose-200 font-black text-[10px] py-1.5 rounded-lg transition cursor-pointer">✕ Odrzuć</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        } catch(e) {
+            console.error("Błąd ładowania wniosków o edycję:", e);
+        }
+    }
 
     async function decideEditRequest(requestId, decision) {
         const comment = prompt(`Komentarz do decyzji (${decision}):`) || "";
@@ -546,7 +594,8 @@
         document.getElementById('adm-reply-text').value = '';
 
         try {
-            const res = await fetch(`/api/audits/${id}`);
+            const apiFetch = window.apiFetch || fetch;
+            const res = await apiFetch(`/api/audits/${id}`);
             if (!res.ok) {
                 alert('Błąd podczas pobierania szczegółów audytu.');
                 return;

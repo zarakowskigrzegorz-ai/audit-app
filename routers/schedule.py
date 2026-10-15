@@ -96,6 +96,20 @@ async def get_schedule(sched_id: int):
 @router.put("/{sched_id}")
 async def update_schedule(sched_id: int, payload: ScheduleUpdateModel, user: dict = Depends(require_auditor_or_manager)):
     async with get_db() as conn:
+        cursor = await conn.execute("SELECT id, lead_auditor, backup_auditor FROM audit_schedules WHERE id = ?", (sched_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+
+        if user.get("role") != "MANAGER":
+            sub = (user.get("sub") or "").strip()
+            lead = (row["lead_auditor"] or "").strip()
+            backup = (row["backup_auditor"] or "").strip()
+            sub_parts = sub.split()
+            last_name = sub_parts[-1] if sub_parts else sub
+            if not (sub in lead or sub in backup or (last_name and (last_name in lead or last_name in backup))):
+                raise HTTPException(status_code=403, detail="Brak uprawnień do edycji zadania innego audytora")
+
         await conn.execute(
             "UPDATE audit_schedules SET scheduled_date = ?, line = ?, audit_type = ?, lead_auditor = ?, backup_auditor = ?, status = ?, notes = ? WHERE id = ?",
             (payload.scheduled_date, payload.line, payload.audit_type, payload.lead_auditor, payload.backup_auditor, payload.status, payload.notes, sched_id)
@@ -114,11 +128,20 @@ async def reschedule_audit(sched_id: int, payload: Dict[str, str], user: dict = 
         raise HTTPException(status_code=400, detail="Nie można przesuwać audytu na datę wsteczną")
         
     async with get_db() as conn:
-        cursor = await conn.execute("SELECT scheduled_date FROM audit_schedules WHERE id = ?", (sched_id,))
+        cursor = await conn.execute("SELECT scheduled_date, lead_auditor, backup_auditor FROM audit_schedules WHERE id = ?", (sched_id,))
         row = await cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
             
+        if user.get("role") != "MANAGER":
+            sub = (user.get("sub") or "").strip()
+            lead = (row["lead_auditor"] or "").strip()
+            backup = (row["backup_auditor"] or "").strip()
+            sub_parts = sub.split()
+            last_name = sub_parts[-1] if sub_parts else sub
+            if not (sub in lead or sub in backup or (last_name and (last_name in lead or last_name in backup))):
+                raise HTTPException(status_code=403, detail="Brak uprawnień do edycji zadania innego audytora")
+
         await conn.execute("UPDATE audit_schedules SET scheduled_date = ? WHERE id = ?", (new_date, sched_id))
         await conn.commit()
     return {"status": "success"}
@@ -132,6 +155,9 @@ async def delete_schedule(sched_id: int, manager: dict = Depends(require_manager
         if not row:
             raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
         
+        if row["status"] == "WYKONANY":
+            raise HTTPException(status_code=400, detail="Nie można usunąć zrealizowanego audytu")
+
         # Blokada usuwania historycznych
         if row["scheduled_date"] < today_str:
             raise HTTPException(status_code=400, detail="Nie można usunąć audytu z przeszłości")
@@ -228,17 +254,7 @@ class ClearMonthModel(BaseModel):
     period_months: Optional[int] = 1
 
 @router.post("/clear-month")
-async def router_clear_month(payload: ClearMonthModel, authorization: Optional[str] = Header(None)):
-    if authorization:
-        try:
-            user = await get_current_user(authorization)
-            if user.get("role") not in ["MANAGER", "AUDITOR"]:
-                raise HTTPException(status_code=403, detail="Brak uprawnień do modyfikacji harmonogramu")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
-
+async def router_clear_month(payload: ClearMonthModel, manager: dict = Depends(require_manager)):
     period = payload.period_months if (payload.period_months and payload.period_months > 0) else 1
     start_date = f"{payload.year:04d}-{payload.month:02d}-01"
 
@@ -266,17 +282,7 @@ async def router_clear_month(payload: ClearMonthModel, authorization: Optional[s
     }
 
 @router.post("/clear-all")
-async def router_clear_all(authorization: Optional[str] = Header(None)):
-    if authorization:
-        try:
-            user = await get_current_user(authorization)
-            if user.get("role") not in ["MANAGER", "AUDITOR"]:
-                raise HTTPException(status_code=403, detail="Brak uprawnień do modyfikacji harmonogramu")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
-
+async def router_clear_all(manager: dict = Depends(require_manager)):
     async with get_db() as conn:
         cursor = await conn.execute("DELETE FROM audit_schedules")
         deleted_count = cursor.rowcount

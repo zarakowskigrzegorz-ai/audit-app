@@ -15,6 +15,7 @@ from security import (
     require_auditor_or_manager,
     log_security_event
 )
+from routers.checklist import CHECKLIST_TEMPLATES
 
 router = APIRouter(tags=["Audits"])
 
@@ -22,6 +23,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".xlsx"}
+MAX_UPLOAD_SIZE = 15 * 1024 * 1024
 
 class AuditEditRequestCreate(BaseModel):
     audit_id: int
@@ -70,9 +72,12 @@ async def save_audit(
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(status_code=400, detail="Niedozwolony format pliku")
         
+        content = await photo.read(MAX_UPLOAD_SIZE + 1)
+        if len(content) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=400, detail="Plik przekracza 15 MB")
+
         # Walidacja Magic Bytes (ISO 27001 A.8.28)
-        header_bytes = await photo.read(8)
-        await photo.seek(0)
+        header_bytes = content[:8]
         is_valid_magic = False
         if ext in [".jpg", ".jpeg"] and header_bytes.startswith(b"\xff\xd8\xff"):
             is_valid_magic = True
@@ -89,24 +94,35 @@ async def save_audit(
         fname = f"{uuid.uuid4()}{ext}"
         dst = os.path.join(UPLOAD_DIR, fname)
         with open(dst, "wb") as f: 
-            shutil.copyfileobj(photo.file, f)
+            f.write(content)
         photo_path = f"/uploads/{fname}"
+
+    clean_audit_type = (audit_type or "HACCP").strip().upper()
+    template_questions = CHECKLIST_TEMPLATES.get(clean_audit_type, CHECKLIST_TEMPLATES.get("HACCP", []))
+    ko_ids_in_template = {str(q["id"]) for q in template_questions if q.get("is_ko")}
 
     # Ekstrakcja uwag (w tym podyktowanych głosem) z pytań checklisty dla RAG i SLM
     chk_notes_list = []
     ko_failed_flag = 0
     try:
         parsed_chk = json.loads(checklist_results) if checklist_results else {}
-        for q_id, q_data in parsed_chk.items():
-            if isinstance(q_data, dict):
-                n_text = str(q_data.get("notes", "")).strip()
-                if n_text:
-                    cl = q_data.get("clause") or f"Pkt {q_id}"
-                    chk_notes_list.append(f"[{cl}]: {n_text}")
-                q_score = q_data.get("score")
-                is_crit_nok = (int(q_score) <= 2) if q_score is not None else (q_data.get("status") == "NOK")
-                if is_crit_nok and q_data.get("is_ko"):
-                    ko_failed_flag = 1
+        if isinstance(parsed_chk, dict) and len(parsed_chk) > 0:
+            if len(parsed_chk) < len(template_questions):
+                raise HTTPException(status_code=400, detail="Wymagane zatwierdzenie 100% pytań checklisty")
+            for q_id, q_data in parsed_chk.items():
+                if isinstance(q_data, dict):
+                    if not q_data.get("accepted") and not q_data.get("locked"):
+                        raise HTTPException(status_code=400, detail="Wymagane zatwierdzenie 100% pytań checklisty")
+                    n_text = str(q_data.get("notes", "")).strip()
+                    if n_text:
+                        cl = q_data.get("clause") or f"Pkt {q_id}"
+                        chk_notes_list.append(f"[{cl}]: {n_text}")
+                    q_score = q_data.get("score")
+                    is_crit_nok = (int(q_score) <= 2) if q_score is not None else (q_data.get("status") == "NOK")
+                    if is_crit_nok and (str(q_id) in ko_ids_in_template or q_data.get("is_ko")):
+                        ko_failed_flag = 1
+    except HTTPException:
+        raise
     except Exception as e_chk:
         print(f"Błąd parsowania checklist_results: {e_chk}")
 
@@ -123,20 +139,39 @@ async def save_audit(
     health_nok = str(health_ok or '').strip().upper() not in ["TAK", "ZGODNY", "OK"]
     slm_analysis_nok = bool(slm_analysis and ("NOK" in slm_analysis.upper() or "HOLD LOT" in slm_analysis.upper()))
 
-    rule_nok = ccp_nok or health_nok or ko_failed_val or slm_analysis_nok
+    # Obliczenie wskaźnika zgodności procentowej total_score_pct (IFS Food v8)
+    total_score_pct = 100.0
+    if isinstance(parsed_chk, dict) and len(parsed_chk) > 0:
+        sum_scores = 0.0
+        for q_id, q_data in parsed_chk.items():
+            if isinstance(q_data, dict):
+                sc = q_data.get("score")
+                if sc is not None:
+                    try:
+                        sum_scores += float(sc)
+                    except (ValueError, TypeError):
+                        sum_scores += 5.0
+                else:
+                    sum_scores += 1.0 if q_data.get("status") == "NOK" else 5.0
+            else:
+                sum_scores += 5.0
+        total_score_pct = round((sum_scores / (len(parsed_chk) * 5.0)) * 100.0, 1)
+    else:
+        if ccp_nok or ko_failed_val:
+            total_score_pct = 50.0
+        elif health_nok or slm_analysis_nok:
+            total_score_pct = 70.0
+        else:
+            total_score_pct = 100.0
+
+    score_nok = total_score_pct < 75.0
+    rule_nok = ccp_nok or health_nok or ko_failed_val or slm_analysis_nok or score_nok
     initial_verdict = "NOK" if rule_nok else "OK"
-    is_critical_hold = (
-        ko_failed_val or 
-        str(ccp1_fe_ok or '').strip().upper() in ["NOK", "NIEZGODNY"] or 
-        str(ccp1_reject_ok or '').strip().upper() in ["NOK", "NIEZGODNY"] or 
-        health_nok or 
-        (bool(slm_analysis) and "HOLD LOT" in slm_analysis.upper())
-    )
+    is_critical_hold = ko_failed_val or ccp_nok or health_nok or (bool(slm_analysis) and "HOLD LOT" in slm_analysis.upper())
     initial_risk = "KRYTYCZNE (HOLD LOT)" if is_critical_hold else ("ŚREDNIE" if rule_nok else "NISKIE")
     initial_analysis = slm_analysis if slm_analysis else ("Wykryto odchylenie krytyczne CCP / procedury PR15.01. Uruchomiono protokół blokady partii (Hold Lot)." if rule_nok else "Weryfikacja regułowa zakończona. Analiza asystenta SLM AI trwa w tle...")
     ko_failed_flag = 1 if is_critical_hold else 0
 
-    clean_audit_type = (audit_type or "HACCP").strip().upper()
     # BŁYSKAWICZNY ZAPIS DO BAZY DANYCH (< 30 ms)
     async with get_db() as db:
         cursor = await db.execute("""
@@ -144,13 +179,13 @@ async def save_audit(
                 auditor_id, line, shift, zone, audit_type, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
                 line_status, ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked, ccp2_magnet_ok, ccp3_sieve_ok,
                 gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok, bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, 
-                bhp_evac_ppoz_ok, bhp_status, slm_analysis, slm_verdict, risk_level, checklist_results, photo_path, notes, ko_failed
-            ) VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                bhp_evac_ppoz_ok, bhp_status, slm_analysis, slm_verdict, risk_level, checklist_results, photo_path, notes, ko_failed, total_score_pct
+            ) VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             auditor_id, line, shift, zone, clean_audit_type, health_ok, dispense_no, glass_plastic_ok, allergen_clean_ok, wood_policy_ok, ppe_ok, 
             line_status, ccp1_fe_ok, ccp1_nonfe_ok, ccp1_ss_ok, ccp1_reject_ok, ccp1_bin_locked, ccp2_magnet_ok, ccp3_sieve_ok,
             gmp_cleanliness_ok, gmp_wood_score, gmp_foreign_score, gmp_waste_ok, bhp_estop_ok, bhp_atex_ok, bhp_hot_cip_ok, 
-            bhp_evac_ppoz_ok, bhp_status, initial_analysis, initial_verdict, initial_risk, checklist_results, photo_path, full_notes, ko_failed_flag
+            bhp_evac_ppoz_ok, bhp_status, initial_analysis, initial_verdict, initial_risk, checklist_results, photo_path, full_notes, ko_failed_flag, total_score_pct
         ))
         audit_id = cursor.lastrowid
         today_str = datetime.now().strftime("%Y-%m-%d")
@@ -184,12 +219,12 @@ async def save_audit(
         await db.commit()
 
     # ASYNCHRONICZNE TŁO (BACKGROUND TASK): Uruchomienie modelu SLM AI bez blokowania odpowiedzi HTTP
-    async def process_slm_background(a_id: int, a_line: str, audit_info: dict):
+    async def process_slm_background(a_id: int, a_line: str, audit_info: dict, rule_nok_val: bool, is_critical_hold_val: bool):
         try:
             analysis_result = await run_agent_turn(audit_info, a_line)
             is_ko_fail = bool(audit_info.get("ko_failed"))
-            v_bg = "NOK" if (is_ko_fail or "NOK" in analysis_result.upper() or "HOLD LOT" in analysis_result.upper()) else "OK"
-            r_bg = "KRYTYCZNE (HOLD LOT)" if (is_ko_fail or "HOLD LOT" in analysis_result.upper()) else ("ŚREDNIE" if v_bg == "NOK" else "NISKIE")
+            v_bg = "NOK" if (rule_nok_val or is_ko_fail or "NOK" in analysis_result.upper() or "HOLD LOT" in analysis_result.upper()) else "OK"
+            r_bg = "KRYTYCZNE (HOLD LOT)" if (is_critical_hold_val or is_ko_fail or "HOLD LOT" in analysis_result.upper()) else ("ŚREDNIE" if v_bg == "NOK" else "NISKIE")
             async with get_db() as conn_bg:
                 await conn_bg.execute("""
                     UPDATE audits 
@@ -208,20 +243,24 @@ async def save_audit(
         "notes": full_notes or "",
         "ko_failed": ko_failed_flag == 1
     }
-    background_tasks.add_task(process_slm_background, audit_id, line, audit_payload_for_ai)
+    background_tasks.add_task(process_slm_background, audit_id, line, audit_payload_for_ai, rule_nok, is_critical_hold)
 
     return {
         "status": "OK",
         "audit_id": audit_id,
         "slm_verdict": initial_verdict,
         "risk_level": initial_risk,
+        "total_score_pct": total_score_pct,
         "message": "Audyt został natychmiastowo zarejestrowany. Analiza SLM przetwarzana asynchronicznie w tle."
     }
 
 
 # --- AUDIT TRAIL / WNIOSKOWANIE O ZMIANĘ (WARIANT 3) ---
 @router.post("/api/audits/request-edit")
-async def request_audit_edit(payload: AuditEditRequestCreate):
+async def request_audit_edit(
+    payload: AuditEditRequestCreate,
+    current_user: dict = Depends(require_auditor_or_manager)
+):
     async with get_db() as conn:
         c = await conn.cursor()
         await c.execute("SELECT id, record_status FROM audits WHERE id = ?", (payload.audit_id,))
@@ -306,14 +345,23 @@ async def apply_audit_correction(payload: AuditUpdateRequest, current_user: dict
         if audit["record_status"] != "ODBLOKOWANY_DO_KOREKTY":
             raise HTTPException(status_code=403, detail="Audyt jest zablokowany. Wymagana zgoda Managera.")
 
+        user_name = current_user.get("full_name") or current_user.get("sub") or "Użytkownik"
+        is_manager = current_user.get("role") == "MANAGER"
+
         ALLOWED_AUDIT_COLUMNS = {
-            "auditor_id", "line", "shift", "zone", "audit_type", "compliance_verdict", "total_score_pct",
+            "auditor_id", "line", "shift", "zone", "audit_type", "total_score_pct",
             "health_ok", "dispense_no", "ppe_ok", "allergen_clean_ok", "wood_policy_ok", "line_status",
             "ccp1_fe_ok", "ccp1_nonfe_ok", "ccp1_ss_ok", "ccp1_reject_ok", "ccp1_bin_locked", "ccp2_magnet_ok",
-            "ccp3_sieve_ok", "cleanliness_rating", "risk_level", "slm_verdict", "notes", "glass_plastic_ok",
+            "ccp3_sieve_ok", "cleanliness_rating", "notes", "glass_plastic_ok",
             "gmp_cleanliness_ok", "gmp_wood_score", "gmp_foreign_score", "gmp_waste_ok", "bhp_estop_ok",
             "bhp_atex_ok", "bhp_hot_cip_ok", "bhp_evac_ppoz_ok", "bhp_status", "checklist_results"
         }
+        if is_manager:
+            ALLOWED_AUDIT_COLUMNS.update({"compliance_verdict", "risk_level", "slm_verdict", "ko_failed"})
+        else:
+            forbidden_fields = {"compliance_verdict", "risk_level", "slm_verdict", "ko_failed"}
+            if any(f in payload.updated_fields for f in forbidden_fields):
+                raise HTTPException(status_code=403, detail="Brak uprawnień do edycji pól krytycznych werdyktu i ryzyka.")
 
         audit_dict = dict(audit)
         for field, new_val in payload.updated_fields.items():
@@ -324,7 +372,7 @@ async def apply_audit_correction(payload: AuditUpdateRequest, current_user: dict
                     await c.execute("""
                         INSERT INTO audit_change_logs (audit_id, modified_by, field_name, old_value, new_value, change_reason)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    """, (payload.audit_id, current_user["full_name"], field, old_val, new_val_str, payload.change_reason))
+                    """, (payload.audit_id, user_name, field, old_val, new_val_str, payload.change_reason))
                     await c.execute(f"UPDATE audits SET {field} = ? WHERE id = ?", (new_val, payload.audit_id))
 
         # Ponowna blokada po zapisie zmian
@@ -333,10 +381,10 @@ async def apply_audit_correction(payload: AuditUpdateRequest, current_user: dict
 
     await log_security_event(
         event_type="AUDIT_CORRECTION_APPLIED",
-        user_id=current_user["uid"],
-        user_name=current_user["sub"],
+        user_id=current_user.get("uid", 0),
+        user_name=current_user.get("sub", user_name),
         severity="INFO",
-        details=f"Użytkownik {current_user['full_name']} zapisał korektę audytu #{payload.audit_id} (powód: {payload.change_reason})"
+        details=f"Użytkownik {user_name} zapisał korektę audytu #{payload.audit_id} (powód: {payload.change_reason})"
     )
     return {"status": "OK", "message": "Korekta została zarejestrowana w dzienniku Audit Trail."}
 
@@ -397,7 +445,7 @@ async def update_audit_status(
     audit_id: int,
     payload: AuditStatusUpdate,
     request: Request,
-    manager: dict = Depends(require_auditor_or_manager)
+    manager: dict = Depends(require_manager)
 ):
     if payload.status not in ["ZATWIERDZONY", "ODRZUCONY", "WERYFIKACJA"]:
         raise HTTPException(status_code=400, detail="Nieprawidłowy status audytu.")
@@ -494,9 +542,9 @@ async def get_all_audits(limit: int = 300):
 async def undo_last_audit(
     audit_id: int,
     request: Request,
-    current_user: dict = Depends(require_auditor_or_manager)
+    current_user: dict = Depends(require_manager)
 ):
-    """Pozwala usunąć wpis przez audytora lub managera z audytem ISO 27001"""
+    """Pozwala usunąć wpis przez managera z audytem ISO 27001"""
     async with get_db() as conn:
         c = await conn.cursor()
         await c.execute("SELECT id, line, record_status FROM audits WHERE id = ?", (audit_id,))
@@ -505,7 +553,15 @@ async def undo_last_audit(
             raise HTTPException(status_code=404, detail="Nie odnaleziono audytu")
             
         await c.execute("DELETE FROM audits WHERE id = ?", (audit_id,))
-        await c.execute("UPDATE audit_schedules SET status = 'PLANOWANY', completed_at = NULL WHERE line = ? AND status = 'WYKONANY'", (row["line"],))
+        await c.execute("""
+            UPDATE audit_schedules 
+            SET status = 'PLANOWANY', completed_at = NULL 
+            WHERE id = (
+                SELECT id FROM audit_schedules 
+                WHERE line = ? AND status = 'WYKONANY' 
+                ORDER BY completed_at DESC LIMIT 1
+            )
+        """, (row["line"],))
         await conn.commit()
 
     client_ip = request.client.host if request.client else "127.0.0.1"

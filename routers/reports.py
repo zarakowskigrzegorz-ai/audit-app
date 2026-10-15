@@ -206,9 +206,9 @@ async def export_powerbi_csv():
             m_int = int(month_part)
             q_part = f"Q{(m_int - 1) // 3 + 1}"
 
-        ccp_ok = "TAK" if (r.get("ccp1_fe_ok") == "OK" and r.get("ccp1_reject_ok") == "OK" and r.get("ccp2_magnet_ok") == "OK") else "NIE"
-        gmp_ok = "TAK" if r.get("gmp_cleanliness_ok") == "OK" else "NIE"
-        bhp_ok = "TAK" if r.get("bhp_status") == "OK" else "NIE"
+        ccp_ok = "TAK" if all(r.get(k) in ("ZGODNY", "OK") for k in ("ccp1_fe_ok", "ccp1_nonfe_ok", "ccp1_ss_ok", "ccp1_reject_ok", "ccp2_magnet_ok", "ccp3_sieve_ok")) else "NIE"
+        gmp_ok = "TAK" if r.get("gmp_cleanliness_ok") in ("ZGODNY", "OK") else "NIE"
+        bhp_ok = "TAK" if r.get("bhp_status") in ("BRAK ZGŁOSZEŃ", "ZGODNY", "OK") else "NIE"
         ko_flag = "TAK" if r.get("ko_failed") == 1 else "NIE"
 
         writer.writerow([

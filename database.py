@@ -11,6 +11,9 @@ DB_PATH = DB_NAME
 @asynccontextmanager
 async def get_db():
     async with aiosqlite.connect(DB_NAME) as conn:
+        # Integralność referencyjna (FOREIGN KEY) i tryb WAL (współbieżny odczyt/zapis)
+        await conn.execute("PRAGMA foreign_keys = ON")
+        await conn.execute("PRAGMA journal_mode = WAL")
         conn.row_factory = aiosqlite.Row
         yield conn
 
@@ -94,11 +97,26 @@ async def run_migrations_engine(conn):
                     content TEXT NOT NULL,
                     is_read INTEGER DEFAULT 0,
                     read_at TEXT,
-                    manager_response TEXT
+                    manager_response TEXT,
+                    manager_response_at TEXT,
+                    manager_name TEXT,
+                    auditor_read_response INTEGER DEFAULT 0,
+                    direction TEXT DEFAULT 'TO_MANAGER'
                 )
                 """,
                 "CREATE INDEX IF NOT EXISTS idx_notes_ts ON auditor_notes(timestamp DESC)",
                 "CREATE INDEX IF NOT EXISTS idx_notes_read ON auditor_notes(is_read)"
+            ]
+        ),
+        (
+            5,
+            "fix_auditor_notes_columns_v5",
+            "Uzupełnienie kolumn auditor_notes wymaganych przez routers/notes.py (czat / odpowiedzi managera)",
+            [
+                "ALTER TABLE auditor_notes ADD COLUMN direction TEXT DEFAULT 'TO_MANAGER'",
+                "ALTER TABLE auditor_notes ADD COLUMN auditor_read_response INTEGER DEFAULT 0",
+                "ALTER TABLE auditor_notes ADD COLUMN manager_response_at TEXT",
+                "ALTER TABLE auditor_notes ADD COLUMN manager_name TEXT"
             ]
         )
     ]
@@ -117,7 +135,14 @@ async def run_migrations_engine(conn):
                         print(f"[DB MIGRATION WARNING] Nie udało się utworzyć kopii zapasowej: {e_bak}")
 
             for stmt in statements:
-                await c.execute(stmt)
+                try:
+                    await c.execute(stmt)
+                except Exception as e_stmt:
+                    # Idempotencja ALTER TABLE ADD COLUMN: kolumna mogła już istnieć
+                    if "duplicate column name" in str(e_stmt).lower():
+                        print(f"[DB MIGRATION] v{ver}: pominięto (kolumna już istnieje): {stmt.strip()[:80]}")
+                        continue
+                    raise
             await c.execute(
                 "INSERT INTO schema_migrations (version, name, description) VALUES (?, ?, ?)",
                 (ver, name, desc)
