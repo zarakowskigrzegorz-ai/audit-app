@@ -4,8 +4,8 @@ import shutil
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-# Obsługa konfiguracji bazy danych (SQLite lub ścieżka zdefiniowana w środowisku)
-DB_NAME = os.getenv("DATABASE_PATH", "audits.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.getenv("DATABASE_PATH", os.path.join(BASE_DIR, "audits.db"))
 DB_PATH = DB_NAME
 
 @asynccontextmanager
@@ -161,13 +161,21 @@ async def init_db():
         except Exception:
             has_users = False
 
-        # Jeśli baza jest pusta lub świeża na serwerze, odtwórz ją 1:1 ze zrzutu
-        if not has_users and os.path.exists("dump_data.sql"):
-            with open("dump_data.sql", "r", encoding="utf-8") as f:
-                sql_dump = f.read()
-            await conn.executescript(sql_dump)
-            await conn.commit()
-            print("Baza danych została w 100% odtworzona z dump_data.sql!")
+        # Jeśli baza jest pusta lub świeża na serwerze (np. Render / Docker), odtwórz ją 1:1 ze zrzutu
+        dump_path = os.path.join(BASE_DIR, "dump_data.sql")
+        if not has_users and os.path.exists(dump_path):
+            try:
+                # Podczas wczytywania zrzutu wyłączamy sprawdzanie kluczy obcych (kolejność tabel w dumpie)
+                await conn.execute("PRAGMA foreign_keys = OFF")
+                with open(dump_path, "r", encoding="utf-8") as f:
+                    sql_dump = f.read()
+                await conn.executescript(sql_dump)
+                await conn.commit()
+                print("Baza danych została w 100% odtworzona z dump_data.sql!")
+            except Exception as e_dump:
+                print(f"[DB INIT ERROR] Błąd podczas wczytywania dump_data.sql: {e_dump}")
+            finally:
+                await conn.execute("PRAGMA foreign_keys = ON")
 
         # Uruchom silnik wersjonowanych migracji
         await run_migrations_engine(conn)
