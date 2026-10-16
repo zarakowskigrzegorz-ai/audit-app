@@ -1721,7 +1721,7 @@ MAX_UPLOAD_SIZE = 15 * 1024 * 1024
 
 class AuditEditRequestCreate(BaseModel):
     audit_id: int
-    requested_by: str
+    requested_by: Optional[str] = None
     reason: str
 
 class AuditEditDecision(BaseModel):
@@ -1800,6 +1800,8 @@ async def save_audit(
     ko_failed_flag = 0
     try:
         parsed_chk = json.loads(checklist_results) if checklist_results else {}
+        if isinstance(parsed_chk, list):
+            parsed_chk = {str(q.get("id", i)): q for i, q in enumerate(parsed_chk) if isinstance(q, dict)}
         if isinstance(parsed_chk, dict) and len(parsed_chk) > 0:
             if len(parsed_chk) < len(template_questions):
                 raise HTTPException(status_code=400, detail="Wymagane zatwierdzenie 100% pytań checklisty")
@@ -1967,12 +1969,14 @@ async def request_audit_edit(
         if pending:
             raise HTTPException(status_code=400, detail="Wniosek dla tego audytu już oczekuje na decyzję Managera.")
 
+        user_name = payload.requested_by or current_user.get("full_name") or current_user.get("sub") or "Audytor"
         await c.execute(
             "INSERT INTO audit_edit_requests (audit_id, requested_by, reason, status) VALUES (?, ?, ?, 'OCZEKUJE')",
-            (payload.audit_id, payload.requested_by, payload.reason.strip())
+            (payload.audit_id, user_name, payload.reason.strip())
         )
+        request_id = c.lastrowid
         await conn.commit()
-    return {"status": "OK", "message": "Wniosek przesłany do Managera Jakości."}
+    return {"status": "OK", "request_id": request_id, "message": "Wniosek przesłany do Managera Jakości."}
 
 @router.get("/api/audits/edit-requests")
 async def list_edit_requests(
@@ -4178,6 +4182,201 @@ def test_auditor_forbidden_on_line_delete_and_chat_clear(client):
     # 2. POST /api/auditor-notes/chat-clear przez audytora -> 403 Forbidden
     chat_clear_res = client.post("/api/auditor-notes/chat-clear", headers=headers)
     assert chat_clear_res.status_code == 403
+
+def test_magic_bytes_spoofing_rejected(client):
+    """Wyślij do POST /api/audit plik exploit.jpg z zawartością bash - musi zwrócić 400 i sygnaturę ISO 27001."""
+    aud_token = get_auditor_token(client)
+    headers = {"Authorization": f"Bearer {aud_token}"}
+    fake_photo = io.BytesIO(b"#!/bin/bash\necho hacked")
+    files = {"photo": ("exploit.jpg", fake_photo, "image/jpeg")}
+    data = {
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "Test exploit upload"
+    }
+    res = client.post("/api/audit", data=data, files=files, headers=headers)
+    assert res.status_code == 400
+    detail = res.json().get("detail", "")
+    assert "sygnatura binarna" in detail.lower() or "iso 27001" in detail.lower()
+
+def test_client_side_ko_tampering_prevented(client):
+    """Sfałszowanie flagi is_ko: False w JSON przez klienta jest ignorowane przez backend na podstawie CHECKLIST_TEMPLATES."""
+    import json
+    checklist = {}
+    for q_id in range(101, 111):
+        if q_id == 106:
+            # W szablonie serwerowym pytanie 106 to KO. Klient celowo fałszuje is_ko na False!
+            checklist[str(q_id)] = {
+                "clause": "3.2 Częstotliwość (KO)",
+                "question": "Częstotliwość zapisów",
+                "score": 1,
+                "status": "NOK",
+                "is_ko": False,
+                "accepted": True,
+                "locked": True,
+                "notes": "Fałszywy audyt z próbą ominięcia KO"
+            }
+        else:
+            checklist[str(q_id)] = {
+                "clause": f"Klauzula {q_id}",
+                "question": "Pytanie zgodne",
+                "score": 5,
+                "status": "OK",
+                "is_ko": False,
+                "accepted": True,
+                "locked": True
+            }
+
+    payload = {
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "audit_type": "HACCP",
+        "health_ok": "TAK",
+        "glass_plastic_ok": "ZGODNY",
+        "allergen_clean_ok": "ZGODNY",
+        "wood_policy_ok": "ZGODNY",
+        "ppe_ok": "ZGODNY",
+        "line_status": "Produkcja Ciągła",
+        "ccp1_fe_ok": "ZGODNY",
+        "ccp1_nonfe_ok": "ZGODNY",
+        "ccp1_ss_ok": "ZGODNY",
+        "ccp1_reject_ok": "ZGODNY",
+        "ccp1_bin_locked": "ZGODNY",
+        "ccp2_magnet_ok": "ZGODNY",
+        "ccp3_sieve_ok": "ZGODNY",
+        "gmp_cleanliness_ok": "ZGODNY",
+        "gmp_wood_score": 5,
+        "gmp_foreign_score": 5,
+        "gmp_waste_ok": "ZGODNY",
+        "ko_failed": "false",
+        "checklist_results": json.dumps(checklist),
+        "notes": "Test tamper KO"
+    }
+    res = client.post("/api/audit", data=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["slm_verdict"] == "NOK"
+    assert data["risk_level"] == "KRYTYCZNE (HOLD LOT)"
+
+def test_incomplete_or_unaccepted_checklist_rejected(client):
+    """Niepełna checklista (<100% pytań) lub niezatwierdzone pytania (accepted: False) muszą zostać odrzucone z kodem 400."""
+    import json
+    # Przypadek 1: Tylko 3 pytania zamiast 10 dla HACCP
+    partial_checklist = {
+        "101": {"score": 5, "accepted": True, "locked": True},
+        "102": {"score": 5, "accepted": True, "locked": True},
+        "103": {"score": 5, "accepted": True, "locked": True}
+    }
+    res_partial = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "audit_type": "HACCP",
+        "checklist_results": json.dumps(partial_checklist)
+    })
+    assert res_partial.status_code == 400
+    assert "100%" in res_partial.json().get("detail", "")
+
+    # Przypadek 2: Komplet 10 pytań, ale jedno ma accepted: False i locked: False
+    full_checklist = {}
+    for q_id in range(101, 111):
+        full_checklist[str(q_id)] = {
+            "score": 5,
+            "accepted": (q_id != 105),
+            "locked": False
+        }
+    res_unaccepted = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "audit_type": "HACCP",
+        "checklist_results": json.dumps(full_checklist)
+    })
+    assert res_unaccepted.status_code == 400
+    assert "100%" in res_unaccepted.json().get("detail", "")
+
+def test_audit_immutability_and_re_lock_after_correction(client):
+    """Rekord audytu jest zablokowany, odblokowuje się wyłącznie po decyzji Managera i ponownie automatycznie blokuje po 1 korekcie."""
+    aud_token = get_auditor_token(client)
+    mgr_token = get_manager_token(client)
+
+    # 1. Tworzymy nowy audyt
+    a_res = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "Oryginalna notatka"
+    })
+    assert a_res.status_code == 200
+    audit_id = a_res.json()["audit_id"]
+
+    # 2. Próba bezpośredniej korekty bez zatwierdzonego wniosku -> 403 Forbidden
+    corr_fail = client.put("/api/audits/apply-correction", json={
+        "audit_id": audit_id,
+        "modified_by": "Audytor",
+        "change_reason": "Próba nieautoryzowanej zmiany",
+        "updated_fields": {"notes": "Nieautoryzowana zmiana"}
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert corr_fail.status_code == 403
+
+    # 3. Złożenie wniosku o edycję przez audytora
+    req_res = client.post("/api/audits/request-edit", json={
+        "audit_id": audit_id,
+        "reason": "Korekta literówki w notatce audytowej"
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert req_res.status_code == 200
+    request_id = req_res.json()["request_id"]
+
+    # 4. Manager zatwierdza wniosek
+    dec_res = client.post("/api/audits/decide-edit", json={
+        "request_id": request_id,
+        "decision": "ZATWIERDZONY",
+        "manager_comment": "Zezwolono na korektę"
+    }, headers={"Authorization": f"Bearer {mgr_token}"})
+    assert dec_res.status_code == 200
+
+    # 5. Audytor aplikuje 1 korektę -> 200 OK
+    corr_ok = client.put("/api/audits/apply-correction", json={
+        "audit_id": audit_id,
+        "modified_by": "Audytor",
+        "change_reason": "Oficjalna poprawka",
+        "updated_fields": {"notes": "Poprawiona notatka po zgodzie managera"}
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert corr_ok.status_code == 200
+
+    # 6. Audytor próbuje wykonać drugą korektę na tym samym audycie -> 403 (rekord automatycznie zablokował się po 1 edycji!)
+    corr_relock = client.put("/api/audits/apply-correction", json={
+        "audit_id": audit_id,
+        "modified_by": "Audytor",
+        "change_reason": "Druga próba zmiany bez nowego wniosku",
+        "updated_fields": {"notes": "Próba ponownej edycji"}
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+    assert corr_relock.status_code == 403
+
+def test_brute_force_rate_limiting_iso27001(client):
+    """Wielokrotne błędne próby logowania (5 nieudanych) muszą aktywować blokadę 429 Too Many Requests (ISO 27001)."""
+    from security import _login_failures
+    _login_failures.clear()
+
+    # 5 błędnych prób logowania (nieprawidłowy PIN)
+    for _ in range(5):
+        res = client.post("/api/auth/login", json={"pin": "WRONG_PIN", "expected_role": "AUDITOR"})
+        assert res.status_code == 401
+
+    # 6. próba musi zostać zablokowana kodem 429 Too Many Requests
+    blocked_res = client.post("/api/auth/login", json={"pin": "WRONG_PIN", "expected_role": "AUDITOR"})
+    assert blocked_res.status_code == 429
+    assert "zbyt wiele nieudanych prób" in blocked_res.json().get("detail", "").lower()
+
+    # Czyszczenie po teście
+    _login_failures.clear()
 
 
 

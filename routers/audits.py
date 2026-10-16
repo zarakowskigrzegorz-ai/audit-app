@@ -27,7 +27,7 @@ MAX_UPLOAD_SIZE = 15 * 1024 * 1024
 
 class AuditEditRequestCreate(BaseModel):
     audit_id: int
-    requested_by: str
+    requested_by: Optional[str] = None
     reason: str
 
 class AuditEditDecision(BaseModel):
@@ -106,6 +106,8 @@ async def save_audit(
     ko_failed_flag = 0
     try:
         parsed_chk = json.loads(checklist_results) if checklist_results else {}
+        if isinstance(parsed_chk, list):
+            parsed_chk = {str(q.get("id", i)): q for i, q in enumerate(parsed_chk) if isinstance(q, dict)}
         if isinstance(parsed_chk, dict) and len(parsed_chk) > 0:
             if len(parsed_chk) < len(template_questions):
                 raise HTTPException(status_code=400, detail="Wymagane zatwierdzenie 100% pytań checklisty")
@@ -273,12 +275,14 @@ async def request_audit_edit(
         if pending:
             raise HTTPException(status_code=400, detail="Wniosek dla tego audytu już oczekuje na decyzję Managera.")
 
+        user_name = payload.requested_by or current_user.get("full_name") or current_user.get("sub") or "Audytor"
         await c.execute(
             "INSERT INTO audit_edit_requests (audit_id, requested_by, reason, status) VALUES (?, ?, ?, 'OCZEKUJE')",
-            (payload.audit_id, payload.requested_by, payload.reason.strip())
+            (payload.audit_id, user_name, payload.reason.strip())
         )
+        request_id = c.lastrowid
         await conn.commit()
-    return {"status": "OK", "message": "Wniosek przesłany do Managera Jakości."}
+    return {"status": "OK", "request_id": request_id, "message": "Wniosek przesłany do Managera Jakości."}
 
 @router.get("/api/audits/edit-requests")
 async def list_edit_requests(
