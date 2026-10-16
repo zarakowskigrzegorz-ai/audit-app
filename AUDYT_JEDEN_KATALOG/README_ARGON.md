@@ -1,7 +1,7 @@
 # 🛡️ PAKIET AUDYTU ARCHITEKTURY, LOGIKI I BEZPIECZEŃSTWA (DLA ARGONA)
 
 System: **Quality Audit Enterprise (IFS Food v8 / BRCGS v9 / HACCP)**  
-Data przygotowania: **2026-10-15**  
+Data przygotowania: **2026-10-16**  
 Lokalizacja paczki: `/Users/grzegorzzarakowski/Desktop/audit_app/ARGON/`
 
 ---
