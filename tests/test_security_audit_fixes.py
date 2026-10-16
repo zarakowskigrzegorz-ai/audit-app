@@ -506,3 +506,67 @@ def test_brute_force_rate_limiting_iso27001(client):
     # Czyszczenie po teście
     _login_failures.clear()
 
+def test_delete_audit_with_change_logs_no_fk_error(client):
+    """Usunięcie audytu posiadającego wpisy w audit_change_logs i audit_edit_requests nie powoduje błędu klucza obcego (PRAGMA foreign_keys = ON)."""
+    aud_token = get_auditor_token(client)
+    mgr_token = get_manager_token(client)
+
+    a_res = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "Do usunięcia z historią"
+    })
+    assert a_res.status_code == 200
+    audit_id = a_res.json()["audit_id"]
+
+    # Dodajemy wpis w audit_edit_requests
+    client.post("/api/audits/request-edit", json={
+        "audit_id": audit_id,
+        "reason": "Test FK"
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+
+    # Dodajemy wpis w audit_change_logs poprzez zmianę statusu przez managera
+    client.patch(f"/api/audits/{audit_id}/status", json={
+        "status": "ZATWIERDZONY",
+        "reason": "Zatwierdzono testowo"
+    }, headers={"Authorization": f"Bearer {mgr_token}"})
+
+    # Usunięcie audytu przez managera -> 200 OK
+    del_res = client.delete(f"/api/audits/{audit_id}", headers={"Authorization": f"Bearer {mgr_token}"})
+    assert del_res.status_code == 200
+
+def test_mark_single_note_read_requires_manager(client):
+    """Endpoint PATCH /api/auditor-notes/{id}/read wymaga uprawnień Managera."""
+    aud_token = get_auditor_token(client)
+    mgr_token = get_manager_token(client)
+
+    n_res = client.post("/api/auditor-notes", json={
+        "auditor_name": "Audytor",
+        "content": "Test ochrony odczytu notatki"
+    })
+    assert n_res.status_code == 200
+    note_id = n_res.json()["note_id"]
+
+    # Audytor -> 403
+    aud_patch = client.patch(f"/api/auditor-notes/{note_id}/read", headers={"Authorization": f"Bearer {aud_token}"})
+    assert aud_patch.status_code == 403
+
+    # Manager -> 200
+    mgr_patch = client.patch(f"/api/auditor-notes/{note_id}/read", headers={"Authorization": f"Bearer {mgr_token}"})
+    assert mgr_patch.status_code == 200
+
+def test_csv_formula_injection_sanitized(client):
+    """Eksport CSV neutralizuje potencjalne formuły złośliwe (=, +, -, @) chroniąc przed CSV Formula Injection."""
+    client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "=cmd|' /C calc'!A0"
+    })
+    res = client.get("/api/audits/export/powerbi/csv")
+    assert res.status_code == 200
+    assert "'=cmd" in res.text
+

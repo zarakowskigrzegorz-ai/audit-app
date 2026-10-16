@@ -206,7 +206,7 @@ async def mark_all_as_read_by_auditor(auditor: Optional[str] = None):
     return {"status": "success"}
 
 @router.patch("/{note_id}/read")
-async def mark_note_as_read(note_id: int):
+async def mark_note_as_read(note_id: int, manager: dict = Depends(require_manager)):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     async with get_db() as conn:
         c = await conn.cursor()

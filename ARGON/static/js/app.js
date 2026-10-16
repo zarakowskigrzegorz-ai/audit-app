@@ -668,7 +668,8 @@
                     return;
                 }
 
-                const resVerify = await fetch('/api/auth/biometric/register-verify', {
+                const httpFetch = window.apiFetch || fetch;
+                const resVerify = await httpFetch('/api/auth/biometric/register-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: state.user_id, credential_id: credId })

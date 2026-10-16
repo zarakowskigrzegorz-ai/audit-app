@@ -128,10 +128,13 @@ async def reschedule_audit(sched_id: int, payload: Dict[str, str], user: dict = 
         raise HTTPException(status_code=400, detail="Nie można przesuwać audytu na datę wsteczną")
         
     async with get_db() as conn:
-        cursor = await conn.execute("SELECT scheduled_date, lead_auditor, backup_auditor FROM audit_schedules WHERE id = ?", (sched_id,))
+        cursor = await conn.execute("SELECT scheduled_date, lead_auditor, backup_auditor, status FROM audit_schedules WHERE id = ?", (sched_id,))
         row = await cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+
+        if row["status"] == "WYKONANY":
+            raise HTTPException(status_code=400, detail="Nie można przesunąć zrealizowanego audytu")
             
         if user.get("role") != "MANAGER":
             sub = (user.get("sub") or "").strip()
@@ -266,7 +269,7 @@ async def router_clear_month(payload: ClearMonthModel, manager: dict = Depends(r
 
     async with get_db() as conn:
         cursor = await conn.execute(
-            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ?",
+            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ? AND (status != 'WYKONANY' OR status IS NULL)",
             (start_date, end_date)
         )
         deleted_count = cursor.rowcount
@@ -284,7 +287,7 @@ async def router_clear_month(payload: ClearMonthModel, manager: dict = Depends(r
 @router.post("/clear-all")
 async def router_clear_all(manager: dict = Depends(require_manager)):
     async with get_db() as conn:
-        cursor = await conn.execute("DELETE FROM audit_schedules")
+        cursor = await conn.execute("DELETE FROM audit_schedules WHERE status != 'WYKONANY' OR status IS NULL")
         deleted_count = cursor.rowcount
         await conn.commit()
 

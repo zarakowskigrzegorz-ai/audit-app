@@ -556,6 +556,8 @@ async def undo_last_audit(
         if not row:
             raise HTTPException(status_code=404, detail="Nie odnaleziono audytu")
             
+        await c.execute("DELETE FROM audit_change_logs WHERE audit_id = ?", (audit_id,))
+        await c.execute("DELETE FROM audit_edit_requests WHERE audit_id = ?", (audit_id,))
         await c.execute("DELETE FROM audits WHERE id = ?", (audit_id,))
         await c.execute("""
             UPDATE audit_schedules 

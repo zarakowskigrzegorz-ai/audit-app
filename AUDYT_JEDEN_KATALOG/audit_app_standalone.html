@@ -4720,7 +4720,8 @@
                     return;
                 }
 
-                const resVerify = await fetch('/api/auth/biometric/register-verify', {
+                const httpFetch = window.apiFetch || fetch;
+                const resVerify = await httpFetch('/api/auth/biometric/register-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: state.user_id, credential_id: credId })
@@ -10305,7 +10306,8 @@
     async function clearLiveChatHistory() {
         if (!confirm("Czy na pewno chcesz wyczyścić całą historię Live Chatu?")) return;
         try {
-            const res = await fetch('/api/auditor-notes/chat-clear', { method: 'POST' });
+            const httpFetch = window.apiFetch || fetch;
+            const res = await httpFetch('/api/auditor-notes/chat-clear', { method: 'POST' });
             if (res.ok) {
                 await loadLiveChatMessages(true);
             }

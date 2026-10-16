@@ -223,7 +223,8 @@
     async function clearLiveChatHistory() {
         if (!confirm("Czy na pewno chcesz wyczyścić całą historię Live Chatu?")) return;
         try {
-            const res = await fetch('/api/auditor-notes/chat-clear', { method: 'POST' });
+            const httpFetch = window.apiFetch || fetch;
+            const res = await httpFetch('/api/auditor-notes/chat-clear', { method: 'POST' });
             if (res.ok) {
                 await loadLiveChatMessages(true);
             }

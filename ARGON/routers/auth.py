@@ -126,13 +126,23 @@ def bio_login_challenge():
     return {"challenge": b64}
 
 @router.post("/biometric/login-verify")
-async def bio_login_verify(payload: BiometricLoginVerifyModel):
+async def bio_login_verify(payload: BiometricLoginVerifyModel, request: Request):
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    check_rate_limit(client_ip)
     async with get_db() as conn:
         c = await conn.cursor()
         await c.execute("SELECT id, pin, full_name, role, qualifications FROM users WHERE biometric_cred_id = ? AND is_active = 1", (payload.credential_id,))
         row = await c.fetchone()
     if not row:
+        record_login_failure(client_ip)
+        await log_security_event(
+            event_type="LOGIN_FAILED",
+            ip_address=client_ip,
+            severity="WARN",
+            details="Nieudana próba logowania biometrycznego"
+        )
         raise HTTPException(status_code=401, detail="Nieprawidłowe poświadczenie biometryczne")
+    reset_login_failures(client_ip)
     user_dict = dict(row)
     token = create_access_token(user_dict)
     user_dict.pop("pin", None)

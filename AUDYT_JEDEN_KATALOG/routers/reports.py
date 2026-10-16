@@ -15,6 +15,12 @@ router = APIRouter(tags=["Reports"])
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+def _sanitize_cell(val):
+    """Chroni przed atakiem CSV / Excel Formula Injection (OWASP / ISO 27001)."""
+    if isinstance(val, str) and val and val[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + val
+    return val
+
 @router.get("/api/reports/kpi")
 async def get_kpi():
     async with get_db() as conn:
@@ -137,13 +143,13 @@ async def export_excel():
     ws_data.append(headers)
     
     for r in rows:
-        ws_data.append([
+        ws_data.append([_sanitize_cell(v) for v in [
             r.get("id", ""), r.get("timestamp", ""), r.get("auditor_id", ""), r.get("line", ""), 
             r.get("shift", ""), r.get("zone", ""), r.get("health_ok", ""), r.get("ccp1_fe_ok", ""), 
             r.get("ccp1_nonfe_ok", ""), r.get("ccp1_ss_ok", ""), r.get("ccp1_reject_ok", ""), 
             r.get("ccp1_bin_locked", ""), r.get("gmp_cleanliness_ok", ""), r.get("slm_analysis", ""), 
             r.get("record_status", "ZABLOKOWANY")
-        ])
+        ]])
         
     if total_audits > 0:
         tab = Table(displayName="TabelaAudytow", ref=f"A1:O{total_audits+1}")
@@ -211,7 +217,7 @@ async def export_powerbi_csv():
         bhp_ok = "TAK" if r.get("bhp_status") in ("BRAK ZGŁOSZEŃ", "ZGODNY", "OK") else "NIE"
         ko_flag = "TAK" if r.get("ko_failed") == 1 else "NIE"
 
-        writer.writerow([
+        writer.writerow([_sanitize_cell(v) for v in [
             r.get("id"),
             ts,
             date_part,
@@ -234,7 +240,7 @@ async def export_powerbi_csv():
             ko_flag,
             r.get("total_score_pct") or 100,
             (r.get("notes") or "").replace("\n", " ").replace("\r", "")
-        ])
+        ]])
 
     csv_data = output.getvalue()
     encoded_bytes = csv_data.encode("utf-8-sig")

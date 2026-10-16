@@ -1527,13 +1527,23 @@ def bio_login_challenge():
     return {"challenge": b64}
 
 @router.post("/biometric/login-verify")
-async def bio_login_verify(payload: BiometricLoginVerifyModel):
+async def bio_login_verify(payload: BiometricLoginVerifyModel, request: Request):
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    check_rate_limit(client_ip)
     async with get_db() as conn:
         c = await conn.cursor()
         await c.execute("SELECT id, pin, full_name, role, qualifications FROM users WHERE biometric_cred_id = ? AND is_active = 1", (payload.credential_id,))
         row = await c.fetchone()
     if not row:
+        record_login_failure(client_ip)
+        await log_security_event(
+            event_type="LOGIN_FAILED",
+            ip_address=client_ip,
+            severity="WARN",
+            details="Nieudana próba logowania biometrycznego"
+        )
         raise HTTPException(status_code=401, detail="Nieprawidłowe poświadczenie biometryczne")
+    reset_login_failures(client_ip)
     user_dict = dict(row)
     token = create_access_token(user_dict)
     user_dict.pop("pin", None)
@@ -2250,6 +2260,8 @@ async def undo_last_audit(
         if not row:
             raise HTTPException(status_code=404, detail="Nie odnaleziono audytu")
             
+        await c.execute("DELETE FROM audit_change_logs WHERE audit_id = ?", (audit_id,))
+        await c.execute("DELETE FROM audit_edit_requests WHERE audit_id = ?", (audit_id,))
         await c.execute("DELETE FROM audits WHERE id = ?", (audit_id,))
         await c.execute("""
             UPDATE audit_schedules 
@@ -2788,7 +2800,7 @@ async def mark_all_as_read_by_auditor(auditor: Optional[str] = None):
     return {"status": "success"}
 
 @router.patch("/{note_id}/read")
-async def mark_note_as_read(note_id: int):
+async def mark_note_as_read(note_id: int, manager: dict = Depends(require_manager)):
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     async with get_db() as conn:
         c = await conn.cursor()
@@ -2902,6 +2914,12 @@ from database import get_db
 router = APIRouter(tags=["Reports"])
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def _sanitize_cell(val):
+    """Chroni przed atakiem CSV / Excel Formula Injection (OWASP / ISO 27001)."""
+    if isinstance(val, str) and val and val[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + val
+    return val
 
 @router.get("/api/reports/kpi")
 async def get_kpi():
@@ -3025,13 +3043,13 @@ async def export_excel():
     ws_data.append(headers)
     
     for r in rows:
-        ws_data.append([
+        ws_data.append([_sanitize_cell(v) for v in [
             r.get("id", ""), r.get("timestamp", ""), r.get("auditor_id", ""), r.get("line", ""), 
             r.get("shift", ""), r.get("zone", ""), r.get("health_ok", ""), r.get("ccp1_fe_ok", ""), 
             r.get("ccp1_nonfe_ok", ""), r.get("ccp1_ss_ok", ""), r.get("ccp1_reject_ok", ""), 
             r.get("ccp1_bin_locked", ""), r.get("gmp_cleanliness_ok", ""), r.get("slm_analysis", ""), 
             r.get("record_status", "ZABLOKOWANY")
-        ])
+        ]])
         
     if total_audits > 0:
         tab = Table(displayName="TabelaAudytow", ref=f"A1:O{total_audits+1}")
@@ -3099,7 +3117,7 @@ async def export_powerbi_csv():
         bhp_ok = "TAK" if r.get("bhp_status") in ("BRAK ZGŁOSZEŃ", "ZGODNY", "OK") else "NIE"
         ko_flag = "TAK" if r.get("ko_failed") == 1 else "NIE"
 
-        writer.writerow([
+        writer.writerow([_sanitize_cell(v) for v in [
             r.get("id"),
             ts,
             date_part,
@@ -3122,7 +3140,7 @@ async def export_powerbi_csv():
             ko_flag,
             r.get("total_score_pct") or 100,
             (r.get("notes") or "").replace("\n", " ").replace("\r", "")
-        ])
+        ]])
 
     csv_data = output.getvalue()
     encoded_bytes = csv_data.encode("utf-8-sig")
@@ -3294,10 +3312,13 @@ async def reschedule_audit(sched_id: int, payload: Dict[str, str], user: dict = 
         raise HTTPException(status_code=400, detail="Nie można przesuwać audytu na datę wsteczną")
         
     async with get_db() as conn:
-        cursor = await conn.execute("SELECT scheduled_date, lead_auditor, backup_auditor FROM audit_schedules WHERE id = ?", (sched_id,))
+        cursor = await conn.execute("SELECT scheduled_date, lead_auditor, backup_auditor, status FROM audit_schedules WHERE id = ?", (sched_id,))
         row = await cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Harmonogram nie znaleziony")
+
+        if row["status"] == "WYKONANY":
+            raise HTTPException(status_code=400, detail="Nie można przesunąć zrealizowanego audytu")
             
         if user.get("role") != "MANAGER":
             sub = (user.get("sub") or "").strip()
@@ -3432,7 +3453,7 @@ async def router_clear_month(payload: ClearMonthModel, manager: dict = Depends(r
 
     async with get_db() as conn:
         cursor = await conn.execute(
-            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ?",
+            "DELETE FROM audit_schedules WHERE scheduled_date >= ? AND scheduled_date <= ? AND (status != 'WYKONANY' OR status IS NULL)",
             (start_date, end_date)
         )
         deleted_count = cursor.rowcount
@@ -3450,7 +3471,7 @@ async def router_clear_month(payload: ClearMonthModel, manager: dict = Depends(r
 @router.post("/clear-all")
 async def router_clear_all(manager: dict = Depends(require_manager)):
     async with get_db() as conn:
-        cursor = await conn.execute("DELETE FROM audit_schedules")
+        cursor = await conn.execute("DELETE FROM audit_schedules WHERE status != 'WYKONANY' OR status IS NULL")
         deleted_count = cursor.rowcount
         await conn.commit()
 
@@ -4378,6 +4399,70 @@ def test_brute_force_rate_limiting_iso27001(client):
     # Czyszczenie po teście
     _login_failures.clear()
 
+def test_delete_audit_with_change_logs_no_fk_error(client):
+    """Usunięcie audytu posiadającego wpisy w audit_change_logs i audit_edit_requests nie powoduje błędu klucza obcego (PRAGMA foreign_keys = ON)."""
+    aud_token = get_auditor_token(client)
+    mgr_token = get_manager_token(client)
+
+    a_res = client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "Do usunięcia z historią"
+    })
+    assert a_res.status_code == 200
+    audit_id = a_res.json()["audit_id"]
+
+    # Dodajemy wpis w audit_edit_requests
+    client.post("/api/audits/request-edit", json={
+        "audit_id": audit_id,
+        "reason": "Test FK"
+    }, headers={"Authorization": f"Bearer {aud_token}"})
+
+    # Dodajemy wpis w audit_change_logs poprzez zmianę statusu przez managera
+    client.patch(f"/api/audits/{audit_id}/status", json={
+        "status": "ZATWIERDZONY",
+        "reason": "Zatwierdzono testowo"
+    }, headers={"Authorization": f"Bearer {mgr_token}"})
+
+    # Usunięcie audytu przez managera -> 200 OK
+    del_res = client.delete(f"/api/audits/{audit_id}", headers={"Authorization": f"Bearer {mgr_token}"})
+    assert del_res.status_code == 200
+
+def test_mark_single_note_read_requires_manager(client):
+    """Endpoint PATCH /api/auditor-notes/{id}/read wymaga uprawnień Managera."""
+    aud_token = get_auditor_token(client)
+    mgr_token = get_manager_token(client)
+
+    n_res = client.post("/api/auditor-notes", json={
+        "auditor_name": "Audytor",
+        "content": "Test ochrony odczytu notatki"
+    })
+    assert n_res.status_code == 200
+    note_id = n_res.json()["note_id"]
+
+    # Audytor -> 403
+    aud_patch = client.patch(f"/api/auditor-notes/{note_id}/read", headers={"Authorization": f"Bearer {aud_token}"})
+    assert aud_patch.status_code == 403
+
+    # Manager -> 200
+    mgr_patch = client.patch(f"/api/auditor-notes/{note_id}/read", headers={"Authorization": f"Bearer {mgr_token}"})
+    assert mgr_patch.status_code == 200
+
+def test_csv_formula_injection_sanitized(client):
+    """Eksport CSV neutralizuje potencjalne formuły złośliwe (=, +, -, @) chroniąc przed CSV Formula Injection."""
+    client.post("/api/audit", data={
+        "auditor_id": "Grzegorz Zarakowski",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "shift": "1",
+        "zone": "High Care",
+        "notes": "=cmd|' /C calc'!A0"
+    })
+    res = client.get("/api/audits/export/powerbi/csv")
+    assert res.status_code == 200
+    assert "'=cmd" in res.text
+
 
 
 # ========================================================
@@ -5121,7 +5206,8 @@ def test_auditor_cannot_delete_users(client):
                     return;
                 }
 
-                const resVerify = await fetch('/api/auth/biometric/register-verify', {
+                const httpFetch = window.apiFetch || fetch;
+                const resVerify = await httpFetch('/api/auth/biometric/register-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: state.user_id, credential_id: credId })
@@ -9214,7 +9300,8 @@ def test_auditor_cannot_delete_users(client):
     async function clearLiveChatHistory() {
         if (!confirm("Czy na pewno chcesz wyczyścić całą historię Live Chatu?")) return;
         try {
-            const res = await fetch('/api/auditor-notes/chat-clear', { method: 'POST' });
+            const httpFetch = window.apiFetch || fetch;
+            const res = await httpFetch('/api/auditor-notes/chat-clear', { method: 'POST' });
             if (res.ok) {
                 await loadLiveChatMessages(true);
             }
