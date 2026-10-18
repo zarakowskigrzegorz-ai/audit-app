@@ -612,3 +612,54 @@ def test_multi_agent_architecture_endpoint(client):
     assert "ollama_status" in data
 
 
+def test_context_aware_chat_manager_and_auditor(client):
+    """
+    Weryfikacja kontekstowego dialogu w POST /api/agent/chat oraz POST /api/agent/chat/stream:
+    - Tryb MANAGER zwraca dane operacyjne zakładu (HOLD LOT / harmonogram / statystyki) oraz podpowiedzi zarządcze.
+    - Tryb AUDITOR zwraca krótkie kroki operacyjne IFS Food v8 / HACCP, pytania pomocnicze oraz podpowiedzi halowe.
+    """
+    # 1. Zapytanie w trybie MANAGER
+    res_mgr = client.post("/api/agent/chat", json={
+        "message": "Podsumuj dzisiejsze audyty, status harmonogramu i ryzyka HOLD LOT",
+        "user_name": "Kierownik Jakości",
+        "role": "MANAGER",
+        "line": "Cały Zakład",
+        "history": []
+    })
+    assert res_mgr.status_code == 200
+    mgr_data = res_mgr.json()
+    assert mgr_data["role"] == "MANAGER"
+    assert "reply" in mgr_data and len(mgr_data["reply"]) > 20
+    assert isinstance(mgr_data.get("suggested_replies"), list)
+    assert len(mgr_data["suggested_replies"]) >= 2
+    assert "live_stats" in mgr_data
+
+    # 2. Zapytanie w trybie AUDITOR
+    res_aud = client.post("/api/agent/chat", json={
+        "message": "Awaria wzorca Fe na detektorze CCP1, co robić?",
+        "user_name": "Grzegorz Zarakowski",
+        "role": "AUDITOR",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "history": []
+    })
+    assert res_aud.status_code == 200
+    aud_data = res_aud.json()
+    assert aud_data["role"] == "AUDITOR"
+    assert "reply" in aud_data and ("CCP1" in aud_data["reply"] or "HOLD LOT" in aud_data["reply"])
+    assert isinstance(aud_data.get("suggested_replies"), list)
+    assert len(aud_data["suggested_replies"]) >= 2
+
+    # 3. Sprawdzenie endpointu strumieniującego POST /api/agent/chat/stream
+    res_stream = client.post("/api/agent/chat/stream", json={
+        "message": "Procedura PR15.01 skaleczenie",
+        "user_name": "Grzegorz Zarakowski",
+        "role": "AUDITOR",
+        "line": "Linia L1 (Masa Konszowanie)",
+        "history": []
+    })
+    assert res_stream.status_code == 200
+    assert "text/event-stream" in res_stream.headers.get("content-type", "")
+    assert "suggested_replies" in res_stream.text
+
+
+

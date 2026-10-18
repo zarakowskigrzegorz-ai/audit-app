@@ -9,6 +9,130 @@
 
     let liveChatPollingTimer = null;
     let cachedChatMessages = [];
+    let lastRenderedChatMsgId = null;
+    let lastRenderedChatCount = -1;
+
+    const AUDITOR_QUICK_CHIPS = [
+        "🚨 Awaria CCP1 - proszę o decyzję",
+        "✅ Audyt zakończony bez uwag",
+        "🔓 Proszę o odblokowanie audytu do korekty",
+        "❓ Pytanie o procedurę PR15.01"
+    ];
+
+    const MANAGER_QUICK_CHIPS = [
+        "👍 Przyjąłem, działaj wg procedury HOLD LOT",
+        "🔍 Zrób dodatkowe zdjęcie dowodowe",
+        "✅ Zatwierdzam korektę, możesz edytować",
+        "📞 Podejdę na linię za 5 minut"
+    ];
+
+    function escapeChatHtml(str) {
+        return String(str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderLiveChatRoleChips() {
+        const inputEl = document.getElementById('live-chat-input');
+        if (!inputEl) return;
+        const composerSection = inputEl.closest('.pt-2\\.5') || inputEl.parentElement?.parentElement;
+        if (!composerSection) return;
+
+        let chipsBar = document.getElementById('live-chat-role-chips');
+        if (!chipsBar) {
+            chipsBar = document.createElement('div');
+            chipsBar.id = 'live-chat-role-chips';
+            chipsBar.className = 'flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 text-[10.5px]';
+            composerSection.insertBefore(chipsBar, composerSection.firstChild);
+        }
+
+        const state = window.state || {};
+        const isMgr = String(state.role || 'AUDITOR').toUpperCase() === 'MANAGER';
+        const chips = isMgr ? MANAGER_QUICK_CHIPS : AUDITOR_QUICK_CHIPS;
+        const chipTheme = isMgr
+            ? 'bg-amber-950/70 hover:bg-amber-900 text-amber-200 border-amber-500/40'
+            : 'bg-cyan-950/70 hover:bg-cyan-900 text-cyan-200 border-cyan-500/40';
+
+        chipsBar.innerHTML = `<span class="text-[9.5px] font-bold text-slate-400 shrink-0 mr-0.5"><i class="fas fa-bolt text-amber-400 mr-1"></i>Szybkie:</span>` +
+            chips.map((chip, idx) => `
+                <button type="button" data-chip-idx="${idx}" onclick="window.useLiveChatRoleChip(${idx})"
+                        class="px-2.5 py-1 rounded-full border ${chipTheme} font-bold shrink-0 transition active:scale-95 cursor-pointer shadow-sm">
+                    ${escapeChatHtml(chip)}
+                </button>
+            `).join('');
+    }
+
+    function useLiveChatRoleChip(idx) {
+        const state = window.state || {};
+        const isMgr = String(state.role || 'AUDITOR').toUpperCase() === 'MANAGER';
+        const chips = isMgr ? MANAGER_QUICK_CHIPS : AUDITOR_QUICK_CHIPS;
+        const chosen = chips[idx];
+        if (!chosen) return;
+
+        const inputEl = document.getElementById('live-chat-input');
+        const prioEl = document.getElementById('live-chat-prio');
+        if (prioEl) {
+            if (chosen.includes('Awaria CCP1') || chosen.includes('HOLD LOT')) {
+                prioEl.value = 'HOLD';
+            } else if (chosen.includes('korekt') || chosen.includes('zdjęcie')) {
+                prioEl.value = 'INFO';
+            } else {
+                prioEl.value = 'CHAT';
+            }
+        }
+        if (inputEl) {
+            inputEl.value = chosen;
+            sendLiveChatMessage();
+        }
+    }
+
+    function renderSingleMessageBubble(msg, currentRole, currentUserName) {
+        const isMgr = (msg.sender_role === 'MANAGER');
+        const isMe = Boolean(msg._optimistic) ||
+                     (currentRole === 'MANAGER' && isMgr) ||
+                     (currentRole !== 'MANAGER' && !isMgr && msg.sender_name && msg.sender_name.toLowerCase().includes(currentUserName));
+
+        let prioBadge = '';
+        if (msg.priority === 'HOLD') {
+            prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-600 text-white border border-rose-400 animate-pulse inline-flex items-center gap-1"><i class="fas fa-triangle-exclamation"></i><span>HOLD CCP</span></span>`;
+        } else if (msg.priority === 'WARNING') {
+            prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/30 text-amber-300 border border-amber-400/50 inline-flex items-center gap-1"><i class="fas fa-circle-exclamation"></i><span>UWAGA CP</span></span>`;
+        } else if (msg.priority === 'INFO') {
+            prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 inline-flex items-center gap-1"><i class="fas fa-circle-info"></i><span>INFO</span></span>`;
+        }
+
+        const lineTag = msg.line_name ? `<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-900 border border-slate-700 text-slate-300 inline-flex items-center gap-1"><i class="fas fa-industry text-amber-400"></i><span>${escapeChatHtml(msg.line_name)}</span></span>` : '';
+
+        const senderLabel = isMgr
+            ? `<span class="text-amber-300 font-black flex items-center gap-1"><i class="fas fa-user-shield text-[10px]"></i> ${escapeChatHtml(msg.sender_name || 'Kierownik Jakości')}</span>`
+            : `<span class="text-cyan-300 font-bold flex items-center gap-1"><i class="fas fa-hard-hat text-[10px]"></i> ${escapeChatHtml(msg.sender_name || 'Audytor Operacyjny')}</span>`;
+
+        const bubbleAlign = isMe ? 'items-end' : 'items-start';
+        const bubbleBg = isMe
+            ? (isMgr ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white rounded-br-none border border-amber-400/40 shadow-lg' : 'bg-gradient-to-br from-cyan-600 to-blue-600 text-white rounded-br-none border border-cyan-400/40 shadow-lg')
+            : (isMgr ? 'bg-amber-950/40 text-slate-100 rounded-bl-none border border-amber-500/40 shadow-md' : 'bg-slate-900 text-slate-100 rounded-bl-none border border-slate-700 shadow-md');
+
+        const timeDisplay = msg._optimistic
+            ? `<span class="text-cyan-300 font-mono text-[9px] animate-pulse"><i class="fas fa-clock mr-0.5"></i>Wysyłanie... (${msg.time_short || ''})</span>`
+            : `<span class="text-slate-500 font-mono text-[9px]">${msg.timestamp ? (msg.timestamp.split(' ')[1] || msg.timestamp) : ''}</span>`;
+
+        return `
+            <div class="flex flex-col ${bubbleAlign} space-y-1" data-msg-id="${msg.id || 'temp'}">
+                <div class="flex items-center gap-2 text-[10px] px-1">
+                    ${senderLabel}
+                    ${prioBadge}
+                    ${lineTag}
+                    ${timeDisplay}
+                </div>
+                <div class="max-w-[85%] sm:max-w-[75%] p-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed break-words ${bubbleBg} ${msg._optimistic ? 'opacity-85' : ''}">
+                    ${escapeChatHtml(msg.message).replace(/\n/g, '<br>')}
+                </div>
+            </div>
+        `;
+    }
 
     function openLiveChatModal(initialText = '', initialPrio = '') {
         const modal = document.getElementById('modal-live-chat') || document.getElementById('modal-quick-note');
@@ -20,10 +144,12 @@
             const linesData = window.productionLinesData || [];
             if (chatLine && Array.isArray(linesData) && linesData.length > 0) {
                 const curVal = chatLine.value;
-                chatLine.innerHTML = `<option value="Hala Główna">— Cała Hala / Ogólna —</option>` + 
+                chatLine.innerHTML = `<option value="Hala Główna">— Cała Hala / Ogólna —</option>` +
                     linesData.map(l => `<option value="${l.name}">${l.name}${l.code ? ' (' + l.code + ')' : ''}</option>`).join('');
                 if (curVal) chatLine.value = curVal;
             }
+
+            renderLiveChatRoleChips();
 
             if (initialPrio) {
                 const prioSel = document.getElementById('live-chat-prio');
@@ -38,15 +164,17 @@
                 }
             }
 
-            loadLiveChatMessages(true);
+            lastRenderedChatMsgId = null;
+            lastRenderedChatCount = -1;
+            loadLiveChatMessages(true, true);
 
             if (liveChatPollingTimer) clearInterval(liveChatPollingTimer);
             liveChatPollingTimer = setInterval(() => {
                 const m = document.getElementById('modal-live-chat') || document.getElementById('modal-quick-note');
                 if (m && !m.classList.contains('hidden')) {
-                    loadLiveChatMessages(false);
+                    loadLiveChatMessages(false, false);
                 }
-            }, 3000);
+            }, 2500);
         }
     }
 
@@ -59,17 +187,31 @@
         }
     }
 
-    async function loadLiveChatMessages(shouldScrollToBottom = true) {
+    async function loadLiveChatMessages(shouldScrollToBottom = true, forceRender = false) {
         const container = document.getElementById('live-chat-messages-container');
         if (!container) return;
 
         try {
-            const res = await fetch('/api/auditor-notes/chat-messages?limit=100');
+            const httpFetch = window.apiFetch || fetch;
+            const res = await httpFetch('/api/auditor-notes/chat-messages?limit=100');
             if (!res.ok) throw new Error("Błąd pobierania wiadomości chatu");
             const messages = await res.json();
-            cachedChatMessages = messages;
+            cachedChatMessages = messages || [];
 
-            if (!messages || messages.length === 0) {
+            const latestMsg = cachedChatMessages.length > 0 ? cachedChatMessages[cachedChatMessages.length - 1] : null;
+            const latestId = latestMsg ? latestMsg.id : 0;
+            const hasOptimisticNode = Boolean(container.querySelector('[data-msg-id="temp"]'));
+
+            // Unikanie migotania DOM: jeśli liczba wiadomości i ostatnie ID nie uległy zmianie i nie ma tymczasowego dymku, pomiń przebudowę
+            if (!forceRender && !hasOptimisticNode && latestId === lastRenderedChatMsgId && cachedChatMessages.length === lastRenderedChatCount) {
+                return;
+            }
+
+            const isNewMessageArrived = (latestId !== lastRenderedChatMsgId);
+            lastRenderedChatMsgId = latestId;
+            lastRenderedChatCount = cachedChatMessages.length;
+
+            if (cachedChatMessages.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-12 px-4 bg-slate-950/40 rounded-xl border border-slate-800/80">
                         <div class="w-12 h-12 mx-auto rounded-2xl bg-cyan-950/50 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-3 shadow-inner">
@@ -78,59 +220,25 @@
                             </svg>
                         </div>
                         <h4 class="text-sm font-black text-slate-200">Live Chat jest gotowy</h4>
-                        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Napisz wiadomość poniżej, zadaj pytanie lub zgłoś natychmiastowy alert z hali produkcyjnej.</p>
+                        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Napisz wiadomość poniżej, kliknij szybką odpowiedź lub zgłoś natychmiastowy alert z hali produkcyjnej.</p>
                     </div>
                 `;
                 return;
             }
 
-            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
             const state = window.state || {};
             const currentRole = state.role || 'AUDITOR';
             const currentUserName = (state.auditor_name || state.auditor || state.user_name || '').toLowerCase();
 
-            container.innerHTML = messages.map(msg => {
-                const isMgr = (msg.sender_role === 'MANAGER');
-                const isMe = (currentRole === 'MANAGER' && isMgr) || 
-                             (currentRole !== 'MANAGER' && !isMgr && msg.sender_name && msg.sender_name.toLowerCase().includes(currentUserName));
+            container.innerHTML = cachedChatMessages.map(msg => renderSingleMessageBubble(msg, currentRole, currentUserName)).join('');
 
-                let prioBadge = '';
-                if (msg.priority === 'HOLD') {
-                    prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-600 text-white border border-rose-400 animate-pulse inline-flex items-center gap-1"><i class="fas fa-triangle-exclamation"></i><span>HOLD CCP</span></span>`;
-                } else if (msg.priority === 'WARNING') {
-                    prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/30 text-amber-300 border border-amber-400/50 inline-flex items-center gap-1"><i class="fas fa-circle-exclamation"></i><span>UWAGA CP</span></span>`;
-                } else if (msg.priority === 'INFO') {
-                    prioBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 inline-flex items-center gap-1"><i class="fas fa-circle-info"></i><span>INFO</span></span>`;
+            if (shouldScrollToBottom || (isNewMessageArrived && isNearBottom)) {
+                if (typeof container.scrollTo === 'function') {
+                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                } else {
+                    container.scrollTop = container.scrollHeight;
                 }
-
-                const lineTag = msg.line_name ? `<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-900 border border-slate-700 text-slate-300 inline-flex items-center gap-1"><i class="fas fa-industry text-amber-400"></i><span>${msg.line_name}</span></span>` : '';
-
-                const senderLabel = isMgr 
-                    ? `<span class="text-amber-300 font-black flex items-center gap-1"><i class="fas fa-user-shield text-[10px]"></i> ${msg.sender_name || 'Kierownik Jakości'}</span>`
-                    : `<span class="text-cyan-300 font-bold flex items-center gap-1"><i class="fas fa-hard-hat text-[10px]"></i> ${msg.sender_name || 'Audytor Operacyjny'}</span>`;
-
-                const bubbleAlign = isMe ? 'items-end' : 'items-start';
-                const bubbleBg = isMe 
-                    ? (isMgr ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white rounded-br-none border border-amber-400/40 shadow-lg' : 'bg-gradient-to-br from-cyan-600 to-blue-600 text-white rounded-br-none border border-cyan-400/40 shadow-lg')
-                    : (isMgr ? 'bg-amber-950/40 text-slate-100 rounded-bl-none border border-amber-500/40 shadow-md' : 'bg-slate-900 text-slate-100 rounded-bl-none border border-slate-700 shadow-md');
-
-                return `
-                    <div class="flex flex-col ${bubbleAlign} space-y-1">
-                        <div class="flex items-center gap-2 text-[10px] px-1">
-                            ${senderLabel}
-                            ${prioBadge}
-                            ${lineTag}
-                            <span class="text-slate-500 font-mono text-[9px]">${msg.timestamp ? (msg.timestamp.split(' ')[1] || msg.timestamp) : ''}</span>
-                        </div>
-                        <div class="max-w-[85%] sm:max-w-[75%] p-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed break-words ${bubbleBg}">
-                            ${msg.message}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            if (shouldScrollToBottom || isNearBottom) {
-                container.scrollTop = container.scrollHeight;
             }
         } catch(e) {
             console.warn("Błąd ładowania wiadomości czatu:", e);
@@ -142,43 +250,76 @@
         const lineEl = document.getElementById('live-chat-line');
         const prioEl = document.getElementById('live-chat-prio');
         const sendBtn = document.getElementById('btn-live-chat-send');
+        const container = document.getElementById('live-chat-messages-container');
         if (!inputEl) return;
 
         const text = (inputEl.value || '').trim();
         if (!text) return;
 
         const state = window.state || {};
-        const senderName = state.role === 'MANAGER' 
+        const currentRole = state.role || 'AUDITOR';
+        const currentUserName = (state.auditor_name || state.auditor || state.user_name || '').toLowerCase();
+        const senderName = currentRole === 'MANAGER'
             ? (state.user_name || state.auditor_id || 'Kierownik Jakości (Key User)')
             : (state.auditor_id || state.auditor_name || state.auditor || 'Audytor Operacyjny');
 
+        const selectedLine = lineEl ? lineEl.value : 'Hala Główna';
+        const selectedPrio = prioEl ? prioEl.value : 'CHAT';
+
         const payload = {
             sender_name: senderName,
-            sender_role: state.role || 'AUDITOR',
-            line_name: lineEl ? lineEl.value : 'Hala Główna',
-            priority: prioEl ? prioEl.value : 'CHAT',
+            sender_role: currentRole,
+            line_name: selectedLine,
+            priority: selectedPrio,
             message: text
         };
+
+        // 1. OPTIMISTIC UI (0 ms): Natychmiast wyczyść pole i wstaw wiadomość ze statusem "Wysyłanie..."
+        inputEl.value = '';
+        if (prioEl) prioEl.value = 'CHAT';
+        inputEl.focus();
+
+        if (container) {
+            if (cachedChatMessages.length === 0) {
+                container.innerHTML = '';
+            }
+            const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const optimisticHtml = renderSingleMessageBubble({
+                id: 'temp',
+                _optimistic: true,
+                time_short: nowTime,
+                sender_name: senderName,
+                sender_role: currentRole,
+                line_name: selectedLine,
+                priority: selectedPrio,
+                message: text
+            }, currentRole, currentUserName);
+            container.insertAdjacentHTML('beforeend', optimisticHtml);
+            if (typeof container.scrollTo === 'function') {
+                container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+            } else {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
 
         try {
             if (sendBtn) {
                 sendBtn.disabled = true;
-                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             }
 
-            const res = await fetch('/api/auditor-notes/chat-send', {
+            const httpFetch = window.apiFetch || fetch;
+            const res = await httpFetch('/api/auditor-notes/chat-send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             if (res.ok) {
-                inputEl.value = '';
-                if (prioEl) prioEl.value = 'CHAT';
-                await loadLiveChatMessages(true);
+                await loadLiveChatMessages(true, true);
             } else {
-                const err = await res.json();
+                const err = await res.json().catch(() => ({}));
                 alert("Błąd wysyłania wiadomości: " + (err.detail || 'Nieznany błąd'));
+                await loadLiveChatMessages(true, true);
             }
         } catch(e) {
             console.error("Błąd sieci czatu:", e);
@@ -226,7 +367,9 @@
             const httpFetch = window.apiFetch || fetch;
             const res = await httpFetch('/api/auditor-notes/chat-clear', { method: 'POST' });
             if (res.ok) {
-                await loadLiveChatMessages(true);
+                lastRenderedChatMsgId = null;
+                lastRenderedChatCount = -1;
+                await loadLiveChatMessages(true, true);
             }
         } catch(e) {
             console.error("Błąd czyszczenia czatu:", e);
@@ -472,6 +615,8 @@
     window.sendLiveChatMessage = sendLiveChatMessage;
     window.handleLiveChatKeyDown = handleLiveChatKeyDown;
     window.insertLiveChatQuickAction = insertLiveChatQuickAction;
+    window.renderLiveChatRoleChips = renderLiveChatRoleChips;
+    window.useLiveChatRoleChip = useLiveChatRoleChip;
     window.clearLiveChatHistory = clearLiveChatHistory;
     window.updateAuditorNotesBadge = updateAuditorNotesBadge;
 

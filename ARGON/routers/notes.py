@@ -234,6 +234,21 @@ async def mark_all_notes_as_read(manager: dict = Depends(require_manager)):
 # =====================================================================
 # MODUŁ: LIVE CHAT (KOMUNIKATOR AUDYTORZY <-> KIEROWNIK JAKOŚCI)
 # =====================================================================
+AUDITOR_QUICK_CHIPS = [
+    "🚨 Awaria CCP1 - proszę o decyzję",
+    "✅ Audyt zakończony bez uwag",
+    "🔓 Proszę o odblokowanie audytu do korekty",
+    "❓ Pytanie o procedurę PR15.01",
+]
+
+MANAGER_QUICK_CHIPS = [
+    "👍 Przyjąłem, działaj wg procedury HOLD LOT",
+    "🔍 Zrób dodatkowe zdjęcie dowodowe",
+    "✅ Zatwierdzam korektę, możesz edytować",
+    "📞 Podejdę na linię za 5 minut",
+]
+
+
 class ChatMessageModel(BaseModel):
     sender_name: str
     sender_role: Optional[str] = "AUDITOR"
@@ -241,53 +256,86 @@ class ChatMessageModel(BaseModel):
     priority: Optional[str] = "CHAT"  # CHAT, INFO, WARNING, HOLD
     message: str
 
+
 @router.get("/chat-messages")
-async def get_chat_messages(limit: int = 100):
+async def get_chat_messages(limit: int = 100, since_id: Optional[int] = None):
     async with get_db() as conn:
         c = await conn.cursor()
-        await c.execute("""
-            SELECT id, timestamp, auditor_name AS sender_name,
-                   direction AS sender_role, line_name, priority, content AS message, is_read
-            FROM auditor_notes
-            ORDER BY id ASC LIMIT ?
-        """, (limit,))
+        if since_id is not None and since_id > 0:
+            await c.execute(
+                """
+                SELECT id, timestamp, auditor_name AS sender_name,
+                       direction AS sender_role, line_name, priority, content AS message, is_read
+                FROM auditor_notes
+                WHERE id > ?
+                ORDER BY id ASC LIMIT ?
+                """,
+                (since_id, limit),
+            )
+        else:
+            await c.execute(
+                """
+                SELECT * FROM (
+                    SELECT id, timestamp, auditor_name AS sender_name,
+                           direction AS sender_role, line_name, priority, content AS message, is_read
+                    FROM auditor_notes
+                    ORDER BY id DESC LIMIT ?
+                ) sub
+                ORDER BY id ASC
+                """,
+                (limit,),
+            )
         rows = await c.fetchall()
         return [dict(r) for r in rows]
+
+
+@router.get("/chat-quick-chips")
+async def get_chat_quick_chips(role: str = "AUDITOR"):
+    norm_role = str(role or "AUDITOR").strip().upper()
+    return {
+        "role": norm_role,
+        "quick_chips": MANAGER_QUICK_CHIPS if norm_role == "MANAGER" else AUDITOR_QUICK_CHIPS,
+    }
+
 
 @router.post("/chat-send")
 async def send_chat_message(payload: ChatMessageModel):
     if not payload.message or not payload.message.strip():
         raise HTTPException(status_code=400, detail="Wiadomość nie może być pusta.")
-    
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     direction = "MANAGER" if (payload.sender_role and payload.sender_role.upper() == "MANAGER") else "AUDITOR"
     async with get_db() as conn:
         c = await conn.cursor()
-        await c.execute("""
+        await c.execute(
+            """
             INSERT INTO auditor_notes (
                 timestamp, auditor_name, line_name, priority, content, is_read, direction
             ) VALUES (?, ?, ?, ?, ?, 1, ?)
-        """, (
-            timestamp,
-            payload.sender_name.strip(),
-            payload.line_name.strip() if payload.line_name else "Hala Produkcyjna",
-            payload.priority or "CHAT",
-            payload.message.strip(),
-            direction
-        ))
+            """,
+            (
+                timestamp,
+                payload.sender_name.strip(),
+                payload.line_name.strip() if payload.line_name else "Hala Produkcyjna",
+                payload.priority or "CHAT",
+                payload.message.strip(),
+                direction,
+            ),
+        )
         msg_id = c.lastrowid
         await conn.commit()
-    
+
     return {
         "status": "success",
         "id": msg_id,
         "timestamp": timestamp,
-        "sender_name": payload.sender_name,
+        "sender_name": payload.sender_name.strip(),
         "sender_role": direction,
         "line_name": payload.line_name or "Hala Produkcyjna",
         "priority": payload.priority or "CHAT",
-        "message": payload.message.strip()
+        "message": payload.message.strip(),
     }
+
 
 @router.post("/chat-clear")
 async def clear_chat_messages(manager: dict = Depends(require_manager)):
@@ -296,5 +344,6 @@ async def clear_chat_messages(manager: dict = Depends(require_manager)):
         await c.execute("DELETE FROM auditor_notes WHERE priority = 'CHAT' OR direction IN ('MANAGER', 'AUDITOR')")
         await conn.commit()
     return {"status": "success", "message": "Historia Live Chatu wyczyszczona."}
+
 
 

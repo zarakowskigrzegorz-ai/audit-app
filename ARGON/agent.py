@@ -1169,16 +1169,82 @@ def run_stateful_dialogue_fallback(line: str, user_msg: str, chat_history: List[
     )
 
 
+def generate_suggested_replies(
+    role: str = "AUDITOR",
+    user_msg: str = "",
+    line: str = "Cały Zakład",
+    live_context: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    """
+    Generuje kontekstowe podpowiedzi szybkich odpowiedzi (Quick Chips) dopasowane do roli (MANAGER vs AUDITOR)
+    oraz aktualnego wątku rozmowy i stanu zakładu.
+    """
+    norm_role = str(role or "AUDITOR").strip().upper()
+    nt = normalize_pl(user_msg or "")
+    live_context = live_context or {}
+
+    if norm_role == "MANAGER":
+        if "harmonogram" in nt or "plan" in nt or "niewykonan" in nt:
+            return [
+                "📊 Które linie mają dziś status NOK lub HOLD LOT?",
+                "📩 Pokaż ostatnie zgłoszenia z Live Chatu od audytorów",
+                "🛡️ Wygeneruj priorytety CAPA na bieżącą zmianę",
+                "📈 Podsumuj wskaźnik zgodności KPI zakładu",
+            ]
+        if "hold" in nt or "nok" in nt or "niezgodn" in nt or "ryzyk" in nt:
+            return [
+                "📅 Pokaż niewykonane audyty z harmonogramu na dziś",
+                "🔍 Jakie działania CAPA wdrożono dla zatrzymanych partii?",
+                "📩 Sprawdź wiadomości i wnioski o korektę od audytorów",
+                "📋 Raport zarządczy IFS Food v8 dla wszystkich linii",
+            ]
+        return [
+            "📊 Podsumuj dzisiejsze audyty i wskaż linie z ryzykiem HOLD LOT",
+            "📅 Które audyty z harmonogramu są dziś jeszcze niewykonane?",
+            "📩 Pokaż ostatnie zgłoszenia i notatki od audytorów z hali",
+            "🛡️ Rekomendacje zarządcze CAPA dla Kierownika Jakości",
+        ]
+
+    # Tryb AUDITOR (Wsparcie na Hali)
+    if "ccp" in nt or "detektor" in nt or "wzorzec" in nt or "metal" in nt:
+        return [
+            f"🚨 Brak odrzutu wzorca Fe 1.5mm na {line} - kroki HOLD LOT",
+            "🔧 Odrzutnik pneumatyczny nie zadziałał - co wpisać w raport?",
+            "📦 Jak wyznaczyć zakres partii do kwarantanny od ostatniego testu?",
+            "❓ Kiedy można wznowić pracę linii po kalibracji UR?",
+        ]
+    if "pr15" in nt or "zdrow" in nt or "skalecz" in nt or "higien" in nt or "plaster" in nt:
+        return [
+            "🩹 Skaleczenie dłoni operatora - procedura niebieskiego plastra",
+            "🤒 Objawy infekcji u pracownika strefy High Care (48h karencji)",
+            "🧤 Wymogi śluzy sanitarnej i odzieży ochronnej wg IFS 3.2.1",
+            "📋 Punkt KO Nr 3 - kiedy należy zatrzymać partię?",
+        ]
+    if "szkl" in nt or "plastik" in nt or "stluczk" in nt or "olej" in nt or "wyciek" in nt:
+        return [
+            "🚨 Stłuczka szkła/pleksi w strefie otwartego produktu - procedura",
+            "🛢️ Wyciek smaru nad taśmą transportową - czy był kontakt z masą?",
+            "🏷️ Jak prawidłowo opisać czerwoną etykietę HOLD LOT?",
+            "📞 Zgłoś pilny alert HOLD CCP do Kierownika Jakości",
+        ]
+
+    return [
+        f"🚨 Awaria wzorca CCP1 na {line} - podaj kroki operacyjne",
+        "🩹 Procedura PR15.01: skaleczenie lub objawy chorobowe operatora",
+        "📦 Procedura HOLD LOT: jak zabezpieczyć podejrzaną partię?",
+        "📋 Przypomnij punkty Knock-Out (KO) IFS Food v8 na hali",
+    ]
+
+
 class CopilotRagAgent:
     """
-    Agent 3: CopilotRagAgent (Konwersacyjny Asystent Audytora z wiedzą IFS Food v8 / BRCGS v9).
+    Agent 3: CopilotRagAgent (Konwersacyjny Asystent Audytora i Partner Zarządczy Managera z wiedzą IFS Food v8 / BRCGS v9).
     Obsługuje funkcję run_chat_turn(messages, line, context).
-    Wzbogaca zapytania audytora o bazę wiedzy (klauzule IFS Food v8: 4.12 Ciała obce i detekcja metali,
-    3.2.2 Higiena personelu PR15.01, 2.2.3 Zarządzanie CCP, 5.8 Wstrzymanie wyrobu HOLD LOT, 4.18 Identyfikowalność).
+    Rozpoznaje rolę rozmówcy (MANAGER vs AUDITOR) oraz wykorzystuje dane na żywo z bazy SQLite (Live Context).
     Gdy Ollama jest offline, zwraca wyczerpujące, deterministyczne odpowiedzi domenowe RAG (nigdy 500).
     """
     name = "CopilotRagAgent"
-    role = "Konwersacyjny Asystent Audytora z wiedzą IFS Food v8 / BRCGS v9 (RAG)"
+    role = "Konwersacyjny Asystent Audytora i Partner Zarządczy Managera (IFS Food v8 / BRCGS v9 RAG)"
 
     KNOWLEDGE_BASE = {
         "4.12": (
@@ -1229,14 +1295,120 @@ class CopilotRagAgent:
             matched = [self.KNOWLEDGE_BASE["2.2.3"], self.KNOWLEDGE_BASE["5.8"]]
         return matched
 
-    async def chat(
+    def _build_manager_fallback_reply(
+        self,
+        user_msg: str,
+        line: str,
+        live_context: Dict[str, Any],
+        history_db: List[Dict[str, Any]],
+    ) -> str:
+        recent_audits = live_context.get("recent_audits") or history_db or []
+        today_nok = live_context.get("today_nok_audits") or [
+            a for a in recent_audits
+            if "NOK" in str(a.get("slm_verdict", "")).upper() or "HOLD" in str(a.get("risk_level", "")).upper()
+        ]
+        pending_sched = live_context.get("pending_schedules") or []
+        recent_notes = live_context.get("recent_notes") or []
+
+        total_rec = len(recent_audits)
+        nok_cnt = len(today_nok)
+        ok_cnt = max(0, total_rec - nok_cnt)
+
+        hold_lines = sorted({
+            str(a.get("line", "Linia"))
+            for a in today_nok
+            if a.get("line")
+        })
+        hold_summary = ", ".join(f"**{l}**" for l in hold_lines) if hold_lines else "Brak aktywnych blokad HOLD LOT"
+
+        sched_summary = (
+            f"**{len(pending_sched)}** zaplanowanych audytów oczekuje na realizację "
+            + (
+                "(" + ", ".join(f"{s.get('line')} [{s.get('audit_type', 'HACCP')}]" for s in pending_sched[:3]) + ")"
+                if pending_sched else "(100% planu dziennego wykonane)"
+            )
+        )
+
+        notes_summary = (
+            f"**{len(recent_notes)}** ostatnich komunikatów z hali"
+            + (
+                f" — najnowszy od *{recent_notes[0].get('auditor_name', 'Audytora')}*: „{str(recent_notes[0].get('content', ''))[:70]}”"
+                if recent_notes else " — brak nieobsłużonych alertów krytycznych"
+            )
+        )
+
+        return (
+            f"### 👔 Raport Partnera Zarządczego (Zastępca Kierownika Jakości)\n"
+            f"**Obszar nadzoru:** {line} | **Tryb:** MANAGER (Live SQLite Context)\n\n"
+            f"- 📊 **Bilans ostatnich audytów:** Przeanalizowano **{total_rec}** sesji (**{ok_cnt} ZGODNY** / **{nok_cnt} NOK**).\n"
+            f"- 🚨 **Linie z ryzykiem HOLD LOT / NOK:** {hold_summary}.\n"
+            f"- 📅 **Status harmonogramu na dziś:** {sched_summary}.\n"
+            f"- 📩 **Komunikacja z hali (Live Chat / Notatki):** {notes_summary}.\n\n"
+            f"**Rekomendacja zarządcza (IFS Food v8):** "
+            + (
+                f"Priorytetowa weryfikacja protokołów reinspekcji i działań CAPA na liniach: {', '.join(hold_lines)} przed zwolnieniem partii w ERP."
+                if hold_lines
+                else "Utrzymanie bieżącego rytmu inspekcji zgodnie z harmonogramem dziennym i nadzór prewencyjny nad CCP1."
+            )
+        )
+
+    def _build_auditor_fallback_reply(
+        self,
+        user_msg: str,
+        line: str,
+        messages: List[Dict[str, Any]],
+        history_db: List[Dict[str, Any]],
+        rag_passages: List[str],
+    ) -> str:
+        curr_norm = normalize_pl(user_msg)
+        if any(k in curr_norm for k in ["ccp1", "detektor", "wzorzec", "odrzut"]):
+            return (
+                f"### 🛡️ Wsparcie Operacyjne Audytora — CCP1 ({line})\n"
+                f"Wykrycie braku odrzutu wzorca na detektorze metali to krytyczne naruszenie **IFS Food v8 KO Nr 2 (klauzula 2.2.3 & 4.12)**.\n"
+                f"- 🛑 **Krok 1:** Natychmiast zatrzymaj linię produkcyjną i zablokuj odrzutnik.\n"
+                f"- 🏷️ **Krok 2:** Odizoluj fizycznie całą partię wyprodukowaną od ostatniego poprawnego testu wzorców (czerwona etykieta **HOLD LOT**).\n"
+                f"- 🔧 **Krok 3:** Wezwij Utrzymanie Ruchu do sprawdzenia ciśnienia pneumatyki i fotokomórki oraz powiadom Kierownika Jakości.\n\n"
+                f"👉 **Doprecyzuj proszę:** Na której dokładnie linii jesteś i którego wzorca (Fe 1.5mm, Non-Fe 2.0mm czy SS 2.5mm) dotyczy problem?"
+            )
+        if any(k in curr_norm for k in ["pr15", "skalecz", "krew", "plaster", "zdrow", "chor", "wymiot", "infekcj"]):
+            return (
+                f"### 🩹 Wsparcie Operacyjne Audytora — Procedura PR15.01 ({line})\n"
+                f"Incydent zdrowotny lub skaleczenie w strefie produkcyjnej podlega rygorom **IFS Food v8 KO Nr 3 (klauzula 3.2.2)**.\n"
+                f"- 🛑 **Krok 1:** Natychmiast odsuń pracownika od otwartego produktu (przy objawach infekcji obowiązuje 48h karencji).\n"
+                f"- 🩹 **Krok 2:** Przy drobnym skaleczeniu załóż niebieski plaster wykrywalny z wkładką metaliczną, przetestuj go na detektorze CCP1 i nałóż rękawicę.\n"
+                f"- 🔍 **Krok 3:** Sprawdź, czy wyrób miał kontakt z krwią/wydzieliną — jeśli tak, nałóż blokadę **HOLD LOT** i zleć mycie oraz dezynfekcję stanowiska.\n\n"
+                f"👉 **Doprecyzuj proszę:** Na której linii jesteś i czy pracownik miał bezpośredni kontakt z nieopakowanym wyrobem?"
+            )
+        if any(k in curr_norm for k in ["hold", "kwarantan", "zablok", "niezgodn", "5.8"]):
+            return (
+                f"### 📦 Wsparcie Operacyjne Audytora — Procedura HOLD LOT ({line})\n"
+                f"Postępowanie z wyrobem niezgodnym reguluje **IFS Food v8 klauzula 5.8 (KO Nr 6)**.\n"
+                f"- 🛑 **Krok 1:** Wstrzymaj podawanie wyrobu i wyznacz granicę partii od ostatniej pozytywnej kontroli.\n"
+                f"- 🏷️ **Krok 2:** Oznacz palety czerwoną kartą **HOLD LOT** (numer partii, godzina, przyczyna, podpis audytora) i przenieś do strefy kwarantanny.\n"
+                f"- 💻 **Krok 3:** Zgłoś blokadę systemową w ERP — zwolnienie partii wymaga pisemnej decyzji Managera Jakości.\n\n"
+                f"👉 **Doprecyzuj proszę:** Na której linii jesteś, jaki jest numer LOT partii i ile palet obejmuje podejrzany odcinek?"
+            )
+
+        base_reply = run_stateful_dialogue_fallback(
+            line=line,
+            user_msg=user_msg,
+            chat_history=messages or [],
+            history_db=history_db,
+        )
+        if "Na której linii" not in base_reply and "Doprecyzuj" not in base_reply and "Pytania rozszerzające" not in base_reply:
+            base_reply += "\n\n👉 **Pytanie pomocnicze:** Na której linii jesteś i którego punktu kontrolnego lub wzorca dotyczy zgłoszenie?"
+        return sanitize_slm_text(base_reply)
+
+    def build_ollama_messages(
         self,
         messages: List[Dict[str, Any]],
         line: str = "Cały Zakład",
         context: Optional[Dict[str, Any]] = None,
-    ) -> str:
+    ) -> tuple:
         context = context or {}
-        history_db = get_recent_line_history(line, limit=5)
+        user_role = str(context.get("role") or context.get("user_role") or "AUDITOR").strip().upper()
+        live_ctx = context.get("live_context") or {}
+        history_db = live_ctx.get("recent_audits") or get_recent_line_history(line, limit=5)
 
         user_turns: List[str] = []
         for m in messages or []:
@@ -1247,25 +1419,44 @@ class CopilotRagAgent:
         if user_msg and (not user_turns or user_turns[-1] != user_msg):
             user_turns.append(user_msg)
 
-        rag_Passages = self.retrieve_rag_context(" ".join(user_turns))
+        rag_passages = self.retrieve_rag_context(" ".join(user_turns))
         facts_preview = extract_dialogue_facts(user_turns, " ".join(user_turns))
 
+        today_nok = live_ctx.get("today_nok_audits") or []
+        pending_sched = live_ctx.get("pending_schedules") or []
+        recent_notes = live_ctx.get("recent_notes") or []
+
+        live_data_str = (
+            f"DANE OPERACYJNE ZAKŁADU NA ŻYWO (SQLite):\n"
+            f"• Ostatnie audyty ({len(history_db)}): "
+            + (", ".join(f"{a.get('line')} [{a.get('slm_verdict', 'OK')} / {a.get('risk_level', 'NISKIE')}]" for a in history_db[:5]) or "Brak")
+            + f"\n• Dzisiejsze niezgodności NOK/HOLD LOT: {len(today_nok)}\n"
+            f"• Niewykonane audyty z harmonogramu na dziś: {len(pending_sched)}\n"
+            f"• Ostatnie notatki z hali: {len(recent_notes)}\n"
+        )
+
+        if user_role == "MANAGER":
+            role_instructions = (
+                "TRYB ROZMÓWCY: MANAGER (Partner Zarządczy - Zastępca Kierownika Jakości).\n"
+                "Odpowiadaj zwięźle i konkretnie jak Zastępca Kierownika Jakości: podawaj statystyki z dzisiejszych audytów, "
+                "wskazuj linie z ryzykiem HOLD LOT, statusy harmonogramu i rekomendacje zarządcze CAPA."
+            )
+        else:
+            role_instructions = (
+                "TRYB ROZMÓWCY: AUDITOR (Wsparcie Operacyjne na Hali).\n"
+                "Odpowiadaj krótko, w punktach operacyjnych (maks. 3-4 zdania + konkretne kroki wg IFS Food v8 / HACCP), "
+                "dopytując na końcu o szczegóły (np. 'Na której linii jesteś i którego wzorca dotyczy problem?')."
+            )
+
         system_prompt = (
-            f"Jesteś certyfikowanym audytorem wiodącym IFS Food v8, BRCGS v9 i HACCP (Agent: {self.name}).\n"
-            f"Działasz jako inteligentny Field Co-Pilot audytora na hali produkcyjnej.\n\n"
+            f"Jesteś certyfikowanym ekspertem IFS Food v8, BRCGS v9 i HACCP (Agent: {self.name}).\n"
+            f"{role_instructions}\n\n"
+            f"{live_data_str}\n"
             f"BAZA WIEDZY RAG (KLAUZULE IFS FOOD V8):\n"
-            + "\n".join(f"• {p}" for p in rag_Passages)
-            + f"\n\nSTAN WIEDZY Z DOTYCHCZASOWEJ ROZMOWY:\n"
-            f"• Linia: {line}\n"
-            f"• Zidentyfikowana strefa: {facts_preview['zone'] or 'Jeszcze nieustalona'}\n"
-            f"• Zidentyfikowany defekt: {facts_preview['defect_desc'] or 'Jeszcze nieustalony'}\n"
-            f"• Kontakt z produktem: {'TAK - Skażenie' if facts_preview['has_contact'] is True else ('NIE - Bezpieczny' if facts_preview['has_contact'] is False else 'Do ustalenia')}\n"
-            f"• Liczba wymian zdań: {facts_preview['turns_count']}\n\n"
-            f"ZASADY DOKONYWANIA OCENY I PYTAŃ ROZSZERZAJĄCYCH:\n"
-            f"1. NIGDY NIE POWTARZAJ TYCH SAMYCH PYTAŃ: Zauważ, co audytor już podał i rozwijaj wątek.\n"
-            f"2. POWOŁUJ SIĘ NA KLAUZULE IFS FOOD V8 Z BAZY RAG (4.12, 3.2.2, 2.2.3, 5.8, 4.18).\n"
-            f"3. ZADAWAJ PRECYZYJNE PYTANIA POGŁĘBIAJĄCE: Pytaj o czas od ostatniego testu wzorców, wielkość partii do zablokowania (Hold Lot), numer LOT lub wezwanie UR.\n"
-            f"4. Odpowiadaj zwięźle i profesjonalnie po polsku w punktach Markdown."
+            + "\n".join(f"• {p}" for p in rag_passages)
+            + f"\n\nSTAN ROZMOWY:\n"
+            f"• Linia: {line} | Strefa: {facts_preview['zone'] or 'Nieustalona'} | Defekt: {facts_preview['defect_desc'] or 'Nieustalony'}\n"
+            f"Odpowiadaj profesjonalnie po polsku w formacie Markdown."
         )
 
         ollama_messages = [{"role": "system", "content": system_prompt}]
@@ -1282,8 +1473,20 @@ class CopilotRagAgent:
         ):
             ollama_messages.append({"role": "user", "content": user_msg})
 
+        return ollama_messages, user_role, user_msg, live_ctx, history_db, rag_passages
+
+    async def chat(
+        self,
+        messages: List[Dict[str, Any]],
+        line: str = "Cały Zakład",
+        context: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        ollama_messages, user_role, user_msg, live_ctx, history_db, rag_passages = self.build_ollama_messages(
+            messages=messages, line=line, context=context
+        )
+
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.post(OLLAMA_CHAT_URL, json={
                     "model": MODEL_NAME,
                     "messages": ollama_messages,
@@ -1306,24 +1509,25 @@ class CopilotRagAgent:
         except Exception:
             pass
 
-        # Deterministyczny fallback RAG + Stateful Dialogue (nigdy nie rzuca błędu 500)
-        curr_norm = normalize_pl(user_msg)
-        if any(k in curr_norm for k in ["4.12", "4.18", "5.8", "3.2.2", "2.2.3", "traceability", "identyfikowalnos", "pr15"]):
-            rag_md = "\n".join(f"-📘 {p}" for p in rag_Passages)
-            return (
-                f"### 📚 Baza Wiedzy Normatywnej IFS Food v8 (CopilotRagAgent)\n"
-                f"**Obszar:** {line}\n\n"
-                f"{rag_md}\n\n"
-                f"**Zalecenie audytowe:** Zweryfikuj zapisy formularza operacyjnego na stanowisku oraz ciągłość identyfikowalności partii (LOT)."
+        if user_role == "MANAGER":
+            return sanitize_slm_text(
+                self._build_manager_fallback_reply(
+                    user_msg=user_msg,
+                    line=line,
+                    live_context=live_ctx,
+                    history_db=history_db,
+                )
             )
 
-        fallback_reply = run_stateful_dialogue_fallback(
-            line=line,
-            user_msg=user_msg,
-            chat_history=messages or [],
-            history_db=history_db,
+        return sanitize_slm_text(
+            self._build_auditor_fallback_reply(
+                user_msg=user_msg,
+                line=line,
+                messages=messages or [],
+                history_db=history_db,
+                rag_passages=rag_passages,
+            )
         )
-        return sanitize_slm_text(fallback_reply)
 
 
 copilot_rag_agent = CopilotRagAgent()
@@ -1335,9 +1539,65 @@ async def run_chat_turn(
     context: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
-    Obsługuje konwersację czatową z audytorem przez CopilotRagAgent.
+    Obsługuje konwersację czatową z audytorem lub managerem przez CopilotRagAgent.
     """
     return await copilot_rag_agent.chat(messages=messages, line=line, context=context)
+
+
+async def stream_chat_turn(
+    messages: List[Dict[str, Any]],
+    line: str = "Cały Zakład",
+    context: Optional[Dict[str, Any]] = None,
+):
+    """
+    Generator SSE (Server-Sent Events) dla endpointu POST /api/agent/chat/stream.
+    Strumieniuje tokeny z lokalnego serwera Ollama (jeśli działa) lub strumieniuje
+    inteligentną odpowiedź kontekstową wraz z tablicą suggested_replies.
+    """
+    context = context or {}
+    ollama_messages, user_role, user_msg, live_ctx, history_db, rag_passages = copilot_rag_agent.build_ollama_messages(
+        messages=messages, line=line, context=context
+    )
+    suggested = generate_suggested_replies(role=user_role, user_msg=user_msg, line=line, live_context=live_ctx)
+
+    streamed_chunks: List[str] = []
+    ollama_succeeded = False
+
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            async with client.stream("POST", OLLAMA_CHAT_URL, json={
+                "model": MODEL_NAME,
+                "messages": ollama_messages,
+                "stream": True,
+                "options": {"temperature": 0.1, "repeat_penalty": 1.25}
+            }) as response:
+                if response.status_code == 200:
+                    async for raw_line in response.aiter_lines():
+                        if not raw_line:
+                            continue
+                        try:
+                            pkt = json.loads(raw_line)
+                            token = pkt.get("message", {}).get("content", "")
+                            if token:
+                                streamed_chunks.append(token)
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except Exception:
+                            continue
+                    full_text = "".join(streamed_chunks).strip()
+                    if full_text and not is_garbage_or_hallucinated(full_text):
+                        ollama_succeeded = True
+                        yield f"data: {json.dumps({'done': True, 'reply': sanitize_slm_text(full_text), 'role': user_role, 'suggested_replies': suggested}, ensure_ascii=False)}\n\n"
+    except Exception:
+        ollama_succeeded = False
+
+    if not ollama_succeeded:
+        fallback_reply = await copilot_rag_agent.chat(messages=messages, line=line, context=context)
+        words = fallback_reply.split(" ")
+        chunk_size = 4
+        for i in range(0, len(words), chunk_size):
+            piece = " ".join(words[i:i + chunk_size]) + (" " if i + chunk_size < len(words) else "")
+            yield f"data: {json.dumps({'token': piece}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'done': True, 'reply': fallback_reply, 'role': user_role, 'suggested_replies': suggested}, ensure_ascii=False)}\n\n"
 
 
 async def run_agent_turn(
@@ -1367,6 +1627,7 @@ async def run_agent_turn(
         messages.append({"role": "user", "content": user_msg})
 
     return await run_chat_turn(messages=messages, line=line, context=audit_payload)
+
 
 
 async def get_agent_architecture_info() -> Dict[str, Any]:

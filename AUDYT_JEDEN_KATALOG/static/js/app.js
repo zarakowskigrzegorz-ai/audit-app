@@ -788,6 +788,7 @@
                 state.auditor = state.auditor_id;
                 state.auditor_name = state.auditor_id;
                 state.user_name = state.auditor_id;
+                state.userName = state.auditor_id;
                 state.role = String(userData.role || user.role || "MANAGER").toUpperCase();
                 const token = user.access_token || (user.user && user.user.access_token);
                 if (token) {
@@ -1237,20 +1238,78 @@
             }
         }
 
+        function renderSuggestedRepliesHtml(suggestions) {
+            if (!Array.isArray(suggestions) || suggestions.length === 0) return '';
+            const btns = suggestions.map(s => {
+                const safeAttr = String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                return `
+                    <button type="button" onclick="sendQuickPrompt('${safeAttr}')"
+                            class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-900/90 hover:bg-indigo-900/80 text-cyan-300 hover:text-white border border-cyan-500/40 transition active:scale-95 cursor-pointer shadow-sm flex items-center gap-1">
+                        <i class="fas fa-reply text-[8.5px] text-amber-400"></i>
+                        <span>${escapeHtml(s)}</span>
+                    </button>
+                `;
+            }).join('');
+            return `
+                <div class="mt-2.5 pt-2 border-t border-indigo-500/20 flex flex-wrap gap-1.5">
+                    <span class="w-full text-[9px] font-black uppercase tracking-wider text-slate-400 mb-0.5 flex items-center gap-1">
+                        <i class="fas fa-wand-magic-sparkles text-amber-400"></i> Szybkie podpowiedzi kontynuacji:
+                    </span>
+                    ${btns}
+                </div>
+            `;
+        }
+
+        async function animateAgentReplyStreaming(contentEl, suggestionsEl, fullReply, suggestions, scrollContainer) {
+            if (!contentEl) return;
+            const text = String(fullReply || '');
+            // Jeśli odpowiedź jest obiektem JSON dla karty graficznej, renderuj od razu
+            if (typeof parseSlmJson === 'function' && parseSlmJson(text)) {
+                contentEl.innerHTML = renderMarkdownToHtml(text);
+                if (suggestionsEl) suggestionsEl.innerHTML = renderSuggestedRepliesHtml(suggestions);
+                if (scrollContainer) scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
+                return;
+            }
+
+            const words = text.split(' ');
+            const step = Math.max(2, Math.ceil(words.length / 22));
+            let current = '';
+            for (let i = 0; i < words.length; i += step) {
+                current = words.slice(0, i + step).join(' ');
+                contentEl.innerHTML = renderMarkdownToHtml(current) + '<span class="inline-block w-1.5 h-3 ml-1 bg-amber-400 animate-pulse align-middle"></span>';
+                if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                await new Promise(r => setTimeout(r, 18));
+            }
+            contentEl.innerHTML = renderMarkdownToHtml(text);
+            if (suggestionsEl) {
+                suggestionsEl.innerHTML = renderSuggestedRepliesHtml(suggestions);
+            }
+            if (scrollContainer && typeof scrollContainer.scrollTo === 'function') {
+                scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
+            } else if (scrollContainer) {
+                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            }
+        }
+
         async function sendAgentMessage() {
             const inp = document.getElementById('agent-user-input');
-            const txt = inp.value.trim();
+            const txt = (inp ? inp.value : '').trim();
             if (!txt) return;
             const box = document.getElementById('agent-chat-box');
             const typing = document.getElementById('agent-typing');
             const sel = document.getElementById('agent-line-select');
-            const activeLine = sel ? sel.value : (state.line || "Cały Zakład");
+            const activeLine = sel ? sel.value : (window.state?.line || state.line || "Cały Zakład");
+            const activeRole = window.state?.role || state.role || 'AUDITOR';
+            const activeUserName = window.state?.userName || window.state?.user_name || window.state?.auditor_id || state.auditor_id || "Audytor";
 
             if (!Array.isArray(state.agent_chat_history)) {
                 state.agent_chat_history = [];
             }
 
-            box.innerHTML += `<div class="flex justify-end"><div class="bg-cyan-950/60 p-2.5 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%] text-xs font-semibold shadow-md">${txt}</div></div>`;
+            box.insertAdjacentHTML(
+                'beforeend',
+                `<div class="flex justify-end"><div class="bg-cyan-950/60 p-2.5 rounded-xl border border-cyan-500/40 text-slate-100 max-w-[85%] text-xs font-semibold shadow-md">${escapeHtml(txt)}</div></div>`
+            );
             inp.value = "";
             box.scrollTop = box.scrollHeight;
             if (typing) typing.classList.remove('hidden');
@@ -1258,31 +1317,52 @@
             state.agent_chat_history.push({ role: 'user', content: txt });
 
             try {
-                const res = await fetch('/api/agent/chat', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ 
-                        message: txt, 
-                        user_name: state.auditor_id || "Audytor", 
-                        user_role: state.role || "AUDITOR",
+                const httpFetch = window.apiFetch || fetch;
+                const res = await httpFetch('/api/agent/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        message: txt,
+                        user_name: activeUserName,
+                        user_role: activeRole,
+                        role: activeRole,
                         line: activeLine,
                         history: state.agent_chat_history
-                    }) 
+                    })
                 });
                 const d = await res.json();
-                if (d && d.reply) {
-                    state.agent_chat_history.push({ role: 'assistant', content: d.reply });
-                }
-                box.innerHTML += `
+                const replyText = (d && d.reply) ? d.reply : "Brak odpowiedzi z silnika AI.";
+                const suggestions = (d && Array.isArray(d.suggested_replies)) ? d.suggested_replies : [];
+
+                state.agent_chat_history.push({ role: 'assistant', content: replyText });
+
+                const msgUid = 'agent-msg-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+                const roleBadge = activeRole === 'MANAGER'
+                    ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[8.5px] font-black">TRYB MANAGER</span>'
+                    : '<span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[8.5px] font-black">TRYB AUDYTOR</span>';
+
+                box.insertAdjacentHTML('beforeend', `
                     <div class="flex justify-start">
-                        <div class="bg-indigo-950/50 p-3 rounded-2xl border border-indigo-500/30 text-slate-200 max-w-[92%] text-xs leading-relaxed shadow-lg">
-                            <span class="text-[9.5px] font-black text-amber-400 block mb-1 flex items-center gap-1.5"><i class="fas fa-microchip text-amber-400"></i><span>Ai Support [${activeLine}]:</span></span>
-                            ${renderMarkdownToHtml(d.reply)}
+                        <div class="bg-indigo-950/50 p-3 rounded-2xl border border-indigo-500/30 text-slate-200 max-w-[94%] text-xs leading-relaxed shadow-lg w-full">
+                            <div class="flex items-center justify-between mb-1 gap-2">
+                                <span class="text-[9.5px] font-black text-amber-400 flex items-center gap-1.5">
+                                    <i class="fas fa-microchip text-amber-400"></i>
+                                    <span>Ai Support [${escapeHtml(activeLine)}]:</span>
+                                </span>
+                                ${roleBadge}
+                            </div>
+                            <div id="${msgUid}-content" class="text-xs leading-relaxed"></div>
+                            <div id="${msgUid}-suggestions"></div>
                         </div>
                     </div>
-                `;
+                `);
+
+                if (typing) typing.classList.add('hidden');
+                const contentEl = document.getElementById(`${msgUid}-content`);
+                const suggestionsEl = document.getElementById(`${msgUid}-suggestions`);
+                await animateAgentReplyStreaming(contentEl, suggestionsEl, replyText, suggestions, box);
             } catch(e) {
-                box.innerHTML += `<div class="text-rose-400 text-[10px] p-2 bg-rose-950/30 rounded-lg">Błąd komunikacji z silnikiem SLM.</div>`;
+                box.insertAdjacentHTML('beforeend', `<div class="text-rose-400 text-[10px] p-2 bg-rose-950/30 rounded-lg">Błąd komunikacji z silnikiem SLM.</div>`);
             } finally {
                 if (typing) typing.classList.add('hidden');
                 box.scrollTop = box.scrollHeight;
